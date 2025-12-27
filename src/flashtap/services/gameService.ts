@@ -30,13 +30,13 @@ const getDistractors = (correctItem: GameAsset, pool: GameAsset[], count: number
 
 // --- Game Logic Generators ---
 
-const generateMatchingRound = (difficulty: number): GameRound => {
+const generateMatchingRound = (answerCount: number): GameRound => {
     // Pick a random category pool for consistency in a round
     const pools = [ANIMAL_ASSETS, FRUIT_ASSETS, VEHICLE_ASSETS];
     const pool = getRandomItem(pools);
     
     const correctItem = getRandomItem(pool);
-    const distractors = getDistractors(correctItem, pool, difficulty - 1);
+    const distractors = getDistractors(correctItem, pool, answerCount - 1);
     
     const options = shuffleArray([correctItem, ...distractors]).map(item => ({
         id: item.id,
@@ -56,13 +56,13 @@ const generateMatchingRound = (difficulty: number): GameRound => {
     };
 };
 
-const generateColorRound = (difficulty: number): GameRound => {
+const generateColorRound = (answerCount: number): GameRound => {
     // Filter shapes that have color tags
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const colorShapes = SHAPE_ASSETS.filter((a: any) => a.tags && a.tags.includes('circle')); // Simplify to just circles for colors, or any
 
     if (colorShapes.length === 0) {
-        return generateMatchingRound(difficulty);
+        return generateMatchingRound(answerCount);
     }
 
     const pool = SHAPE_ASSETS;
@@ -72,10 +72,10 @@ const generateColorRound = (difficulty: number): GameRound => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const targetColor = correctItem.tags?.find((t: any) => ['red','blue','green','yellow','orange','purple','black','white'].includes(t));
     
-    if (!targetColor) return generateMatchingRound(difficulty); // Fallback
+    if (!targetColor) return generateMatchingRound(answerCount); // Fallback
 
     // Distractors must be different colors
-    const distractors = getDistractors(correctItem, pool, difficulty - 1);
+    const distractors = getDistractors(correctItem, pool, answerCount - 1);
     
     const options = shuffleArray([correctItem, ...distractors]).map(item => ({
         id: item.id,
@@ -95,7 +95,7 @@ const generateColorRound = (difficulty: number): GameRound => {
     };
 };
 
-const generateCountingRound = (difficulty: number): GameRound => {
+const generateCountingRound = (answerCount: number): GameRound => {
     const itemToCount = getRandomItem([...ANIMAL_ASSETS, ...FRUIT_ASSETS]);
     const correctNumber = Math.floor(Math.random() * 5) + 1; // 1 to 5 items to keep it simple for visuals
     
@@ -111,7 +111,7 @@ const generateCountingRound = (difficulty: number): GameRound => {
     };
     
     const distractorOpts: GameOption[] = [];
-    while (distractorOpts.length < difficulty - 1) {
+    while (distractorOpts.length < answerCount - 1) {
         const n = Math.floor(Math.random() * 10) + 1;
         if (n !== correctNumber && !distractorOpts.find(d => d.content === n.toString())) {
             distractorOpts.push({ 
@@ -136,14 +136,14 @@ const generateCountingRound = (difficulty: number): GameRound => {
     };
 };
 
-const generateLetterRound = (difficulty: number): GameRound => {
+const generateLetterRound = (answerCount: number): GameRound => {
     const pool = [...ANIMAL_ASSETS, ...FRUIT_ASSETS];
     const correctItem = getRandomItem(pool);
     const letter = correctItem.label.charAt(0).toUpperCase();
 
     // Distractors should NOT start with the same letter
     const validDistractors = pool.filter(i => i.label.charAt(0).toUpperCase() !== letter);
-    const distractors = shuffleArray(validDistractors).slice(0, difficulty - 1);
+    const distractors = shuffleArray(validDistractors).slice(0, answerCount - 1);
 
     const options = shuffleArray([correctItem, ...distractors]).map(item => ({
         id: item.id,
@@ -165,22 +165,22 @@ const generateLetterRound = (difficulty: number): GameRound => {
 
 // --- Main Generator ---
 
-export const generateGameRound = async (mode: GameMode, difficulty: number): Promise<GameRound> => {
+export const generateGameRound = async (mode: GameMode, answerCount: number): Promise<GameRound> => {
     // Simulate async to keep interface consistent if we ever fetch data
     return new Promise((resolve) => {
         let round: GameRound;
 
         switch (mode) {
             case GameMode.MATCHING:
-                round = generateMatchingRound(difficulty);
+                round = generateMatchingRound(answerCount);
                 break;
             case GameMode.COLORS:
-                round = generateColorRound(difficulty);
+                round = generateColorRound(answerCount);
                 break;
             case GameMode.SHAPES:
                 // Reuse matching logic but restrict pool to shapes
                 const shapeTarget = getRandomItem(SHAPE_ASSETS);
-                const shapeDist = getDistractors(shapeTarget, SHAPE_ASSETS, difficulty - 1);
+                const shapeDist = getDistractors(shapeTarget, SHAPE_ASSETS, answerCount - 1);
                 round = {
                     questionText: `Find the ${shapeTarget.label}`,
                     questionDisplay: shapeTarget.content,
@@ -197,16 +197,16 @@ export const generateGameRound = async (mode: GameMode, difficulty: number): Pro
                 };
                 break;
             case GameMode.LETTERS:
-                round = generateLetterRound(difficulty);
+                round = generateLetterRound(answerCount);
                 break;
             case GameMode.COUNTING:
-                round = generateCountingRound(difficulty);
+                round = generateCountingRound(answerCount);
                 break;
             case GameMode.MIXED:
             default:
                 const modes = [GameMode.MATCHING, GameMode.COUNTING, GameMode.LETTERS, GameMode.COLORS, GameMode.SHAPES];
                 const randomMode = getRandomItem(modes);
-                return resolve(generateGameRound(randomMode, difficulty));
+                return resolve(generateGameRound(randomMode, answerCount));
         }
 
         resolve(round);

@@ -4,3 +4,4 @@ docs-dist
 coverage
 .DS_Store
 *.log
+playwright-report/

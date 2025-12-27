@@ -15,8 +15,8 @@ const Sidebar: React.FC<SidebarProps> = ({ config, onConfigChange, isOpen, toggl
     onConfigChange({ ...config, mode });
   };
 
-  const handleDifficultyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onConfigChange({ ...config, difficulty: parseInt(e.target.value) });
+  const handleAnswerCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onConfigChange({ ...config, answerCount: parseInt(e.target.value) });
   };
 
   const modes = [
@@ -72,12 +72,12 @@ const Sidebar: React.FC<SidebarProps> = ({ config, onConfigChange, isOpen, toggl
             </div>
           </div>
 
-          {/* Difficulty Slider */}
+          {/* Answer Count Slider */}
           <div className="mb-8">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Difficulty</h2>
+              <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Answer Count</h2>
               <span className="px-3 py-1 bg-slate-100 rounded-lg text-slate-600 font-bold text-sm">
-                {config.difficulty} items
+                {config.answerCount} items
               </span>
             </div>
             <input
@@ -85,8 +85,8 @@ const Sidebar: React.FC<SidebarProps> = ({ config, onConfigChange, isOpen, toggl
               min="4"
               max="16"
               step="2"
-              value={config.difficulty}
-              onChange={handleDifficultyChange}
+              value={config.answerCount}
+              onChange={handleAnswerCountChange}
               className="w-full h-3 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600"
             />
             <div className="flex justify-between text-xs text-slate-400 mt-2 font-medium">
