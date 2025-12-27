@@ -2,26 +2,29 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import App from '../App';
 
-// Setup testing library if needed, but simple render is fine
-// Need to install @testing-library/react and @testing-library/dom in docs devDependencies?
-// I only installed react, react-dom. Testing library is standard for React testing.
-// I will check if I can run without it or if I should install it.
-// Given the requirements "best practices", I should install testing-library.
-
 describe('App', () => {
   afterEach(() => {
     cleanup();
   });
 
-  it('renders title', () => {
+  it('renders the application with navigation tabs', () => {
     render(<App />);
-    expect(screen.getByText('My Library Docs')).toBeTruthy();
+    expect(screen.getByText('Full Game Demo')).toBeInTheDocument();
+    expect(screen.getByText('Custom Integration')).toBeInTheDocument();
   });
 
-  it('updates greeting when button is clicked', () => {
+  it('renders the FlashTap game by default', () => {
     render(<App />);
-    const button = screen.getByText('Greet');
-    fireEvent.click(button);
-    expect(screen.getByTestId('greeting-result').textContent).toBe('Hello, World!');
+    // "FlashTap" is in the sidebar of the game
+    expect(screen.getByText('FlashTap')).toBeInTheDocument();
+  });
+
+  it('switches to custom integration view', () => {
+    render(<App />);
+    const customTab = screen.getByText('Custom Integration');
+    fireEvent.click(customTab);
+
+    // Check if the tab became active
+    expect(customTab).toHaveClass('border-purple-600');
   });
 });
