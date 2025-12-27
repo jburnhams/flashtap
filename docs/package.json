@@ -20,14 +20,14 @@
     "@testing-library/react": "^14.0.0",
     "@types/react": "^18.3.27",
     "@types/react-dom": "^18.3.7",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-react": "^5.1.2",
     "autoprefixer": "^10.4.23",
     "happy-dom": "^20.0.11",
     "jsdom": "^27.4.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.4.5",
-    "vite": "^5.4.21",
-    "vitest": "^1.6.1"
+    "vite": "^7.3.0",
+    "vitest": "^4.0.16"
   }
 }
