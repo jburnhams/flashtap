@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { GameRound, GameState } from '../types';
+import { GameState } from '../types.js';
 import { Volume2, RefreshCw, Trophy, Star } from 'lucide-react';
-import { speakText } from '../services/audioService';
+import { speakText } from '../services/audioService.js';
 
 interface GameAreaProps {
   gameState: GameState;
@@ -23,6 +23,7 @@ const GameArea: React.FC<GameAreaProps> = ({ gameState, onOptionClick, onNextRou
       }, 500);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [currentRound, status, lastSpoken]);
 
   const handleSpeak = () => {

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import Sidebar from './components/Sidebar';
-import GameArea from './components/GameArea';
-import { GameConfig, GameMode, GameState } from './types';
-import { generateGameRound } from './services/gameService';
-import { speakText } from './services/audioService';
+import Sidebar from './components/Sidebar.js';
+import GameArea from './components/GameArea.js';
+import { GameConfig, GameMode, GameState } from './types.js';
+import { generateGameRound } from './services/gameService.js';
+import { speakText } from './services/audioService.js';
 
-const App: React.FC = () => {
+export const FlashTapGame: React.FC = () => {
   // Config State
   const [config, setConfig] = useState<GameConfig>({
     mode: GameMode.MATCHING,
@@ -130,5 +130,3 @@ const App: React.FC = () => {
     </div>
   );
 };
-
-export default App;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { GameMode, GameConfig } from '../types';
+import { GameMode, GameConfig } from '../types.js';
 import { Brain, Palette, Shapes, Type, Calculator, Shuffle } from 'lucide-react';
 
 interface SidebarProps {
