@@ -54,7 +54,9 @@ jobs:
         run: npm ci
 
       - name: 'Build browser bundle'
-        run: npm run build:docs
+        run: |
+          npm run build
+          npm run build:docs
 
       - name: 'Create GitHub Release'
         if: ${{ steps.version-bump.outputs.newTag }}
