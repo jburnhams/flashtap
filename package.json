@@ -31,11 +31,7 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "npm run build && vitest run tests/integration",
     "test:all": "npm run test:unit && npm run test:integration",
-    "smoke:esm": "node scripts/smoke-esm.mjs",
-    "smoke:cjs": "node scripts/smoke-cjs.cjs",
-    "smoke": "npm run smoke:esm && npm run smoke:cjs",
     "coverage": "vitest run tests/unit --coverage",
-    "size": "npm run build && node scripts/check-bundle-size.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
