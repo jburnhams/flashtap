@@ -4,7 +4,7 @@
   "description": "FlashTap Game Library",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_USERNAME/YOUR_REPO.git"
+    "url": "https://github.com/jburnhams/flashtap.git"
   },
   "main": "dist/flashtap.cjs.js",
   "module": "dist/flashtap.es.js",
