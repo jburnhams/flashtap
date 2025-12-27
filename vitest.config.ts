@@ -10,5 +10,6 @@ export default defineConfig({
       exclude: ['docs/**', 'scripts/**', 'tests/**', 'dist/**'],
     },
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    exclude: ['tests/e2e/**', 'node_modules', 'dist', '.idea', '.git', '.cache'],
   },
 });

@@ -36,7 +36,8 @@ export interface GameRound {
 
 export interface GameConfig {
   mode: GameMode;
-  difficulty: number; // 4 to 16
+  answerCount: number; // 4 to 16 (was difficulty)
+  attempts?: number; // 0 = 1 try, >0 = N tries, <0 = (Total - N) tries. Default to undefined (infinite) or handle explicitly.
   categoryFilter?: string; // Optional specific category
 }
 
