@@ -9,8 +9,9 @@
     "module": "CommonJS",
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "jsx": "react-jsx"
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["src/**/*.test.ts"]
 }

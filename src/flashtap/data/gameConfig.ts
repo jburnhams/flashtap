@@ -1,4 +1,4 @@
-import { GameAsset } from '../types';
+import { GameAsset } from '../types.js';
 
 /**
  * CONFIGURATION

@@ -1,15 +1,24 @@
-import { GameMode, GameRound, GameAsset, GameOption } from "../types";
-import { ALL_ASSETS, ANIMAL_ASSETS, FRUIT_ASSETS, SHAPE_ASSETS, VEHICLE_ASSETS } from "../data/gameConfig";
+import { GameMode, GameRound, GameAsset, GameOption } from "../types.js";
+import { ANIMAL_ASSETS, FRUIT_ASSETS, SHAPE_ASSETS, VEHICLE_ASSETS } from "../data/gameConfig.js";
 
 // --- Helper Functions ---
 
-const getRandomItem = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+const getRandomItem = <T>(arr: T[]): T => {
+    const item = arr[Math.floor(Math.random() * arr.length)];
+    if (!item) {
+        throw new Error("Empty array passed to getRandomItem");
+    }
+    return item;
+};
 
 const shuffleArray = <T>(array: T[]): T[] => {
     const newArr = [...array];
     for (let i = newArr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+        const temp = newArr[i];
+        if (temp !== undefined && newArr[j] !== undefined) {
+             [newArr[i], newArr[j]] = [newArr[j], temp];
+        }
     }
     return newArr;
 };
@@ -49,12 +58,19 @@ const generateMatchingRound = (difficulty: number): GameRound => {
 
 const generateColorRound = (difficulty: number): GameRound => {
     // Filter shapes that have color tags
-    const colorShapes = SHAPE_ASSETS.filter(a => a.tags && a.tags.includes('circle')); // Simplify to just circles for colors, or any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const colorShapes = SHAPE_ASSETS.filter((a: any) => a.tags && a.tags.includes('circle')); // Simplify to just circles for colors, or any
+
+    if (colorShapes.length === 0) {
+        return generateMatchingRound(difficulty);
+    }
+
     const pool = SHAPE_ASSETS;
     
     // Pick a target color
-    const correctItem = getRandomItem(pool);
-    const targetColor = correctItem.tags?.find(t => ['red','blue','green','yellow','orange','purple','black','white'].includes(t));
+    const correctItem = getRandomItem(colorShapes);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const targetColor = correctItem.tags?.find((t: any) => ['red','blue','green','yellow','orange','purple','black','white'].includes(t));
     
     if (!targetColor) return generateMatchingRound(difficulty); // Fallback
 
