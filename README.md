@@ -28,50 +28,44 @@ function App() {
 
 The `FlashTapGame` component is responsive and will adapt to the container size.
 
-## Custom Integration (Headless Mode)
+## Custom Integration
 
-For skilled developers who want full control over the UI or want to integrate the game mechanics into a custom interface, FlashTap exposes its core logic via the `useGameLogic` hook.
+If you need to wrap the game in your own layout (e.g., inside a dashboard, or with custom surrounding controls) but still want to use the standard game visualization, you can combine the `useGameLogic` hook with the `GameArea` component.
 
-### `useGameLogic` Hook
+This allows you to manage the configuration and container while delegating the complex game rendering to the library.
 
-This hook manages the game state, round generation, scoring, and audio feedback, allowing you to build your own visualization.
+### Example: Custom Wrapper
 
 ```tsx
-import { useGameLogic, GameConfig } from 'flashtap';
+import { useGameLogic, GameArea, GameConfig } from 'flashtap';
 
-function CustomGame() {
-  // 1. Define initial configuration
-  const initialConfig: GameConfig = {
+function CustomGameWrapper() {
+  // 1. Define configuration
+  const config: GameConfig = {
     mode: 'matching', // 'matching' | 'ordering' | 'mixed'
     answerCount: 4,
-    attempts: 0 // 0 = Sudden Death, >0 = Fixed attempts
+    attempts: 0 // 0 = Sudden Death
   };
 
-  // 2. Initialize hook
+  // 2. Initialize logic
   const {
     gameState,
     handleOptionClick,
-    loadRound,
-    score
-  } = useGameLogic(initialConfig);
-
-  // 3. Render your custom UI
-  if (gameState.status === 'loading') return <div>Loading...</div>;
+    loadRound
+  } = useGameLogic(config);
 
   return (
-    <div>
-      <h2>Score: {gameState.score}</h2>
-      <div className="grid">
-        {gameState.currentRound?.options.map(option => (
-          <button
-            key={option.id}
-            onClick={() => handleOptionClick(option.id)}
-            className="custom-btn"
-          >
-            {option.content}
-          </button>
-        ))}
-      </div>
+    <div className="my-custom-container" style={{ height: '600px', border: '2px solid #333' }}>
+      <header className="custom-header">
+         <h2>My Custom Game Header</h2>
+      </header>
+
+      {/* 3. Render the GameArea with state from the hook */}
+      <GameArea
+        gameState={gameState}
+        onOptionClick={handleOptionClick}
+        onNextRound={loadRound}
+      />
     </div>
   );
 }
@@ -87,6 +81,4 @@ The library exports TypeScript types to help with integration:
 
 ## Styling
 
-The library uses Tailwind CSS internally. If you are using the pre-built components, ensure your project handles the CSS (or import the dist styles if provided, typically `import 'flashtap/dist/style.css'` depending on build setup).
-
-If using the headless `useGameLogic` hook, you are responsible for all styling.
+The library uses Tailwind CSS internally. If you are using the pre-built components (`FlashTapGame` or `GameArea`), ensure your project handles the CSS (or import the dist styles if provided, typically `import 'flashtap/dist/style.css'` depending on build setup).
