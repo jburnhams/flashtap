@@ -23,7 +23,7 @@
     "@vitejs/plugin-react": "^5.1.2",
     "autoprefixer": "^10.4.23",
     "happy-dom": "^20.0.11",
-    "jsdom": "^27.4.0",
+    "jsdom": "^31.0.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.4.5",
