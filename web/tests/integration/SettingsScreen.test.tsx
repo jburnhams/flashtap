@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { modesLoading, saveSettingsFails, settingsError } from '../../src/mocks/handlers'
+import { modesError, modesFew, modesLoading, saveSettingsFails, settingsError } from '../../src/mocks/handlers'
 import { openApp, screen, waitFor } from '../utils/render'
 import { mock, server } from '../utils/server'
 
@@ -58,11 +58,25 @@ describe('Settings', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('The server could not answer (503)')
   })
 
-  it('works before the list of modes arrives, with plain names', async () => {
+  it('waits for the list of kinds of round before showing the form', async () => {
     server.use(modesLoading)
+    openApp('/settings')
+    await screen.findByRole('tabpanel')
+    expect(screen.queryByRole('combobox', { name: 'Kind of round' })).not.toBeInTheDocument()
+  })
+
+  it('names a kind of round the server did not describe by its plain name', async () => {
+    server.use(modesFew)
     openApp('/settings')
     const mode = await screen.findByRole('combobox', { name: 'Kind of round' })
     expect(mode).toHaveAccessibleDescription('Which kind of round Play starts with.')
-    expect(screen.getByRole('option', { name: 'counting' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'colours' })).toBeInTheDocument()
+  })
+
+  it('says so when the list of kinds of round cannot be read', async () => {
+    server.use(modesError)
+    openApp('/settings')
+    expect(await screen.findByRole('alert')).toHaveTextContent('The server could not answer (503)')
+    expect(screen.queryByRole('combobox', { name: 'Kind of round' })).not.toBeInTheDocument()
   })
 })

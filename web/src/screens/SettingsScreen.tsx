@@ -28,7 +28,11 @@ function General() {
   const modes = useLoad({ queryKey: keys.modes, queryFn: api.modes, staleTime: Infinity })
   return (
     <DataView state={settings} isEmpty={() => false} skeleton={<FormSkeleton />} empty={<EmptyState title="No settings">The server sent none.</EmptyState>}>
-      {s => <SettingsForm current={s} modes={modes.status === 'ready' ? modes.data : undefined} />}
+      {s => (
+        <DataView state={modes} isEmpty={m => m.length === 0} skeleton={<FormSkeleton />} empty={<EmptyState title="No kinds of round">The server listed none.</EmptyState>}>
+          {m => <SettingsForm current={s} modes={m} />}
+        </DataView>
+      )}
     </DataView>
   )
 }
@@ -49,7 +53,7 @@ function FormSkeleton() {
   )
 }
 
-export function SettingsForm({ current, modes }: { current: Settings; modes?: ModeInfo[] }) {
+export function SettingsForm({ current, modes }: { current: Settings; modes: ModeInfo[] }) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<Mode>(current.mode)
   const [choices, setChoices] = useState<number | null>(Number(current.choices))
@@ -68,13 +72,13 @@ export function SettingsForm({ current, modes }: { current: Settings; modes?: Mo
     e.preventDefault()
     void save.run()
   }
-  const described = modes?.find(m => m.mode === mode)?.description
+  const described = modes.find(m => m.mode === mode)?.description
 
   return (
     <form onSubmit={onSubmit} noValidate className="grid max-w-xl gap-6">
       <Field label="Kind of round" hint={described ?? 'Which kind of round Play starts with.'}>
         <NativeSelect value={mode} onChange={e => setMode(e.target.value as Mode)}>
-          {MODES.map(m => <option key={m} value={m}>{modes?.find(i => i.mode === m)?.name ?? m}</option>)}
+          {MODES.map(m => <option key={m} value={m}>{modes.find(i => i.mode === m)?.name ?? m}</option>)}
         </NativeSelect>
       </Field>
       <Field label="Choices" hint={`Pictures or numbers in a round, ${limits.minChoices} to ${limits.maxChoices}. Fewer is easier.`} error={save.fieldErrors.choices}>

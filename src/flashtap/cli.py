@@ -1,7 +1,10 @@
 """Command line: `doctor` checks the environment, `round` prints a round, `set` shows or changes a setting, `serve` starts the web server."""
 
 import argparse
+import io
+import sys
 from collections.abc import Sequence
+from typing import Any, cast
 
 from strata_python import cli as shared
 
@@ -16,6 +19,10 @@ def run_server(host: str, port: int) -> None:
 
 
 def cmd_round(args: argparse.Namespace) -> int:
+    # Pictures are emoji: a Windows console's default code page (cp1252) cannot print them, so write UTF-8.
+    out = sys.stdout
+    if isinstance(out, io.TextIOWrapper):
+        cast("io.TextIOWrapper[Any]", out).reconfigure(encoding="utf-8")
     r = rounds.generate(
         rounds.Mode(args.mode) if args.mode else settings.mode(), args.choices or settings.choices(), args.seed
     )

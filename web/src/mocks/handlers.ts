@@ -14,12 +14,15 @@ import { defaultSettings, modes, rounds } from './fixtures'
 export const mock = {
   settings: { ...defaultSettings } as Settings,
   tries: null as number | null,
+  /** Rounds asked for since the last reset: a test can see a round fetched afresh rather than replayed from the cache. */
+  roundRequests: 0,
 }
 
 /** Back to the healthy state: call between tests and stories. */
 export function resetMock() {
   mock.settings = { ...defaultSettings }
   mock.tries = null
+  mock.roundRequests = 0
 }
 
 // Matched as paths, so they answer whatever origin and base the app runs under.
@@ -43,7 +46,10 @@ export const handlers = [
     return HttpResponse.json(mock.settings)
   }),
   http.get(at(paths.modes), () => HttpResponse.json(modes)),
-  http.get(at(paths.round), ({ request }) => HttpResponse.json(roundFor(new URL(request.url).searchParams.get('mode')))),
+  http.get(at(paths.round), ({ request }) => {
+    mock.roundRequests += 1
+    return HttpResponse.json(roundFor(new URL(request.url).searchParams.get('mode')))
+  }),
 ]
 
 const down = () => HttpResponse.json({ detail: 'down' }, { status: 503 })
@@ -53,4 +59,7 @@ export const settingsError = http.get(at(paths.settings), down)
 export const saveSettingsFails = http.put(at(paths.settings), down)
 export const roundLoading = http.get(at(paths.round), async () => { await delay('infinite'); return HttpResponse.json(null) })
 export const roundError = http.get(at(paths.round), down)
+/** A server that describes only some kinds of round (an older one): the rest keep their plain names. */
+export const modesFew = http.get(at(paths.modes), () => HttpResponse.json(modes.filter(m => m.mode === 'matching' || m.mode === 'counting')))
+export const modesError = http.get(at(paths.modes), down)
 export const modesLoading = http.get(at(paths.modes), async () => { await delay('infinite'); return HttpResponse.json(null) })

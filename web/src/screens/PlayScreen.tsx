@@ -75,8 +75,9 @@ export function Board({ round, onNext }: { round: Round; onNext: () => void }) {
   }
 
   const next = () => {
-    // The round just played is not shown again: drop it so a Back to this mode fetches afresh.
-    queryClient.removeQueries({ queryKey: ['round'], exact: false, type: 'inactive' })
+    // The round just played is not shown again: drop every round, this one too while it is still on
+    // screen, so coming back to this kind of round (a new Game, counting from 0) asks the server afresh.
+    queryClient.removeQueries({ queryKey: ['round'] })
     onNext()
   }
 

@@ -8,7 +8,7 @@
 - Pictures: the fontsource Noto Color Emoji is an SVG-in-OpenType font, which Chromium draws blank (seen in a screenshot, confirmed by its tables: `SVG `, no `COLR`). `twemoji-colr-font` (a COLR font, 476 kB, one file) draws in Chromium, Firefox and Safari, and gives the same pictures on every device.
 - Face: Andika, drawn by SIL for children learning to read (single-storey a and g), so the letters on screen have the shapes a child is taught.
 - The mode picker on Play is a select: a ToggleGroup of six names ran off a 390 px phone.
-- Visual baselines could not be written here: the pinned Playwright 1.65 Chromium (158) cannot be downloaded in this environment. Shots taken with an older Chromium looked right and were not committed; the baselines come from the "Update visual baselines" workflow on the CI runner.
+- Visual baselines could not be written here: the pinned Playwright 1.65 Chromium (158) cannot be downloaded in this environment. The workflow that writes them on the CI runner cannot be dispatched before it is on `main`, so the 52 baselines were written here in Chromium 157 and checked by eye; rewrite them with the "Update visual baselines" workflow if CI's 158 disagrees.
 
 
 ## 2026-11-09: web app rebuilt on strata-react

@@ -31,6 +31,20 @@ describe('Play', () => {
     expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
   })
 
+  it('asks for a new round, not the one just played, after Next and a change of kind and back', async () => {
+    const { user } = openApp('/')
+    await user.click(await screen.findByRole('button', { name: 'cow' }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await screen.findByRole('button', { name: 'pig' })
+    const asked = mock.roundRequests
+    const kind = screen.getByRole('combobox', { name: 'Kind of round' })
+    await user.selectOptions(kind, 'colours')
+    await screen.findByRole('heading', { level: 1, name: 'Which one is yellow?' })
+    await user.selectOptions(kind, 'mixed')
+    await screen.findByRole('heading', { level: 1, name: 'Find the cow.' })
+    expect(mock.roundRequests).toBe(asked + 2)
+  })
+
   it('shows where the answer was once the tries run out', async () => {
     mock.tries = 1
     const { user } = openApp('/')
