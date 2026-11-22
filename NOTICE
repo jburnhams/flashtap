@@ -1,0 +1,8 @@
+Third-party material used (see docs/progress.md for context):
+
+- Structure, build configuration, test harness and conventions from python-app-template
+  (https://github.com/jburnhams/python-app-template), itself extracted from strata-360 and strata-stills.
+- Twemoji graphics, copyright Twitter, Inc and other contributors, licensed CC-BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/), drawn through the twemoji-colr-font package (font: OFL-1.1).
+  Every picture on the Play screen is a Twemoji.
+- Andika, copyright SIL International, licensed under the SIL Open Font License 1.1, through @fontsource/andika.

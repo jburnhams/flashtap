@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Flashtap</title>
+<!-- The stand-in served when the web app has not been built (`cd web && npm run build`): enough to play a round against the real API. -->
+<style>
+:root{color-scheme:light dark;--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--line:#d8d8dc}
+@media(prefers-color-scheme:dark){:root{--bg:#161618;--fg:#ececee;--mut:#9a9aa2;--line:#33333a}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,sans-serif}
+main{max-width:720px;margin:0 auto;padding:32px 16px}h1{font-size:22px;margin:0}.mut{color:var(--mut)}
+#show{font-size:56px;text-align:center;margin:16px 0}#opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
+button{font-size:48px;padding:16px;border:2px solid var(--line);border-radius:16px;background:transparent;color:inherit;cursor:pointer}
+button[disabled]{opacity:.35}
+</style></head><body><main>
+<h1>Flashtap</h1><p class="mut">The web app is not built yet, so this is the plain version. Build it with <code>cd web &amp;&amp; npm run build</code>.</p>
+<p id="prompt"></p><div id="show"></div><div id="opts"></div>
+</main><script>
+const $=id=>document.getElementById(id);
+const say=t=>{try{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(t))}catch(e){}};
+async function next(){const r=await (await fetch('api/round')).json();$('prompt').textContent=r.prompt;$('show').textContent=r.show;say(r.prompt);
+$('opts').replaceChildren(...r.options.map(o=>{const b=document.createElement('button');b.textContent=o.picture;b.setAttribute('aria-label',o.word);
+b.onclick=()=>{say(o.feedback);if(o.correct)setTimeout(next,1500);else b.disabled=true};return b}))}
+next();
+</script></body></html>

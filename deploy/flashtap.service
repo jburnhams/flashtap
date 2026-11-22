@@ -1,0 +1,19 @@
+# Example systemd user unit. Copy to ~/.config/systemd/user/flashtap.service, adjust the path, then:
+#   systemctl --user daemon-reload && systemctl --user enable --now flashtap
+# The unit starts the app through its console script, so it cannot drift from the repo: if the entry point moves,
+# `uv run flashtap` still works, and `flashtap serve --help` is the contract.
+[Unit]
+Description=Flashtap
+After=network.target
+
+[Service]
+WorkingDirectory=%h/path/to/checkout
+# `--locked` refuses to start if uv.lock and pyproject.toml disagree, instead of silently changing the environment.
+# systemd does not search ~/.local/bin, so give uv's full path (`command -v uv` shows it; %h is your home folder).
+ExecStart=%h/.local/bin/uv run --locked --no-dev flashtap serve --host 127.0.0.1 --port 8361
+# Settings live in ~/.flashtap/settings.json; set FLASHTAP_HOME to keep them elsewhere.
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

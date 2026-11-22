@@ -1,0 +1,68 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flashtap"
+version = "0.2.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
+description = "Flashtap: early years learning games, a FastAPI + strata-react web app"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "strata-python>=0.2,<0.3",   # brings FastAPI, uvicorn, pydantic and pytest; while 0.x, capped below the next minor
+]
+
+[project.scripts]
+flashtap = "flashtap.cli:main"
+
+[dependency-groups]
+dev = [
+    "strata-python[dev]",   # ruff, pyright, ty, httpx and the pytest plugins at the versions strata-check expects
+    "hypothesis>=6",        # property tests: every seeded round is valid (tests/unit/test_rounds.py)
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flashtap"]
+# The React build is gitignored but must ship in the wheel: `cd web && npm run build` before `uv build`.
+artifacts = ["src/flashtap/server/static/**"]
+
+[tool.pytest.ini_options]
+strata_env_prefix = "FLASHTAP"                                        # strata-python plugin: FLASHTAP_HOME and FLASHTAP_DATA point into a tmp dir for every test
+strata_tuning_vars = ["FLASHTAP_MODE", "FLASHTAP_CHOICES", "FLASHTAP_TRIES"]   # removed from the environment for every test
+testpaths = ["tests/unit"]
+addopts = "-ra --timeout=300 --strict-markers --strict-config"
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]       # TestClient noise from the installed starlette; remove when the dependency moves on
+markers = ["slow: slow tests; run manually or on a schedule"]
+
+[tool.coverage.run]
+source = ["src/flashtap"]
+branch = true
+omit = ["*/__main__.py"]
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = false
+# Measured from the unit suite only (tests/unit). Ratchet this up as coverage improves.
+fail_under = 95
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "C4", "PT", "S", "TID"]
+ignore = ["E501"]        # the formatter wraps code; long comments and docstrings stay (the house style comments the why)
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"pytest.importorskip".msg = "Do not skip when a dependency is missing: install it (locally and in CI) and let the test fail if it is not there. A deliberate skip is a marker with a reason, see AGENTS.md (Testing)."
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S104", "S105", "S106", "S108", "S310", "S311", "S603", "S607"]    # asserts, fake secrets, tmp paths, plain random, subprocess of our own CLI
+"src/flashtap/rounds.py" = ["S311"]    # random.Random(seed) on purpose: rounds must be reproducible from their seed, not secret
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
