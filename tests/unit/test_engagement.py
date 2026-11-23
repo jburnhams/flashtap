@@ -82,8 +82,12 @@ def test_each_kind_has_its_row() -> None:
     assert (c.rounds, c.right_first, c.median_seconds, c.mean_tries, c.left) == (2, 1, 5.0, 2.0, 0)
     assert (c.liked, c.okay, c.disliked, c.offered, c.picked) == (1, 0, 1, 1, 1)
     assert c.preference == pytest.approx(round(0.5 / (3 + SHRINK), 3))
-    g = rows["give"]  # struck rounds count for nothing; offered twice, passed over once
-    assert (g.rounds, g.median_seconds, g.mean_tries, g.offered, g.picked) == (0, None, None, 2, 0)
+    g = rows[
+        "give"
+    ]  # struck rounds count for nothing; passed over once, and the choice left unpicked counts for neither
+    assert (g.rounds, g.median_seconds, g.mean_tries, g.offered, g.picked) == (0, None, None, 1, 0)
+    assert "listen" in rows
+    assert rows["listen"].offered == 0
     assert g.preference < 0
     assert rows["listen"].left == 1
     assert out.hypotheses == []  # too few rounds to name a pattern
@@ -109,6 +113,8 @@ def test_sad_faces_and_passing_over_are_named() -> None:
     out = report([], faces, offers, TITLES)
     assert [(h.code, h.mode) for h in out.hypotheses] == [("passed_over", "give"), ("disliked", "listen")]
     assert out.hypotheses[1].seen == "Listen: rated with the sad face 2 of 3 times."
+    left = [Offered(first="give", second="counting") for _ in range(6)]  # left at the choice screen each time
+    assert report([], [], left, TITLES).hypotheses == []  # they chose against neither
 
 
 def test_fewer_right_late_in_long_sessions_is_named_once() -> None:

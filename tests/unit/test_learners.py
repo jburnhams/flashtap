@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from flashtap import rounds
@@ -14,7 +14,7 @@ from flashtap.learners import db as learner_db
 from flashtap.learners import store
 from flashtap.learners.estimators import BAYES, PLACE_GUESS, RULE
 from flashtap.learners.evidence import Event, Observation, SkillUse, Told, uses
-from flashtap.learners.models import Attempt, Learner, Sitting, Tombstone, utc
+from flashtap.learners.models import Attempt, Learner, Override, Sitting, Tombstone, utc
 from flashtap.learners.report import SkillInfo, State, differences, evidence_rows, skill_reports
 from flashtap.mechanics import Mode
 
@@ -465,8 +465,15 @@ def test_an_override_is_source_labelled_folded_into_bkt_and_withdrawn(db_session
     assert store.rebuild(saved.model_copy(update={"overrides": []}))  # without it the estimates differ
     with pytest.raises(KeyError, match="No override"):
         store.withdraw(db_session, fox, "f" * 32)
-    store.withdraw(db_session, fox, t.id, at=T0 + timedelta(hours=1))
-    store.withdraw(db_session, fox, t.id, at=T0 + timedelta(hours=2))  # the first time is kept
+    held = db_session.get(Override, t.id)  # a copy read before another request withdraws it
+    assert held is not None
+    assert held.withdrawn_at is None
+    db_session.execute(  # the other request's withdrawal, which the held copy does not see
+        update(Override).where(Override.id == t.id).values(withdrawn_at=T0 + timedelta(hours=1)),
+        execution_options={"synchronize_session": False},
+    )
+    assert held.withdrawn_at is None
+    store.withdraw(db_session, fox, t.id, at=T0 + timedelta(hours=2))  # re-read under the lock: the first time is kept
     assert store.told(db_session, fox)[0].withdrawn_at == T0 + timedelta(hours=1)
     p = {s.skill: s for s in store.profile(db_session, fox, SKILLS).skills}
     assert p[COUNT].told is None

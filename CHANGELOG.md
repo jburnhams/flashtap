@@ -19,6 +19,7 @@ The plan's PR 6: a choice of two activities, the 3-face rating and session caps 
 - `web/tests/utils/setup.ts`: correction: after each test MSW was reset to the handlers the last `server.resetHandlers(...)` call named, so a failure handler leaked into later tests in the file; it now resets to the app's handlers.
 - Tests: `tests/unit/test_engagement.py` (**new**), `test_engine.py`, `test_learners.py`, `test_settings.py`, `test_server.py`; `web/tests/integration/PlayScreen.test.tsx`, `LearnerScreen.test.tsx`, `SettingsScreen.test.tsx`.
 - Issues raised: strata-react #305, #306.
+- Review fixes (Codex on #48): a choice left unpicked no longer counts as offered in the Engagement report, so leaving at the choice screen cannot name both kinds "passed over" (`engagement.py`); `store.withdraw` reads the override under the learner lock, fresh, so a second withdrawal racing the first cannot overwrite its time (`store.py`). Tests in `test_engagement.py` and `test_learners.py`.
 - `README.md`, `AGENTS.md`, `docs/implementation-plan.md` (PR 5 done, PR 6's record and what is left), `docs/progress.md`, `tests/unit/README.md`.
 
 **Pack versions recorded on every answer and decision (0.7.0, branch `claude/project-thread-qqzdad`)**

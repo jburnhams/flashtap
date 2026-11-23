@@ -457,10 +457,13 @@ def tell(db: Session, learner_id: str, body: OverrideIn, skills: set[str], at: d
 
 def withdraw(db: Session, learner_id: str, override_id: str, at: datetime | None = None) -> None:
     """Stop an override counting from now. Withdrawing twice keeps the first time."""
-    x = db.get(Override, override_id)
-    if x is None or x.learner_id != learner_id:
-        raise KeyError(f"No override {override_id} for this learner.")
     hold(db, learner_id)
+    # Read under the lock, fresh from the database: a copy read before it could miss a withdrawal committed meanwhile
+    # and overwrite its time, which would change what a decision made between the two saw on replay.
+    x = db.get(Override, override_id, populate_existing=True)
+    if x is None or x.learner_id != learner_id:
+        db.rollback()
+        raise KeyError(f"No override {override_id} for this learner.")
     if x.withdrawn_at is None:
         x.withdrawn_at = at or now()
     db.commit()

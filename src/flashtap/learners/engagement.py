@@ -100,7 +100,7 @@ class KindRow(BaseModel):
     liked: int
     okay: int
     disliked: int
-    offered: int  # times it was one of two to pick from
+    offered: int  # times it was one of two in a choice they answered (a choice left unpicked counts for neither)
     picked: int
     preference: float  # what the engine adds for it: -1 to 1, 0 with no signal
 
@@ -138,10 +138,11 @@ def report(
     offered: dict[str, int] = {}
     picked: dict[str, int] = {}
     for o in offers:
+        if o.picked is None:  # left at the choice: they chose against neither, so it is no evidence either way
+            continue
         for m in (o.first, o.second):
             offered[m] = offered.get(m, 0) + 1
-        if o.picked is not None:
-            picked[o.picked] = picked.get(o.picked, 0) + 1
+        picked[o.picked] = picked.get(o.picked, 0) + 1
     prefs = preferences(ratings, [p for o in offers if (p := o.pick()) is not None])
     kinds: list[KindRow] = []
     for m in sorted(set(by_mode) | set(rated) | set(offered), key=lambda k: titles.get(k, k)):
