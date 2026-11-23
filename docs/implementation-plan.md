@@ -1,6 +1,6 @@
 # Implementation plan
 
-From a one-mechanic game to the adaptive learning spec (v0.1, 2026-11-17, written for the early years; "Technical design specification": ontology, seeded items, mechanics, evidence, learner model, scheduler, P0 to P5 roadmap). The full plan, with the gap analysis and the decisions it needs, was written 2026-11-22 with Jonathan; this is its working copy. Section numbers (§) are the spec's.
+From a one-mechanic game to the adaptive learning spec (v0.1, 2026-11-17, written for the early years; "Technical design specification": ontology, seeded items, mechanics, evidence, learner model, scheduler, P0 to P5 roadmap). The full plan, with the gap analysis and the decisions it needs, was written 2026-11-22 with the owner; this is its working copy. Section numbers (§) are the spec's.
 
 Scope (decided 2026-11-23): every school year and ability, starting with the earliest skills but not limited to them. Progression is by ability, not age: the skill graph's prerequisites and the learner's evidence decide what comes next; curriculum stages (EYFS, KS1 to KS4) are labels mapped onto skills, never gates; placement is by probes; no age, birth date or year group is stored.
 
