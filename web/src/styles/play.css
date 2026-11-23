@@ -1,4 +1,4 @@
-/* The Play screen's own layout: tiles a three-year-old can hit and pictures they can see.
+/* The Play screen's own layout: tiles a learner still mastering a tap can hit, and pictures big enough to see.
    strata-react's steps are sized for product screens (its largest type step is a page title, its
    controls are 36px high), so the tile and picture sizes are set here, from theme roles only, and
    the gap (a touch tile grid) is raised on strata-react rather than hidden (docs/implementation-plan.md, decision 5). */

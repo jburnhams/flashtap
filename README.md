@@ -1,6 +1,6 @@
 # Flashtap
 
-Early years learning games for children of about three to seven: a spoken question, a big picture, and two to eight tiles to tap, exactly one of them right. A Python web app (FastAPI + CLI on [strata-python](https://github.com/jburnhams/strata-python)) with a React frontend on [strata-react](https://github.com/jburnhams/strata-react), shaped like [python-app-template](https://github.com/jburnhams/python-app-template).
+Learning games for every school year and ability, starting with the earliest skills: a spoken question, a big picture, and two to eight tiles to tap, exactly one of them right. Progression follows what a learner can show they can do, never their age. A personal app for private use; the repository is public, so it holds no detail that identifies anyone (see `AGENTS.md`, rule 8). A Python web app (FastAPI + CLI on [strata-python](https://github.com/jburnhams/strata-python)) with a React frontend on [strata-react](https://github.com/jburnhams/strata-react), shaped like [python-app-template](https://github.com/jburnhams/python-app-template).
 
 Five kinds of round today: Matching, Colours, Shapes, Letters and Counting, plus Mixed. The server builds every round from a seed and checks it before sending (one right answer, no repeats), so a round can be rebuilt exactly. Where this is going, towards an adaptive learning engine with a skill ontology, a learner model and a scheduler, is in [docs/implementation-plan.md](docs/implementation-plan.md).
 
@@ -34,7 +34,7 @@ Without the web build, `flashtap serve` answers with a plain stand-in page that 
 | Document | What it is |
 | --- | --- |
 | [docs/overview.md](docs/overview.md) | The design brief: goals, architecture, layout |
-| [docs/implementation-plan.md](docs/implementation-plan.md) | The plan from here to the early years adaptive learning spec, PR by PR |
+| [docs/implementation-plan.md](docs/implementation-plan.md) | The plan from here to an adaptive learning engine (from the adaptive learning spec), PR by PR |
 | [docs/progress.md](docs/progress.md) | The log of what was tried, measured and decided |
 | [docs/deploying.md](docs/deploying.md) | Running it as a service |
 | [AGENTS.md](AGENTS.md) | Repository conventions and commands (for people and coding agents) |

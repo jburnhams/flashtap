@@ -2,6 +2,18 @@
 
 Newest first, grouped by day. One entry per change, in the same commit or PR as the change.
 
+## 2026-11-23
+
+**Scope and privacy: every school year, progression by ability, nothing identifying (branch `claude/project-thread-fmqqff`)**
+Jonathan answered the plan's open questions: Flashtap is a personal app for private use in a public repository, so it must hold nothing identifying, above all about children; and it covers every school year and ability, starting with the youngest but not limited to them, progressing by ability rather than age.
+
+- `AGENTS.md`: **new** rule 8, nothing that identifies a person (no names, ages, birth dates, year groups, schools, places, photos, voices or learner data anywhere in the repository; invented learners in tests; the learner model stores no age). "What this is" no longer says early years.
+- `tests/unit/test_privacy.py`: **new**. Scans the repository's text files for an age, a birth date or a birthday; it caught `play.css` calling the player "a three-year-old".
+- `docs/implementation-plan.md`: decisions recorded with their answers; a Scope paragraph (curriculum stages are labels on skills, never gates; placement by probes; no age stored); PR 2's schema covers every year, PR 4's learner holds only a nickname, PR 5 places by evidence.
+- `README.md`, `docs/overview.md`, `pyproject.toml`, `src/flashtap/__init__.py`, `web/stories/introduction.mdx`: describe Flashtap by ability, not by age, and say the repository is public.
+- `web/src/speech.ts`, `web/src/styles/play.css`, `web/src/styles/theme.css`, `web/src/styles/theme.generated.css` (header comment only): comments no longer assume a young child.
+- `tests/unit/README.md`: ledger row for the privacy test.
+
 ## 2026-11-22
 
 **Flashtap 0.2.0: a Python web app on strata-python and strata-react (branch `claude/project-thread-fmqqff`)**

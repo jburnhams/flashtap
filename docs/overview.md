@@ -2,7 +2,9 @@
 
 ## 1. Goal
 
-Short, spoken, picture-based rounds for children of about three to seven, played on a tablet or laptop, with a grown-up choosing what kind. The longer goal is the early years adaptive learning spec (v0.1, 2026-11-17): a skill ontology, seeded and validated items, several mechanics, a learner model and a scheduler. [implementation-plan.md](implementation-plan.md) maps the way there.
+Short, spoken, picture-based rounds, played on a tablet or laptop, with a grown-up choosing what kind. The scope is every school year and every ability, starting with the earliest skills but not limited to them, and progression is by ability, never by age: what a learner is offered next depends on what they have shown they can do, and no age or year group is stored or used to gate content. The longer goal comes from the adaptive learning spec (v0.1, 2026-11-17, written for the early years and widened here): a skill ontology, seeded and validated items, several mechanics, a learner model and a scheduler.
+
+A personal app for private use, in a public repository: nothing in it identifies a person, above all a child (`AGENTS.md`, rule 8). Learner records live only in the deployed database, under a nickname. [implementation-plan.md](implementation-plan.md) maps the way there.
 
 The first rule from that spec, already in force: the server owns the truth (what a round asks and which answer is right), and the browser only draws it and reports taps.
 

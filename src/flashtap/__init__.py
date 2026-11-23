@@ -1,4 +1,4 @@
-"""flashtap: early years learning games, served as a FastAPI + strata-react web app."""
+"""flashtap: learning games that progress by ability, served as a FastAPI + strata-react web app."""
 
 from importlib.metadata import PackageNotFoundError, version
 
