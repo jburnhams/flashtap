@@ -1,0 +1,120 @@
+# The default phonics sequence: Letters and Sounds (2007) Phases 2 and 3, in its order, in UK English IPA.
+# Schools now follow a DfE-validated programme, and each orders its GPCs a little differently. Another programme is
+# another [[phonics]] entry in its own pack; a learner follows one, and its order is never shuffled (spec §5).
+# Phonemes are written in the traditional British transcription (/e/ in "bed", /r/ in "red", length marks).
+
+pack = "phonics.letters_and_sounds"
+version = 1
+title = "Phonics sequence: Letters and Sounds, Phases 2 and 3"
+status = "draft"
+
+[[phonics]]
+id = "phonics.ls"
+title = "Letters and Sounds"
+dialect = "en-GB"
+source = "src.letters_and_sounds"
+
+[[phonics.sets]]
+id = "phonics.ls.p2_set1"
+title = "Phase 2, set 1"
+gpcs = [
+  { grapheme = "s", phoneme = "s", example = "sun" },
+  { grapheme = "a", phoneme = "æ", example = "ant" },
+  { grapheme = "t", phoneme = "t", example = "tap" },
+  { grapheme = "p", phoneme = "p", example = "pan" },
+]
+
+[[phonics.sets]]
+id = "phonics.ls.p2_set2"
+title = "Phase 2, set 2"
+gpcs = [
+  { grapheme = "i", phoneme = "ɪ", example = "pin" },
+  { grapheme = "n", phoneme = "n", example = "net" },
+  { grapheme = "m", phoneme = "m", example = "map" },
+  { grapheme = "d", phoneme = "d", example = "dog" },
+]
+
+[[phonics.sets]]
+id = "phonics.ls.p2_set3"
+title = "Phase 2, set 3"
+gpcs = [
+  { grapheme = "g", phoneme = "ɡ", example = "got" },
+  { grapheme = "o", phoneme = "ɒ", example = "on" },
+  { grapheme = "c", phoneme = "k", example = "cat" },
+  { grapheme = "k", phoneme = "k", example = "kit" },
+]
+
+[[phonics.sets]]
+id = "phonics.ls.p2_set4"
+title = "Phase 2, set 4"
+gpcs = [
+  { grapheme = "ck", phoneme = "k", example = "sock" },
+  { grapheme = "e", phoneme = "e", example = "bed" },
+  { grapheme = "u", phoneme = "ʌ", example = "sun" },
+  { grapheme = "r", phoneme = "r", example = "rat" },
+]
+
+[[phonics.sets]]
+id = "phonics.ls.p2_set5"
+title = "Phase 2, set 5"
+gpcs = [
+  { grapheme = "h", phoneme = "h", example = "hat" },
+  { grapheme = "b", phoneme = "b", example = "bus" },
+  { grapheme = "f", phoneme = "f", example = "fan" },
+  { grapheme = "ff", phoneme = "f", example = "off" },
+  { grapheme = "l", phoneme = "l", example = "log" },
+  { grapheme = "ll", phoneme = "l", example = "bell" },
+  { grapheme = "ss", phoneme = "s", example = "kiss" },
+]
+
+[[phonics.sets]]
+id = "phonics.ls.p3_set6"
+title = "Phase 3, set 6"
+gpcs = [
+  { grapheme = "j", phoneme = "dʒ", example = "jam" },
+  { grapheme = "v", phoneme = "v", example = "van" },
+  { grapheme = "w", phoneme = "w", example = "web" },
+  { grapheme = "x", phoneme = "ks", example = "fox" },
+]
+
+[[phonics.sets]]
+id = "phonics.ls.p3_set7"
+title = "Phase 3, set 7"
+gpcs = [
+  { grapheme = "y", phoneme = "j", example = "yes" },
+  { grapheme = "z", phoneme = "z", example = "zip" },
+  { grapheme = "zz", phoneme = "z", example = "buzz" },
+  { grapheme = "qu", phoneme = "kw", example = "quiz" },
+]
+
+[[phonics.sets]]
+id = "phonics.ls.p3_consonant_digraphs"
+title = "Phase 3, consonant digraphs"
+gpcs = [
+  { grapheme = "ch", phoneme = "tʃ", example = "chip" },
+  { grapheme = "sh", phoneme = "ʃ", example = "ship" },
+  { grapheme = "th", phoneme = "θ", example = "thin" },
+  { grapheme = "th", phoneme = "ð", example = "then" },
+  { grapheme = "ng", phoneme = "ŋ", example = "ring" },
+]
+
+[[phonics.sets]]
+id = "phonics.ls.p3_vowel_digraphs"
+title = "Phase 3, vowel digraphs and trigraphs"
+gpcs = [
+  { grapheme = "ai", phoneme = "eɪ", example = "rain" },
+  { grapheme = "ee", phoneme = "iː", example = "bee" },
+  { grapheme = "igh", phoneme = "aɪ", example = "light" },
+  { grapheme = "oa", phoneme = "əʊ", example = "boat" },
+  { grapheme = "oo", phoneme = "uː", example = "moon" },
+  { grapheme = "oo", phoneme = "ʊ", example = "book" },
+  { grapheme = "ar", phoneme = "ɑː", example = "star" },
+  { grapheme = "or", phoneme = "ɔː", example = "fork" },
+  { grapheme = "ur", phoneme = "ɜː", example = "fur" },
+  { grapheme = "ow", phoneme = "aʊ", example = "cow" },
+  { grapheme = "oi", phoneme = "ɔɪ", example = "coin" },
+  { grapheme = "ear", phoneme = "ɪə", example = "ear" },
+  { grapheme = "air", phoneme = "eə", example = "hair" },
+  { grapheme = "ure", phoneme = "ʊə", example = "pure" },
+  { grapheme = "er", phoneme = "ə", example = "letter" },
+]

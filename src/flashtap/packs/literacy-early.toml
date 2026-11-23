@@ -1,0 +1,279 @@
+# Early reading and spelling: sounds in words, letter shapes, GPCs, blending and segmenting (spec §5).
+# The GPCs themselves are in the phonics sequence (phonics-letters-and-sounds.toml); a skill names a phase as a
+# parameter, so the same skill runs from Phase 2 to Phase 5 without new entries.
+
+pack = "literacy.early"
+version = 1
+title = "Literacy: phonological awareness, letters, GPCs, decoding, spelling, comprehension"
+status = "draft"
+
+[[strands]]
+id = "literacy.phonological"
+domain = "literacy"
+title = "Phonological awareness"
+
+[[strands]]
+id = "literacy.phonemic"
+domain = "literacy"
+title = "Phonemic awareness"
+
+[[strands]]
+id = "literacy.letters"
+domain = "literacy"
+title = "Letter forms"
+
+[[strands]]
+id = "literacy.gpc"
+domain = "literacy"
+title = "Grapheme-phoneme correspondences"
+
+[[strands]]
+id = "literacy.decoding"
+domain = "literacy"
+title = "Decoding"
+
+[[strands]]
+id = "literacy.word_recognition"
+domain = "literacy"
+title = "Word recognition"
+
+[[strands]]
+id = "literacy.spelling"
+domain = "literacy"
+title = "Spelling"
+
+[[strands]]
+id = "literacy.comprehension"
+domain = "literacy"
+title = "Comprehension"
+
+[[strands]]
+id = "literacy.handwriting"
+domain = "literacy"
+title = "Handwriting"
+
+# Phonological and phonemic awareness (sounds, no letters)
+
+[[skills]]
+id = "literacy.phonological.rhyme"
+title = "Hear which words rhyme"
+strand = "literacy.phonological"
+description = "Pick the word that rhymes with a spoken word."
+
+[[skills]]
+id = "literacy.phonological.alliteration"
+title = "Hear words that start the same"
+strand = "literacy.phonological"
+description = "Pick the words that begin with the same sound, by ear."
+edges = [
+  { relation = "facilitates", to = "literacy.phonemic.initial_sound", confidence = "high", source = "src.letters_and_sounds" },
+]
+
+[[skills]]
+id = "literacy.phonemic.initial_sound"
+title = "Hear the first sound in a word"
+strand = "literacy.phonemic"
+description = "Find the picture whose word starts with a given sound."
+dimensions = { sound_position = ["initial"] }
+edges = [
+  { relation = "confounded_by", to = "language.vocabulary.receptive", confidence = "high", source = "src.flashtap_judgement", note = "A learner who does not know the picture's word cannot hear its first sound." },
+]
+
+[[skills]]
+id = "literacy.phonemic.blend_oral"
+title = "Blend spoken sounds into a word"
+strand = "literacy.phonemic"
+description = "Hear /k/ /æ/ /t/ and find the cat."
+dimensions = { word_shape = ["vc", "cvc", "ccvc", "cvcc"] }
+edges = [
+  { relation = "facilitates", from = "literacy.phonemic.initial_sound", confidence = "medium", source = "src.letters_and_sounds" },
+]
+
+[[skills]]
+id = "literacy.phonemic.segment_oral"
+title = "Split a spoken word into its sounds"
+strand = "literacy.phonemic"
+description = "Hear 'dog' and give /d/ /ɒ/ /ɡ/, in order."
+dimensions = { word_shape = ["vc", "cvc", "ccvc", "cvcc"], sound_position = ["initial", "final", "medial"] }
+edges = [
+  { relation = "facilitates", from = "literacy.phonemic.initial_sound", confidence = "medium", source = "src.letters_and_sounds" },
+  { relation = "related_to", to = "literacy.phonemic.blend_oral", confidence = "medium", source = "src.letters_and_sounds" },
+]
+
+# Letter forms
+
+[[skills]]
+id = "literacy.letters.identify"
+title = "Tell letter shapes apart"
+strand = "literacy.letters"
+description = "Find a shown letter among others, including b, d, p and q."
+dimensions = { letter_case = ["lower", "upper"] }
+
+[[skills]]
+id = "literacy.letters.case_match"
+title = "Match capital and small letters"
+strand = "literacy.letters"
+description = "Pair each capital with its lower-case letter."
+dimensions = { letter_case = ["lower", "upper"] }
+edges = [
+  { relation = "prerequisite_strong", from = "literacy.letters.identify", confidence = "medium", source = "src.flashtap_judgement" },
+]
+
+# GPCs
+
+[[skills]]
+id = "literacy.gpc.grapheme_from_sound"
+title = "Find the letters for a sound"
+strand = "literacy.gpc"
+description = "Hear a phoneme and tap its grapheme, from single letters to digraphs and trigraphs."
+dimensions = { gpc_phase = ["phase2", "phase3", "phase4", "phase5"] }
+edges = [
+  { relation = "prerequisite_strong", from = "literacy.letters.identify", confidence = "medium", source = "src.flashtap_judgement" },
+  { relation = "facilitates", from = "literacy.phonemic.initial_sound", confidence = "high", source = "src.letters_and_sounds" },
+]
+
+[[skills]]
+id = "literacy.gpc.sound_from_grapheme"
+title = "Say the sound for the letters"
+strand = "literacy.gpc"
+description = "See a grapheme and give its phoneme: a sound for each letter, then digraphs and trigraphs."
+dimensions = { gpc_phase = ["phase2", "phase3", "phase4", "phase5"] }
+edges = [
+  { relation = "related_to", to = "literacy.gpc.grapheme_from_sound", confidence = "high", source = "src.letters_and_sounds" },
+  { relation = "prerequisite_strong", from = "literacy.letters.identify", confidence = "medium", source = "src.flashtap_judgement" },
+]
+
+[[skills]]
+id = "literacy.gpc.initial_letter"
+title = "Find a word that starts with a letter's sound"
+strand = "literacy.gpc"
+description = "See a letter and find the picture whose word starts with that letter's sound (the Letters round)."
+dimensions = { gpc_phase = ["phase2", "phase3"], sound_position = ["initial"] }
+edges = [
+  { relation = "prerequisite_strong", from = "literacy.gpc.sound_from_grapheme", confidence = "medium", source = "src.flashtap_judgement" },
+  { relation = "prerequisite_strong", from = "literacy.phonemic.initial_sound", confidence = "high", source = "src.letters_and_sounds" },
+]
+
+# Decoding and word recognition
+
+[[skills]]
+id = "literacy.decoding.blend_words"
+title = "Read a word by blending its sounds"
+strand = "literacy.decoding"
+description = "Read a written word made of taught GPCs by saying and blending its sounds; shown by finding its picture."
+dimensions = { gpc_phase = ["phase2", "phase3", "phase4", "phase5"], word_shape = ["vc", "cvc", "ccvc", "cvcc", "polysyllabic"] }
+edges = [
+  { relation = "prerequisite_strong", from = "literacy.gpc.sound_from_grapheme", confidence = "high", source = "src.eef_phonics" },
+  { relation = "prerequisite_strong", from = "literacy.phonemic.blend_oral", confidence = "high", source = "src.letters_and_sounds" },
+]
+
+[[skills]]
+id = "literacy.word_recognition.exception_words"
+title = "Read common exception words"
+strand = "literacy.word_recognition"
+description = "Read the frequent words whose spelling is not yet decodable (the, to, I, no, go)."
+
+[[skills]]
+id = "literacy.decoding.sentences"
+title = "Read a simple sentence"
+strand = "literacy.decoding"
+description = "Read a short sentence of decodable and exception words, shown by picking the picture it describes."
+dimensions = { gpc_phase = ["phase2", "phase3", "phase4", "phase5"] }
+edges = [
+  { relation = "prerequisite_strong", from = "literacy.decoding.blend_words", confidence = "high", source = "src.letters_and_sounds" },
+  { relation = "prerequisite_strong", from = "literacy.word_recognition.exception_words", confidence = "medium", source = "src.letters_and_sounds" },
+]
+
+# Spelling
+
+[[skills]]
+id = "literacy.spelling.build_words"
+title = "Spell a word from its sounds"
+strand = "literacy.spelling"
+description = "Hear a word, split it into sounds and choose a grapheme for each, in order (selecting, not handwriting)."
+dimensions = { gpc_phase = ["phase2", "phase3", "phase4", "phase5"], word_shape = ["vc", "cvc", "ccvc", "cvcc"] }
+edges = [
+  { relation = "prerequisite_strong", from = "literacy.phonemic.segment_oral", confidence = "high", source = "src.letters_and_sounds" },
+  { relation = "prerequisite_strong", from = "literacy.gpc.grapheme_from_sound", confidence = "high", source = "src.letters_and_sounds" },
+]
+
+# Comprehension (listening to texts read aloud)
+
+[[skills]]
+id = "literacy.comprehension.literal"
+title = "Answer a question about a story heard"
+strand = "literacy.comprehension"
+description = "After a short story read aloud, pick the picture that answers who, what or where."
+edges = [
+  { relation = "prerequisite_strong", from = "language.listening.story", confidence = "medium", source = "src.eef_preparing_for_literacy" },
+]
+
+[[skills]]
+id = "literacy.comprehension.sequence"
+title = "Put a story's events in order"
+strand = "literacy.comprehension"
+description = "Order three or four pictures of a story just heard."
+edges = [
+  { relation = "facilitates", from = "literacy.comprehension.literal", confidence = "medium", source = "src.eef_preparing_for_literacy" },
+]
+
+[[skills]]
+id = "literacy.comprehension.predict"
+title = "Say what happens next in a story"
+strand = "literacy.comprehension"
+description = "Pick the picture of what is likely to happen next, partway through a familiar or new story."
+edges = [
+  { relation = "facilitates", from = "literacy.comprehension.sequence", confidence = "medium", source = "src.eef_preparing_for_literacy" },
+]
+
+[[skills]]
+id = "literacy.comprehension.vocabulary"
+title = "Understand new words from a story"
+strand = "literacy.comprehension"
+description = "Find the picture for a word recently met in a story, rhyme or information book."
+edges = [
+  { relation = "part_of", to = "language.vocabulary.receptive", confidence = "medium", source = "src.flashtap_judgement" },
+]
+
+# Handwriting: named so curricula can map to it; tap rounds cannot observe it (see the EYFS objectives).
+
+[[skills]]
+id = "literacy.handwriting.letter_formation"
+title = "Form letters correctly"
+strand = "literacy.handwriting"
+description = "Write each letter starting and moving in the right place."
+edges = [
+  { relation = "facilitates", from = "literacy.letters.identify", confidence = "medium", source = "src.flashtap_judgement" },
+]
+
+[[misconceptions]]
+id = "literacy.misconception.letter_name"
+title = "Gives the letter's name, not its sound"
+skills = ["literacy.gpc.sound_from_grapheme", "literacy.gpc.initial_letter"]
+signs = "Picks words starting with the letter's name sound: for C, a word starting /s/ ('see')."
+probe = "For C, offer a word starting /k/ and one starting /s/ written with another letter."
+source = "src.flashtap_judgement"
+
+[[misconceptions]]
+id = "literacy.misconception.mirror_letters"
+title = "Confuses b, d, p and q"
+skills = ["literacy.letters.identify", "literacy.gpc.sound_from_grapheme"]
+signs = "Errors cluster among letters that are rotations or reflections of each other."
+probe = "b with d, p and q as the other choices, against b with unrelated letters."
+source = "src.flashtap_judgement"
+
+[[misconceptions]]
+id = "literacy.misconception.added_schwa"
+title = "Adds 'uh' to stretchy sounds"
+skills = ["literacy.phonemic.blend_oral", "literacy.decoding.blend_words"]
+signs = "Blends 'suh-a-tuh' and cannot hear 'sat'; stretchy sounds (s, m, n, f) are said with an extra vowel."
+probe = "Words beginning with a stretchy sound against words beginning with a bouncy one (p, t)."
+source = "src.letters_and_sounds"
+
+[[misconceptions]]
+id = "literacy.misconception.first_letter_guess"
+title = "Guesses the word from its first letter"
+skills = ["literacy.decoding.blend_words"]
+signs = "Picks a picture whose word shares the first letter but not the rest: 'cat' read as 'cup'."
+probe = "Choices that share the first GPC and differ later (cat, cap, cot)."
+source = "src.eef_phonics"

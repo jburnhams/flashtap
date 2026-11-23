@@ -1,0 +1,329 @@
+# Number to 10 and the counting system: the first slice of the maths ontology (spec §4).
+# Skills are capabilities with parameter ranges, not ages or years; later skills (place value, addition within 20)
+# join as more [[skills]] here or in a new pack, with edges back to these.
+
+pack = "maths.number"
+version = 1
+title = "Number: counting, cardinality, subitising, numerals, comparison, composition"
+status = "draft"
+
+[[strands]]
+id = "maths.verbal_count"
+domain = "maths"
+title = "Verbal number sequence"
+
+[[strands]]
+id = "maths.counting"
+domain = "maths"
+title = "Counting objects"
+
+[[strands]]
+id = "maths.cardinality"
+domain = "maths"
+title = "Cardinality"
+
+[[strands]]
+id = "maths.subitising"
+domain = "maths"
+title = "Subitising"
+
+[[strands]]
+id = "maths.numerals"
+domain = "maths"
+title = "Numeral symbols"
+
+[[strands]]
+id = "maths.comparison"
+domain = "maths"
+title = "Magnitude and comparison"
+
+[[strands]]
+id = "maths.composition"
+domain = "maths"
+title = "Part-whole"
+
+[[strands]]
+id = "maths.patterns"
+domain = "maths"
+title = "Number patterns"
+
+[[strands]]
+id = "maths.geometry"
+domain = "maths"
+title = "Geometry"
+
+# Verbal number sequence
+
+[[skills]]
+id = "maths.verbal_count.forwards"
+title = "Say the number names in order"
+strand = "maths.verbal_count"
+description = "Recite the counting sequence from one, without objects."
+dimensions = { number_range = [1, 100] }
+
+[[skills]]
+id = "maths.verbal_count.decades"
+title = "Count across a decade"
+strand = "maths.verbal_count"
+description = "Carry on past 19, 29, 39: the pattern of the counting system beyond 20."
+dimensions = { number_range = [10, 100] }
+edges = [
+  { relation = "prerequisite_strong", from = "maths.verbal_count.forwards", confidence = "high", source = "src.ncetm_mastering_number" },
+]
+
+[[skills]]
+id = "maths.verbal_count.one_more"
+title = "Say one more and one less"
+strand = "maths.verbal_count"
+description = "Name the number after or before a given number without counting from one."
+dimensions = { number_range = [0, 20] }
+edges = [
+  { relation = "prerequisite_strong", from = "maths.verbal_count.forwards", confidence = "high", source = "src.ncetm_cardinality" },
+]
+
+# Counting objects
+
+[[skills]]
+id = "maths.counting.one_to_one"
+title = "Touch or tag each thing once"
+strand = "maths.counting"
+description = "One number word per object, none skipped or counted twice."
+dimensions = { number_range = [1, 10], arrangement = ["line", "scattered"] }
+
+[[skills]]
+id = "maths.counting.objects"
+title = "Count a set of things"
+strand = "maths.counting"
+description = "Count a set by saying the sequence in step with each object."
+dimensions = { number_range = [1, 10], arrangement = ["line", "scattered"], representation = ["objects", "dots"] }
+edges = [
+  { relation = "prerequisite_strong", from = "maths.verbal_count.forwards", confidence = "high", source = "src.ncetm_cardinality" },
+  { relation = "prerequisite_strong", from = "maths.counting.one_to_one", confidence = "high", source = "src.ncetm_cardinality" },
+  { relation = "confounded_by", to = "maths.numerals.recognise", confidence = "high", source = "src.flashtap_judgement", note = "When the answer is a tapped numeral, not knowing the numeral explains a wrong tap as well as a wrong count." },
+]
+
+# Cardinality
+
+[[skills]]
+id = "maths.cardinality.last_number"
+title = "Know the last number counted is how many"
+strand = "maths.cardinality"
+description = "Answer 'how many?' with the last number said, without counting again."
+dimensions = { number_range = [1, 10] }
+edges = [
+  { relation = "prerequisite_strong", from = "maths.counting.objects", confidence = "high", source = "src.ncetm_cardinality" },
+  { relation = "facilitates", from = "maths.subitising.perceptual", confidence = "medium", source = "src.ncetm_cardinality" },
+]
+
+[[skills]]
+id = "maths.cardinality.give_n"
+title = "Give a number of things"
+strand = "maths.cardinality"
+description = "Make a set of the asked-for size and stop at that number."
+dimensions = { number_range = [1, 10], representation = ["spoken", "numerals"] }
+edges = [
+  { relation = "prerequisite_strong", from = "maths.cardinality.last_number", confidence = "high", source = "src.ncetm_cardinality" },
+]
+
+[[skills]]
+id = "maths.cardinality.conservation"
+title = "Know rearranging does not change how many"
+strand = "maths.cardinality"
+description = "A set moved, spread out or bunched up still has the same number."
+dimensions = { number_range = [1, 10], arrangement = ["line", "scattered"] }
+edges = [
+  { relation = "prerequisite_strong", from = "maths.cardinality.last_number", confidence = "medium", source = "src.ncetm_cardinality" },
+]
+
+# Subitising
+
+[[skills]]
+id = "maths.subitising.perceptual"
+title = "See how many without counting, up to 5"
+strand = "maths.subitising"
+description = "Name a small number of things shown too briefly to count."
+dimensions = { number_range = [1, 5], arrangement = ["line", "scattered", "dice"], exposure = ["brief"] }
+
+[[skills]]
+id = "maths.subitising.conceptual"
+title = "See a number as smaller groups"
+strand = "maths.subitising"
+description = "See 7 on a ten frame as 5 and 2, or 6 on a dice as two 3s."
+dimensions = { number_range = [4, 10], arrangement = ["dice", "ten_frame", "fingers"], exposure = ["untimed", "brief"] }
+edges = [
+  { relation = "prerequisite_strong", from = "maths.subitising.perceptual", confidence = "high", source = "src.ncetm_mastering_number" },
+  { relation = "facilitates", to = "maths.composition.part_whole", confidence = "medium", source = "src.ncetm_mastering_number" },
+]
+
+# Numerals
+
+[[skills]]
+id = "maths.numerals.recognise"
+title = "Find the numeral for a spoken number"
+strand = "maths.numerals"
+description = "Hear a number word and pick its numeral."
+dimensions = { number_range = [0, 10], representation = ["spoken"] }
+
+[[skills]]
+id = "maths.numerals.quantity"
+title = "Match a numeral to a quantity"
+strand = "maths.numerals"
+description = "Link a numeral with a set of that many, either way round."
+dimensions = { number_range = [0, 10], representation = ["objects", "dots", "fingers", "numerals"] }
+edges = [
+  { relation = "prerequisite_strong", from = "maths.numerals.recognise", confidence = "high", source = "src.eef_early_maths" },
+  { relation = "prerequisite_strong", from = "maths.cardinality.last_number", confidence = "high", source = "src.eef_early_maths" },
+]
+
+[[skills]]
+id = "maths.numerals.zero"
+title = "Know zero as none"
+strand = "maths.numerals"
+description = "Zero is the number of an empty set, and comes before one."
+dimensions = { number_range = [0, 1] }
+edges = [
+  { relation = "facilitates", from = "maths.cardinality.last_number", confidence = "medium", source = "src.ncetm_mastering_number" },
+]
+
+# Comparison
+
+[[skills]]
+id = "maths.comparison.more_fewer"
+title = "Tell which has more, fewer or the same"
+strand = "maths.comparison"
+description = "Compare two sets by matching, counting or seeing, including when the bigger-looking set has fewer."
+dimensions = { number_range = [1, 10], arrangement = ["line", "scattered"] }
+edges = [
+  { relation = "facilitates", from = "maths.cardinality.last_number", confidence = "high", source = "src.ncetm_mastering_number" },
+  { relation = "facilitates", from = "maths.subitising.perceptual", confidence = "medium", source = "src.ncetm_mastering_number" },
+]
+
+[[skills]]
+id = "maths.comparison.order"
+title = "Put numbers in order"
+strand = "maths.comparison"
+description = "Order numerals or sets from smallest to largest."
+dimensions = { number_range = [0, 10], representation = ["numerals", "objects"] }
+edges = [
+  { relation = "facilitates", from = "maths.comparison.more_fewer", confidence = "medium", source = "src.learning_trajectories" },
+  { relation = "facilitates", from = "maths.verbal_count.one_more", confidence = "medium", source = "src.learning_trajectories" },
+]
+
+# Part-whole
+
+[[skills]]
+id = "maths.composition.part_whole"
+title = "See a number as made of two parts"
+strand = "maths.composition"
+description = "Split a set into two parts and know the whole is unchanged."
+dimensions = { number_range = [2, 10] }
+edges = [
+  { relation = "prerequisite_strong", from = "maths.cardinality.last_number", confidence = "high", source = "src.ncetm_mastering_number" },
+  { relation = "facilitates", from = "maths.cardinality.conservation", confidence = "medium", source = "src.ncetm_mastering_number" },
+]
+
+[[skills]]
+id = "maths.composition.bonds_to_5"
+title = "Recall the pairs that make each number to 5"
+strand = "maths.composition"
+description = "Know without counting which two numbers make 2, 3, 4 and 5, and the missing part."
+dimensions = { number_range = [0, 5] }
+edges = [
+  { relation = "prerequisite_strong", from = "maths.composition.part_whole", confidence = "high", source = "src.ncetm_mastering_number" },
+]
+
+[[skills]]
+id = "maths.composition.bonds_to_10"
+title = "Recall the pairs that make 10"
+strand = "maths.composition"
+description = "Know without counting the pairs that make 6 to 10, and 10 above all."
+dimensions = { number_range = [0, 10] }
+edges = [
+  { relation = "prerequisite_strong", from = "maths.composition.bonds_to_5", confidence = "medium", source = "src.ncetm_mastering_number" },
+]
+
+[[skills]]
+id = "maths.composition.doubles"
+title = "Know doubles to 10"
+strand = "maths.composition"
+description = "1 and 1, 2 and 2 ... 5 and 5, recalled."
+dimensions = { number_range = [2, 10] }
+edges = [
+  { relation = "facilitates", from = "maths.composition.part_whole", confidence = "medium", source = "src.ncetm_mastering_number" },
+]
+
+# Patterns
+
+[[skills]]
+id = "maths.patterns.odd_even"
+title = "Tell odd from even"
+strand = "maths.patterns"
+description = "Even numbers pair up with none left over; odd numbers leave one."
+dimensions = { number_range = [1, 10] }
+edges = [
+  { relation = "facilitates", from = "maths.composition.doubles", confidence = "medium", source = "src.ncetm_mastering_number" },
+]
+
+[[skills]]
+id = "maths.patterns.equal_sharing"
+title = "Share fairly"
+strand = "maths.patterns"
+description = "Share a set equally between 2 to 4, and see when it cannot be shared equally."
+dimensions = { number_range = [2, 10] }
+edges = [
+  { relation = "facilitates", from = "maths.composition.part_whole", confidence = "medium", source = "src.flashtap_judgement" },
+  { relation = "related_to", to = "maths.patterns.odd_even", confidence = "medium", source = "src.flashtap_judgement" },
+]
+
+# Geometry (the Shapes round)
+
+[[skills]]
+id = "maths.geometry.name_2d"
+title = "Name flat shapes"
+strand = "maths.geometry"
+description = "Find a circle, square, triangle, rectangle or diamond by its name, whatever its colour."
+edges = [
+  { relation = "confounded_by", to = "language.vocabulary.colours", confidence = "low", source = "src.flashtap_judgement", note = "The Shapes round names the colour too." },
+]
+
+# Misconceptions: named error patterns, each with an item that tells it from a slip.
+
+[[misconceptions]]
+id = "maths.misconception.recounts"
+title = "Counts again when asked how many"
+skills = ["maths.cardinality.last_number"]
+signs = "Asked 'how many?' straight after counting, counts the set again instead of giving the last number."
+probe = "Count a set together, cover it, then ask how many."
+source = "src.ncetm_cardinality"
+
+[[misconceptions]]
+id = "maths.misconception.one_to_one_slip"
+title = "Skips or double-counts objects"
+skills = ["maths.counting.one_to_one", "maths.counting.objects"]
+signs = "The count is off by one or two, more often in scattered sets than in lines."
+probe = "The same number in a line and scattered: right in the line, wrong when scattered."
+source = "src.ncetm_cardinality"
+
+[[misconceptions]]
+id = "maths.misconception.longer_is_more"
+title = "Judges by how much room a set takes"
+skills = ["maths.comparison.more_fewer", "maths.cardinality.conservation"]
+signs = "Chooses the more spread-out set as having more."
+probe = "Two sets where the one with fewer things is spread out wider."
+source = "src.ncetm_mastering_number"
+
+[[misconceptions]]
+id = "maths.misconception.reversal_6_9"
+title = "Confuses 6 and 9"
+skills = ["maths.numerals.recognise"]
+signs = "Taps 9 for six or 6 for nine, more than other numerals."
+probe = "6 and 9 both offered, with other numerals as well."
+source = "src.flashtap_judgement"
+
+[[misconceptions]]
+id = "maths.misconception.teen_reversal"
+title = "Reverses teen numerals (12 and 21)"
+skills = ["maths.numerals.recognise"]
+signs = "Taps 21 for twelve: 'twelve' is heard ones first, but written tens first."
+probe = "12 and 21 both offered."
+source = "src.flashtap_judgement"

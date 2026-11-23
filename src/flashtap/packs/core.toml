@@ -1,0 +1,133 @@
+# The sources every other pack cites, the domains and the parameter dimensions skills are defined over.
+# How to write a pack: docs/content.md. `checked` is the date someone compared the packs with the source itself.
+
+pack = "core"
+version = 1
+title = "Sources, domains and dimensions"
+status = "draft"
+
+[[sources]]
+id = "src.ncetm_cardinality"
+title = "Early years: cardinality and counting"
+publisher = "NCETM"
+url = "https://ncetm.org.uk/classroom-resources/ey-cardinality-and-counting/"
+
+[[sources]]
+id = "src.ncetm_mastering_number"
+title = "Mastering Number: building strong foundations in early maths"
+publisher = "NCETM"
+edition = "2025"
+url = "https://www.ncetm.org.uk/features/mastering-number-building-strong-foundations-in-early-maths/"
+
+[[sources]]
+id = "src.eef_early_maths"
+title = "Improving Mathematics in the Early Years and Key Stage 1"
+publisher = "Education Endowment Foundation"
+url = "https://d2tic4wvo1iusb.cloudfront.net/production/eef-guidance-reports/early-maths/EEF_Maths_EY_KS1_Guidance_Report.pdf"
+
+[[sources]]
+id = "src.eef_preparing_for_literacy"
+title = "Preparing for Literacy"
+publisher = "Education Endowment Foundation"
+edition = "2018"
+url = "https://educationendowmentfoundation.org.uk/education-evidence/guidance-reports/literacy-early-years"
+
+[[sources]]
+id = "src.eef_phonics"
+title = "Phonics: Teaching and Learning Toolkit"
+publisher = "Education Endowment Foundation"
+url = "https://educationendowmentfoundation.org.uk/education-evidence/teaching-learning-toolkit/phonics/"
+
+[[sources]]
+id = "src.eyfs_2026"
+title = "Early years foundation stage statutory framework for group and school-based providers"
+publisher = "Department for Education"
+edition = "Effective 1 September 2026"
+url = "https://www.gov.uk/government/publications/early-years-foundation-stage-framework--2"
+
+[[sources]]
+id = "src.letters_and_sounds"
+title = "Letters and Sounds: principles and practice of high quality phonics"
+publisher = "Department for Education and Skills"
+edition = "2007 (no longer a validated programme; the order of its Phase 2 and 3 sets is used as a default)"
+url = "https://www.gov.uk/government/publications/letters-and-sounds"
+
+[[sources]]
+id = "src.learning_trajectories"
+title = "Learning and teaching early math: the learning trajectories approach (Clements and Sarama)"
+url = "https://www.learningtrajectories.org/"
+
+[[sources]]
+id = "src.flashtap_judgement"
+title = "Flashtap's own judgement, to be reviewed"
+url = "https://github.com/jburnhams/flashtap/blob/main/docs/content.md"
+
+[[domains]]
+id = "maths"
+title = "Mathematics"
+
+[[domains]]
+id = "literacy"
+title = "Literacy"
+
+[[domains]]
+id = "language"
+title = "Communication and language"
+
+# Content dimensions (spec §4-§6). Presentation, response, scaffolding and time are properties of a mechanic, and
+# arrive with the mechanics (plan PR 3).
+
+[[dimensions]]
+id = "number_range"
+title = "Number range"
+kind = "range"
+low = 0
+high = 1000
+description = "The smallest and largest number the skill is practised with."
+
+[[dimensions]]
+id = "arrangement"
+title = "Arrangement"
+kind = "set"
+values = ["line", "scattered", "dice", "ten_frame", "fingers"]
+description = "How a set of things is laid out."
+
+[[dimensions]]
+id = "representation"
+title = "Representation"
+kind = "set"
+values = ["objects", "dots", "fingers", "numerals", "spoken"]
+description = "What stands for the number."
+
+[[dimensions]]
+id = "exposure"
+title = "Exposure"
+kind = "ordered"
+values = ["untimed", "brief"]
+description = "Untimed, or shown briefly so it cannot be counted (subitising). Time is never the only evidence."
+
+[[dimensions]]
+id = "letter_case"
+title = "Letter case"
+kind = "set"
+values = ["lower", "upper"]
+
+[[dimensions]]
+id = "gpc_phase"
+title = "Phonics phase"
+kind = "ordered"
+values = ["phase2", "phase3", "phase4", "phase5"]
+description = "Which phase's correspondences are in play, in the learner's phonics sequence."
+
+[[dimensions]]
+id = "word_shape"
+title = "Word shape"
+kind = "ordered"
+values = ["vc", "cvc", "ccvc", "cvcc", "polysyllabic"]
+description = "Consonant and vowel pattern of the words, easiest first."
+
+[[dimensions]]
+id = "sound_position"
+title = "Sound position"
+kind = "ordered"
+values = ["initial", "final", "medial"]

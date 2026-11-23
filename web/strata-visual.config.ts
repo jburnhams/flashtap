@@ -40,6 +40,7 @@ export default defineVisualConfig({
         },
       },
       { name: 'counting', path: '/?mode=counting' },
+      { name: 'content', path: '/content', states: { skills: [], curriculum: { path: '/content?tab=curriculum' } } },
       { name: 'settings', path: '/settings', states: { play: [], appearance: { path: '/settings?tab=appearance' } } },
     ],
   },

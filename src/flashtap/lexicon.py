@@ -1,12 +1,18 @@
-"""The things a round can ask about: a picture (an emoji for now), the word for it, and the forms a sentence needs.
+"""The things a round can ask about: a picture (an emoji for now), the word for it, the forms a sentence needs, and the
+sound it starts with.
 
-Ported from the TypeScript library's `data/gameConfig.ts`, with what its string templates got wrong written down per word:
-the plural ("sheep", not "sheeps") and the article ("an elephant", not "a elephant"). `initial` is the first sound's letter
-for the Letters round, or None where the word does not start with the plain sound of its first letter (chicken, cheese):
-"What starts with C?" must not mix /k/ and /tʃ/. A content pack with real phonemes replaces this (docs/plan.md, PR 2).
+The words live in the `words` content pack (`src/flashtap/packs/words.toml`), with their graphemes and phonemes; this
+module turns them into the `Thing`s the round generators use (`words()`, read once on first use). Plurals and articles are written per word where a rule
+would be wrong ("sheep", "some grapes"). `onset` is the word's first GPC from the phonics inventory, or None when its
+first sound is outside it; the Letters round uses only words whose first grapheme is one letter, so "What starts with
+C?" never mixes /k/ (cat) with /tʃ/ (chicken).
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from functools import cache
+
+from flashtap import content
+from flashtap.content.model import GPC
 
 
 @dataclass(frozen=True)
@@ -17,10 +23,9 @@ class Thing:
     category: str
     plural: str = ""  # empty: word + "s"
     article: str = ""  # empty: "an" before a vowel letter, else "a"
-    initial: str | None = ""  # empty: the first letter; None: not used in the Letters round
+    onset: GPC | None = None  # the first sound, when the phonics inventory has it
     colour: str | None = None  # shapes only
     shape: str | None = None  # shapes only
-    tags: tuple[str, ...] = field(default_factory=tuple[str, ...])
 
     @property
     def many(self) -> str:
@@ -33,7 +38,8 @@ class Thing:
 
     @property
     def letter(self) -> str | None:
-        return None if self.initial is None else (self.initial or self.word[0]).upper()
+        """The capital letter for the Letters round: the first grapheme when it is a single letter, else None."""
+        return self.onset.grapheme.upper() if self.onset and len(self.onset.grapheme) == 1 else None
 
     @property
     def label(self) -> str:
@@ -41,66 +47,64 @@ class Thing:
         return self.word[0].upper() + self.word[1:]
 
 
-ANIMALS = (
-    Thing("sheep", "🐑", "sheep", "animals", plural="sheep"),
-    Thing("cow", "🐄", "cow", "animals"),
-    Thing("pig", "🐖", "pig", "animals"),
-    Thing("horse", "🐎", "horse", "animals"),
-    Thing("chicken", "🐓", "chicken", "animals", initial=None),
-    Thing("dog", "🐕", "dog", "animals"),
-    Thing("cat", "🐈", "cat", "animals"),
-    Thing("duck", "🦆", "duck", "animals"),
-    Thing("lion", "🦁", "lion", "animals"),
-    Thing("tiger", "🐅", "tiger", "animals"),
-    Thing("elephant", "🐘", "elephant", "animals"),
-    Thing("monkey", "🐒", "monkey", "animals"),
-)
+@dataclass(frozen=True)
+class Lexicon:
+    everything: tuple[Thing, ...]
 
-FOOD = (
-    Thing("apple", "🍎", "apple", "food"),
-    Thing("banana", "🍌", "banana", "food"),
-    Thing("grapes", "🍇", "grapes", "food", plural="grapes", article="some"),
-    Thing("watermelon", "🍉", "watermelon", "food"),
-    Thing("carrot", "🥕", "carrot", "food"),
-    Thing("corn", "🌽", "corn", "food", plural="corn cobs", article="some"),
-    Thing("pepper", "🌶️", "pepper", "food"),
-    Thing("cheese", "🧀", "cheese", "food", plural="cheeses", article="some", initial=None),
-)
+    def category(self, name: str) -> tuple[Thing, ...]:
+        return tuple(t for t in self.everything if t.category == name)
 
-VEHICLES = (
-    Thing("car", "🚗", "car", "vehicles"),
-    Thing("taxi", "🚕", "taxi", "vehicles"),
-    Thing("bus", "🚌", "bus", "vehicles", plural="buses"),
-    Thing("police", "🚓", "police car", "vehicles"),
-    Thing("ambulance", "🚑", "ambulance", "vehicles"),
-    Thing("fire", "🚒", "fire engine", "vehicles"),
-    Thing("bicycle", "🚲", "bicycle", "vehicles"),
-    Thing("aeroplane", "✈️", "aeroplane", "vehicles"),  # UK English (the spec's default dialect); was "Airplane"
-    Thing("rocket", "🚀", "rocket", "vehicles"),
-)
+    @property
+    def animals(self) -> tuple[Thing, ...]:
+        return self.category("animals")
 
+    @property
+    def food(self) -> tuple[Thing, ...]:
+        return self.category("food")
 
-def _shape(colour: str, shape: str, picture: str) -> Thing:
-    return Thing(f"{colour}_{shape}", picture, f"{colour} {shape}", "shapes", colour=colour, shape=shape)
+    @property
+    def vehicles(self) -> tuple[Thing, ...]:
+        return self.category("vehicles")
+
+    @property
+    def shapes(self) -> tuple[Thing, ...]:
+        return self.category("shapes")
+
+    @property
+    def matching_pools(self) -> tuple[tuple[Thing, ...], ...]:
+        """Matching keeps a round inside one category, so a cow is never matched among buses."""
+        return (self.animals, self.food, self.vehicles)
+
+    @property
+    def countable(self) -> tuple[Thing, ...]:
+        """Pictures a learner can count in a row."""
+        return self.animals + self.food
+
+    @property
+    def letter_words(self) -> tuple[Thing, ...]:
+        """Words with a plain first sound, for Letters."""
+        return tuple(t for t in self.animals + self.food if t.letter is not None)
 
 
-SHAPES = (
-    _shape("red", "circle", "🔴"),
-    _shape("blue", "circle", "🔵"),
-    _shape("green", "circle", "🟢"),
-    _shape("yellow", "circle", "🟡"),
-    _shape("red", "square", "🟥"),
-    _shape("blue", "square", "🟦"),
-    _shape("green", "square", "🟩"),
-    _shape("orange", "square", "🟧"),
-    _shape("white", "square", "⬜"),
-    _shape("black", "square", "⬛"),
-    _shape("orange", "diamond", "🔶"),
-)
-
-# Matching keeps a round inside one category, so a cow is never matched among buses.
-MATCHING_POOLS = (ANIMALS, FOOD, VEHICLES)
-# Counting needs pictures a child can count in a row; Letters needs words with a plain first sound.
-COUNTABLE = ANIMALS + FOOD
-LETTER_WORDS = tuple(t for t in ANIMALS + FOOD if t.letter is not None)
-EVERYTHING = ANIMALS + FOOD + VEHICLES + SHAPES
+@cache
+def words() -> Lexicon:
+    """The words from the packs, read on first use rather than at import: a broken pack must not stop
+    `flashtap content check` from starting and naming what is wrong."""
+    r = content.load()
+    return Lexicon(
+        tuple(
+            Thing(
+                id=w.id,
+                picture=w.picture,
+                word=w.word,
+                category=w.category,
+                plural=w.plural,
+                article=w.article,
+                onset=r.onset(w),
+                colour=w.colour or None,
+                shape=w.shape or None,
+            )
+            for w in r.words.values()
+            if w.picture
+        )
+    )

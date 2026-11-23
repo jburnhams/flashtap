@@ -1,5 +1,15 @@
 # Progress log
 
+## 2026-11-23: content packs, the P0 ontology seed (plan PR 2)
+
+- Asked for: the next PR of the plan, the content packs for the earliest skills, built to grow through every school year by ability, never by age.
+- TOML, not the planned YAML: `tomllib` ships with Python, so the packs add no dependency, and TOML has no implicit typing (YAML reads `no` as false). Pydantic models refuse unknown keys, so a misspelt key fails instead of defaulting.
+- Edges are written on either end (`from` or `to`) and turned to one direction in the registry, so a skill's prerequisites sit with the skill. `prerequisite_strong` and `part_of` must be acyclic; `facilitates` may loop (two skills can help each other).
+- Confidence is a word (low, medium, high), not a number: these are judgements from guidance, and a probability would claim a precision nobody measured. Edges drafted here, not read from a source, cite `src.flashtap_judgement` so review can start with them.
+- The EYFS framework now in force is the one effective 1 September 2026 (dated 13 July 2026). Its maths and literacy goals are 15 statements; 12 map to skills and 3 are set aside because tap rounds cannot observe them (retelling in their own words, forming letters, free writing). Statements that need speech (say a sound, read aloud, count aloud) are mapped, with a note that choosing is the evidence until speech input exists. The statement wording was checked against the PDF only in part (opening words of each bullet).
+- `lexicon.py`'s word tables moved into `words.toml` with graphemes resolved to IPA through the phonics inventory. The Letters round now decides "plain first sound" from the first grapheme (one letter) rather than a hand-kept `initial=None`: chicken and cheese drop out for the same reason as before, and no new word can slip in. New decodable picture words (bat, fox, fish, chips...) joined their categories, so Matching, Counting and Letters draw from more pictures.
+- Every pack is `draft`: IPA and segmentations were drafted here, and the spec (§9) says generated text must not supply unchecked transcriptions; the Content screen leads with the drafts count until a person reviews them.
+
 ## 2026-11-22: Flashtap rebuilt as a strata app (0.2.0)
 
 - Asked for: change Flashtap (an npm React library, 0.1.9) into a Python web app on strata-python and strata-react; then, given the early years adaptive learning spec, a plan to grow it to match ([implementation-plan.md](implementation-plan.md)). This is PR 1 of that plan.

@@ -37,3 +37,4 @@ Vitest 5, Testing Library, user-event, MSW, and strata-react's test helpers (`st
 | `src/screens/LogScreen.tsx` | 100 | done | integration/LogScreen.test.tsx |
 | `src/screens/SystemScreen.tsx` | 100 | done | integration/SystemScreen.test.tsx, unit/logic.test.ts |
 | `src/screens/SettingsScreen.tsx` | 100 | done | integration/SettingsScreen.test.tsx |
+| `src/screens/ContentScreen.tsx` | 100 | done | integration/ContentScreen.test.tsx |

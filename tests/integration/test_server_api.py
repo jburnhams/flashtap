@@ -18,3 +18,10 @@ def test_a_real_server_answers_health_modes_and_rounds(live_app):
         r = _get(f"{base}/api/round?mode=counting&choices=8&seed=99")
         assert len(r["options"]) == 8
         assert _get(f"{base}/api/round?mode=counting&choices=8&seed=99") == r
+
+
+def test_a_real_server_lists_the_content(live_app):
+    with live_app(create_app()) as base:
+        s = _get(f"{base}/api/content")
+        assert {o["goal"] for o in s["objectives"]} >= {"Number", "Word Reading"}
+        assert any(k["modes"] == ["counting"] for k in s["skills"])

@@ -24,6 +24,32 @@ export interface Round {
   tries: number | null
 }
 
+/** An edge into or out of a skill, named by the other skill's title. */
+export interface EdgeRow { skill: string; relation: string; confidence: string; source: string; note: string }
+/** A skill from the content packs. `stages` are curriculum labels only: nothing is gated on them. */
+export interface SkillRow {
+  id: string
+  title: string
+  description: string
+  domain: string
+  strand: string
+  stages: string[]
+  modes: string[]
+  needs: EdgeRow[]
+  leads_to: EdgeRow[]
+  misconceptions: string[]
+}
+/** A curriculum statement: mapped to skills (their titles), or out of scope with the reason. */
+export interface ObjectiveRow { id: string; curriculum: string; stage: string; area: string; goal: string; text: string; skills: string[]; out_of_scope: string; note: string }
+export interface PhonicsSetRow { id: string; title: string; gpcs: { grapheme: string; phoneme: string; example: string }[]; words: string[] }
+/** `GET /api/content`: the content packs flattened into rows (src/flashtap/content/summary.py). */
+export interface ContentSummary {
+  packs: { id: string; version: number; title: string; status: 'draft' | 'reviewed' }[]
+  skills: SkillRow[]
+  objectives: ObjectiveRow[]
+  phonics: { id: string; title: string; dialect: string; sets: PhonicsSetRow[] }[]
+}
+
 // Where the app is served from: '' at the server's own root, '/prefix' behind a reverse proxy. Read
 // from the page's base URL: the server gives every page a relative <base> back to its root, and
 // assets are relative (vite.config.ts base './'), so one build works in both places.
@@ -36,12 +62,14 @@ export const paths = {
   settings: '/api/settings',
   modes: '/api/modes',
   round: '/api/round',
+  content: '/api/content',
 } as const
 
 /** The query keys the screens share, so a write can invalidate every read it changes. */
 export const keys = {
   settings: ['settings'],
   modes: ['modes'],
+  content: ['content'],
   round: (mode: Mode, n: number) => ['round', mode, n],
 } as const
 
@@ -56,6 +84,7 @@ export const api = {
   saveSettings: (s: Partial<Settings>) => fetchJson<Settings>(withBase(paths.settings), send('PUT', s)),
   modes: () => fetchJson<ModeInfo[]>(withBase(paths.modes)),
   round: (mode: Mode, signal?: AbortSignal) => fetchJson<Round>(roundUrl(mode), { signal }),
+  content: () => fetchJson<ContentSummary>(withBase(paths.content)),
 }
 
 // The server's own limits (src/flashtap/rounds.py), checked here too so the field says why before sending.

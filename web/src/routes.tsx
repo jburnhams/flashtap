@@ -4,6 +4,7 @@
 // Routes are real paths (/settings?tab=appearance), not #hashes: the server answers every page path
 // with the app (src/flashtap/server/app.py), so a reload or a shared link opens that screen.
 import type { RouteObject } from 'react-router'
+import { ContentScreen } from './screens/ContentScreen'
 import { Layout } from './screens/Layout'
 import { NotFoundScreen } from './screens/NotFoundScreen'
 import { PlayScreen } from './screens/PlayScreen'
@@ -14,6 +15,7 @@ export const routes: RouteObject[] = [
     element: <Layout />,
     children: [
       { index: true, element: <PlayScreen /> },
+      { path: 'content', element: <ContentScreen /> },
       { path: 'settings', element: <SettingsScreen /> },
       { path: '*', element: <NotFoundScreen /> },
     ],

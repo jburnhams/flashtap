@@ -4,6 +4,24 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-23
 
+**Flashtap 0.3.0: content packs, the P0 ontology seed, with an adult Content screen (branch `claude/project-thread-ghe3ix`)**
+The owner asked for the next PR of the plan: content packs for the earliest skills (numbers to 10, early phonics) in a structure that grows through every school year, by ability and never by age. YAML became TOML (standard library, no new dependency).
+
+- `src/flashtap/content/`: **new**. `model.py` (pydantic models for sources, domains, strands, parameter dimensions, skills with typed edges carrying confidence and source, misconceptions, phonics sequences, words, curricula and objectives; unknown keys refused), `registry.py` (reads `packs/*.toml`, one id space, edges turned to one direction, GPC resolution and decodability, `check` for dangling references, duplicate ids, `prerequisite_strong` and `part_of` cycles, parameter ranges, word spellings, unmapped objectives; `load()` refuses bad packs at start), `summary.py` (the rows `GET /api/content` returns).
+- `src/flashtap/packs/`: **new**, all `status = "draft"`. `core.toml` (sources, domains, dimensions), `maths-number.toml` (22 skills: verbal count, counting, cardinality, subitising, numerals, comparison, part-whole, patterns, 2D shapes; 5 misconceptions), `literacy-early.toml` (19 skills, 4 misconceptions), `language.toml` (3 skills), `phonics-letters-and-sounds.toml` (Phases 2 and 3, 51 GPCs in IPA), `words.toml` (71 words with pictures and sounds), `curriculum-uk-eyfs.toml` (the 15 maths and literacy Early Learning Goal statements, 12 mapped, 3 out of scope with reasons).
+- `src/flashtap/lexicon.py`: words now come from `words.toml`; `initial` is replaced by `onset`, the first GPC from the phonics inventory. Matching, Counting and Letters gain the new picture words of their categories.
+- Review fixes (Codex on PR #40): `lexicon.words()` reads the packs on first use, not at import, so `flashtap content check` still starts and names the problems when a packaged pack is broken; an empty range (`number_range = []`) is reported instead of raising `IndexError`; `content.load(folder)` takes the folder, so its test reads real files instead of replacing `build`.
+- `src/flashtap/rounds.py`: `MODE_SKILLS`, the skills each kind of round practises; `MAX_CHOICES` comment corrected.
+- `src/flashtap/cli.py`: `flashtap content check [--packs DIR]` and `flashtap content list [--json]`.
+- `src/flashtap/server/app.py`: `GET /api/content`.
+- `web/src/screens/ContentScreen.tsx`: **new** Content screen (`/content`): drafts or coverage as the finding, a `MetricStrip`, tabs for Skills (a `DataTable` whose rows open to their edges and misconceptions, open rows and sort in the URL), Curriculum and Phonics. `Layout.tsx`: Content in the menu. `routes.tsx`, `api.ts` (types, path, key): the screen and its endpoint.
+- `web/src/mocks/content.ts`: **new** fixture cut down from `flashtap content list --json`; `handlers.ts`: the endpoint plus loading, error, empty and all-reviewed states.
+- `web/stories/content.stories.tsx`: **new**, every state. `web/strata-visual.config.ts`: Content route shots. `web/stories/introduction.mdx`: the screen.
+- `web/tests/visual/baselines/`: Content shots are new; every other screen's shots change because the menu has a third entry.
+- `tests/unit/test_content.py`: **new**. `tests/unit/test_cli.py`, `test_server.py`, `tests/integration/test_cli_end_to_end.py`, `test_server_api.py`, `web/tests/integration/ContentScreen.test.tsx` (**new**): the commands, the endpoint and the screen.
+- `pyproject.toml`, `uv.lock`: version 0.3.0; Python coverage floor 95 to 98 (the suite is at 99).
+- `docs/content.md`: **new**, the pack format, its rules and what is left to review. `docs/implementation-plan.md`, `docs/progress.md`, `docs/overview.md`, `README.md`, `AGENTS.md`, `tests/unit/README.md`, `web/tests/README.md`: describe the packs, the command, the endpoint and the screen.
+
 **Play screen on strata-react's `ChoiceGrid` (branch `claude/project-thread-fmqqff`)**
 The tap tiles were the one part of the Play screen drawn in Flashtap's own CSS until strata-react had a component for them; strata-react 1.1.5 ships `ChoiceGrid` (strata-react PR #281), so the stand-in goes.
 
