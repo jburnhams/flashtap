@@ -4,6 +4,15 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-23
 
+**strata-react 1.3.3: the web stand-ins replaced (branch `claude/project-thread-y42azs`)**
+The owner asked to check for a newer strata-react. 1.3.3 released all seven issues raised in the audit (#293-#299), so each web stand-in is now the library's.
+- `web/package.json`, `web/package-lock.json`: strata-react 1.3.3.
+- `web/src/api.ts`: requests go through `createTypedApi<paths>()` (paths, parameters, bodies and answers checked against the generated schema); `BASE`, `withBase`, `send` and `roundUrl` are gone, and `exportUrl` uses strata-react's `withBase`. `web/src/main.tsx`: `appBase()` is the router's basename.
+- `web/src/screens/PlayScreen.tsx`: the kind of round and who plays are `NativeSelect param=` read back with `useSearchParam`; prompts are said with `speak`, and Say again is `SayAgain` (named "Say again: <prompt>", hidden without speech). `web/src/speech.ts`: removed.
+- `web/src/screens/LearnerScreen.tsx`, `LearnersScreen.tsx`, `NotFoundScreen.tsx`: `ButtonLink` and `TextLink` replace hand-styled links. Seven dark baselines in `web/tests/visual/baselines/` move: the text link's ink is now the theme's `primary-11` step.
+- `web/tests/utils/setup.ts`: the localStorage shim is gone (`installLayoutShims` has it). `web/tests/utils/speech.ts`: removed; `web/tests/integration/PlayScreen.test.tsx` uses `installFakeSpeech`. `web/tests/unit/logic.test.ts`: the base and speech cases now live in strata-react; tests `exportUrl`.
+- `AGENTS.md`, `docs/implementation-plan.md`, `docs/overview.md`, `docs/progress.md`, `web/tests/README.md`.
+
 **strata-python 0.2.6 and strata-react 1.3.2: the audit's stand-ins replaced by library code (branch `claude/project-thread-y42azs`)**
 The owner asked to use the new versions. strata-python 0.2.6 released the six issues raised in the audit (#36-#41); strata-react 1.3.2 has none of Flashtap's seven yet.
 - `pyproject.toml`, `uv.lock`: strata-python 0.2.6. `[tool.strata-db]` is now `file = "src/flashtap/strata-db.toml"`; `[tool.strata-public-check] deny` holds the age and birth-date patterns.

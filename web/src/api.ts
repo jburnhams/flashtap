@@ -1,15 +1,15 @@
 // The FastAPI server's endpoints (src/flashtap/server/app.py) and their shapes. Reads go through
-// strata-react's useLoad with fetchJson, which throws HttpError on a non-2xx answer; the screens
-// never call fetch themselves. Every URL is built here, through withBase, so the app works at the
-// server's root and behind a reverse proxy at /<prefix>/.
-import { fetchJson } from 'strata-react'
+// strata-react's useLoad with the typed client below, which throws HttpError on a non-2xx answer; the
+// screens never call fetch themselves. Every URL is built here, with the app's base in front, so the app
+// works at the server's root and behind a reverse proxy at /<prefix>/.
+import { createTypedApi, withBase } from 'strata-react'
 
 // The shapes are generated from the server's OpenAPI schema (`api.generated.ts`, by strata-react's
 // strata-api-types from `web/openapi.json`, which `flashtap openapi` writes), so they follow the Python
 // models instead of being written again here. CI fails when either file is stale. What stays here is
 // what the schema cannot say: the kinds of round as a list in their order, and the reporting states as
 // a list ranked lowest first.
-import type { Schema } from './api.generated'
+import type { paths as ApiPaths, Schema } from './api.generated'
 
 export type Mode = Schema<'Mode'>
 /** The kinds of round, as the server lists them (src/flashtap/mechanics.py `Mode`), Mixed last. */
@@ -63,12 +63,6 @@ export function newId(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('')
 }
 
-// Where the app is served from: '' at the server's own root, '/prefix' behind a reverse proxy. Read
-// from the page's base URL: the server gives every page a relative <base> back to its root, and
-// assets are relative (vite.config.ts base './'), so one build works in both places.
-export const BASE = typeof document === 'undefined' ? '' : new URL('.', document.baseURI).pathname.replace(/\/$/, '')
-export const withBase = (u: string) => (u.startsWith('/') ? BASE + u : u)
-
 /** The endpoints, as paths under the server's root. Mock handlers (src/mocks/handlers.ts) match the same paths. */
 export const paths = {
   health: '/api/health',
@@ -91,29 +85,30 @@ export const keys = {
   evidence: (id: string, skill: string) => ['learners', id, 'evidence', skill],
 } as const
 
-export function roundUrl(mode: Mode) {
-  return withBase(`${paths.round}?${new URLSearchParams({ mode })}`)
-}
-
-const send = (method: string, body: unknown): RequestInit => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+// Every request goes through strata-react's typed client over the generated `paths`: it puts the app's base
+// in front (the page's <base href>, which the server gives every page, so one build works at the root and
+// behind a reverse proxy), sends JSON bodies, fills and escapes `{learner_id}`, and checks each path, body and
+// answer against the schema. `fetchJson` underneath throws HttpError with the server's reason.
+const http = createTypedApi<ApiPaths>()
 
 export const api = {
-  settings: () => fetchJson<Settings>(withBase(paths.settings)),
-  saveSettings: (s: Partial<Settings>) => fetchJson<Settings>(withBase(paths.settings), send('PUT', s)),
-  modes: () => fetchJson<ModeInfo[]>(withBase(paths.modes)),
-  round: (mode: Mode, signal?: AbortSignal) => fetchJson<Round>(roundUrl(mode), { signal }),
-  content: () => fetchJson<ContentSummary>(withBase(paths.content)),
-  learners: () => fetchJson<LearnerRow[]>(withBase(paths.learners)),
-  addLearner: (nickname: string) => fetchJson<LearnerRow>(withBase(paths.learners), send('POST', { nickname })),
-  deleteLearner: (id: string) => fetchJson<undefined>(withBase(`${paths.learners}/${id}`), { method: 'DELETE' }),
-  profile: (id: string) => fetchJson<Profile>(withBase(`${paths.learners}/${id}/profile`)),
-  evidence: (id: string, skill: string) => fetchJson<EvidenceRow[]>(withBase(`${paths.learners}/${id}/skills/${skill}/evidence`)),
-  recordAttempt: (a: AttemptIn) => fetchJson<Schema<'Ack'>>(withBase(paths.attempts), send('POST', a)),
-  strike: (eventId: string, reason: string) => fetchJson<undefined>(withBase(`${paths.attempts}/${eventId}/strike`), send('POST', { reason })),
+  settings: () => http.get('/api/settings'),
+  saveSettings: (s: Partial<Settings>) => http.put('/api/settings', { json: s }),
+  modes: () => http.get('/api/modes'),
+  // The server answers the kind actually played (never Mixed), which the schema's whole-enum `mode` cannot say.
+  round: (mode: Mode, signal?: AbortSignal) => http.get('/api/round', { query: { mode }, signal }) as Promise<Round>,
+  content: () => http.get('/api/content'),
+  learners: () => http.get('/api/learners'),
+  addLearner: (nickname: string) => http.post('/api/learners', { json: { nickname } }),
+  deleteLearner: (id: string) => http.delete('/api/learners/{learner_id}', { path: { learner_id: id } }),
+  profile: (id: string) => http.get('/api/learners/{learner_id}/profile', { path: { learner_id: id } }),
+  evidence: (id: string, skill: string) => http.get('/api/learners/{learner_id}/skills/{skill}/evidence', { path: { learner_id: id, skill } }),
+  recordAttempt: (a: AttemptIn) => http.post('/api/attempts', { json: a }),
+  strike: (eventId: string, reason: string) => http.post('/api/attempts/{event_id}/strike', { path: { event_id: eventId }, json: { reason } }),
 }
 
 /** The export download: a plain link, so the browser saves the file the server names. */
-export const exportUrl = (id: string) => withBase(`${paths.learners}/${id}/export`)
+export const exportUrl = (id: string) => withBase(`${paths.learners}/${encodeURIComponent(id)}/export`)
 
 // The server's own limits (src/flashtap/rounds.py), checked here too so the field says why before sending.
 export const limits = { minChoices: 2, maxChoices: 8 } as const

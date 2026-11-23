@@ -14,8 +14,8 @@
 // round for good, so it is the one action behind a confirm.
 import { useQueryClient } from '@tanstack/react-query'
 import { Download, Trash2 } from 'lucide-react'
-import { Link, useNavigate, useParams } from 'react-router'
-import { AlertDialog, Button, buttonVariants, DataTable, DataView, EmptyState, format, Metric, MetricStrip, PageHeader, RowAction, Skeleton, Status, TableSkeleton, Tabs, UndoBar, useExpanded, useLoad, useUndoable, type Column, type Tone, type Undoable } from 'strata-react'
+import { useNavigate, useParams } from 'react-router'
+import { AlertDialog, Button, ButtonLink, DataTable, DataView, EmptyState, format, Metric, MetricStrip, PageHeader, RowAction, Skeleton, Status, TableSkeleton, Tabs, TextLink, UndoBar, useExpanded, useLoad, useUndoable, type Column, type Tone, type Undoable } from 'strata-react'
 import { api, exportUrl, keys, SKILL_STATES, type EvidenceRow, type Profile, type SkillReport, type SkillState } from '../api'
 import { modeLabels } from './PlayScreen'
 
@@ -44,7 +44,7 @@ export function LearnerScreen() {
       empty={null}
       error={({ message, retry }) => (
         <EmptyState title="This learner could not be shown" action={<Button onClick={retry}>Try again</Button>}>
-          {message} If the learner was deleted, choose another on <Link to="/learners" className="text-primary underline underline-offset-4">Learners</Link>.
+          {message} If the learner was deleted, choose another on <TextLink to="/learners">Learners</TextLink>.
         </EmptyState>
       )}
     >
@@ -80,8 +80,8 @@ function Learner({ p }: { p: Profile }) {
         scope={`${format.count(p.learner.attempts, 'round')} recorded over ${format.count(p.sessions, 'session')}`}
         actions={
           <>
-            <Link to={`/?learner=${p.learner.id}`} data-variant="default" className={buttonVariants({ variant: 'default' })}>Play as {name}</Link>
-            <a href={exportUrl(p.learner.id)} download data-variant="outline" className={buttonVariants({ variant: 'outline' })}><Download aria-hidden className="size-4" />Export</a>
+            <ButtonLink to={`/?learner=${encodeURIComponent(p.learner.id)}`} variant="default">{`Play as ${name}`}</ButtonLink>
+            <ButtonLink href={exportUrl(p.learner.id)} download icon={Download}>Export</ButtonLink>
             <AlertDialog
               title={`Delete ${name} and everything recorded?`}
               description={`This removes ${name}, ${format.count(p.learner.attempts, 'round')} and every estimate made from them, for good. Export first to keep a copy.`}

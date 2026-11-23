@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { attemptFails, learnersError, quickLookGoes, roundError } from '../../src/mocks/handlers'
 import { openApp, screen, within } from '../utils/render'
 import { mock, server } from '../utils/server'
-import { installSpeech } from '../utils/speech'
+import { installFakeSpeech } from 'strata-react/testing'
 
 const tiles = () => within(screen.getByRole('grid', { name: 'Choices' })).getAllByRole('row')
 // A tile is named by what it shows, then its mark once it has one ("duck, not this one").
@@ -86,24 +86,24 @@ describe('Play', () => {
   })
 
   describe('spoken aloud', () => {
-    let speech: ReturnType<typeof installSpeech>
-    afterEach(() => speech.remove())
+    let speech: ReturnType<typeof installFakeSpeech>
+    afterEach(() => speech.uninstall())
 
     it('says the prompt, each tap and the prompt again on request, in a UK English voice', async () => {
-      speech = installSpeech([{ lang: 'en-US', name: 'Samantha' }, { lang: 'en-GB', name: 'Daniel' }])
+      speech = installFakeSpeech([{ lang: 'en-US', name: 'Samantha' }, { lang: 'en-GB', name: 'Daniel' }])
       const { user } = openApp('/')
       await user.click(await screen.findByRole('row', { name: tile('pig') }))
-      await user.click(screen.getByRole('button', { name: 'Say it again' }))
+      await user.click(screen.getByRole('button', { name: 'Say again: Find the cow.' }))
       await user.click(screen.getByRole('row', { name: tile('cow') }))
       expect(speech.said.map(s => s.text)).toEqual(['Find the cow.', 'No, that\u2019s a pig. Try again.', 'Find the cow.', 'Yes! You found the cow.'])
-      expect(speech.said[0]).toMatchObject({ lang: 'en-GB', voice: 'Daniel' })
+      expect(speech.said[0]).toMatchObject({ lang: 'en-GB', voice: 'Daniel', rate: 0.9 })
     })
 
     it('falls back to British English without a matching voice', async () => {
-      speech = installSpeech([{ lang: 'de-DE', name: 'Anna' }])
+      speech = installFakeSpeech([{ lang: 'de-DE', name: 'Anna' }])
       openApp('/')
       await screen.findByRole('heading', { level: 1, name: 'Find the cow.' })
-      expect(speech.said[0]).toEqual({ text: 'Find the cow.', lang: 'en-GB', voice: undefined })
+      expect(speech.said[0]).toMatchObject({ text: 'Find the cow.', lang: 'en-GB', voice: null })
     })
   })
 })
@@ -138,20 +138,20 @@ describe('Play, the new kinds of round', () => {
   })
 
   describe('spoken', () => {
-    let speech: ReturnType<typeof installSpeech>
-    afterEach(() => speech.remove())
+    let speech: ReturnType<typeof installFakeSpeech>
+    afterEach(() => speech.uninstall())
 
     it('says the Listen word aloud without printing it', async () => {
-      speech = installSpeech([{ lang: 'en-GB', name: 'Daniel' }])
+      speech = installFakeSpeech([{ lang: 'en-GB', name: 'Daniel' }])
       const { user } = openApp('/?mode=listen')
       expect(await screen.findByRole('heading', { level: 1, name: 'Listen, then tap the letter it starts with.' })).toBeInTheDocument()
       expect(screen.queryByText(/dog/)).not.toBeInTheDocument()
-      await user.click(screen.getByRole('button', { name: 'Say it again' }))
+      await user.click(screen.getByRole('button', { name: /^Say again: dog\./ }))
       expect(speech.said.map(s => s.text)).toEqual(['dog. Which letter does dog start with?', 'dog. Which letter does dog start with?'])
     })
 
     it('says how many were given when a basket is checked', async () => {
-      speech = installSpeech([{ lang: 'en-GB', name: 'Daniel' }])
+      speech = installFakeSpeech([{ lang: 'en-GB', name: 'Daniel' }])
       const { user } = openApp('/?mode=give')
       await screen.findByRole('heading', { level: 1, name: 'Put 3 ducks in the basket.' })
       for (let i = 0; i < 4; i++) {
