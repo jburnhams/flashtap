@@ -1,5 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
+from strata_python.db.web import database
 
 from flashtap.server import app as server_app
 from flashtap.server.app import create_app
@@ -9,8 +10,7 @@ from flashtap.server.app import create_app
 def client():
     app = create_app()
     yield TestClient(app)
-    if (engine := getattr(app.state, "learner_engine", None)) is not None:
-        engine.dispose()  # the learner database the first learner route opened
+    database(app).close()  # the learner database, if a learner route opened it
 
 
 def test_landing_page_and_built_static_index(tmp_path, monkeypatch):
@@ -80,7 +80,11 @@ def test_a_place_round_and_a_template_version_no_longer_kept(client):
 
 def test_settings_refuse_a_bad_value(client):
     assert client.put("/api/settings", json={"choices": "12"}).status_code == 400
-    assert client.get("/api/settings").json() == {"mode": "mixed", "choices": "4", "tries": "0"}
+    assert client.get("/api/settings").json() == {
+        "mode": "mixed",
+        "choices": 4,
+        "tries": 0,
+    }  # numbers: Settings(numbers=True)
 
 
 def test_content_lists_skills_objectives_and_phonics(client):

@@ -3,6 +3,8 @@
 import json
 import urllib.request
 
+from strata_python.db.web import database
+
 from flashtap.server.app import create_app
 
 
@@ -61,7 +63,7 @@ def test_a_learner_plays_is_exported_and_rebuilt_exactly(live_app, cli_subproces
         profile = _get(f"{base}/api/learners/{fox}/profile")
         with urllib.request.urlopen(f"{base}/api/learners/{fox}/export", timeout=10) as r:
             exported = r.read()
-    app.state.learner_engine.dispose()
+    database(app).close()
 
     states = {s["skill"]: s["state"] for s in profile["skills"]}
     assert states["maths.counting.objects"] != "unobserved"

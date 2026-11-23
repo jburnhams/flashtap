@@ -424,11 +424,14 @@ export interface components {
         /** FlashtapSettings */
         FlashtapSettings: {
             /** Choices */
-            choices: string;
-            /** Mode */
-            mode: string;
+            choices: number;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "mixed";
             /** Tries */
-            tries: string;
+            tries: number;
         };
         /** GPCRow */
         GPCRow: {
@@ -625,20 +628,11 @@ export interface components {
             exposure_ms: number | null;
             mechanic: components["schemas"]["Mechanic"];
             mode: components["schemas"]["Mode"];
-            /**
-             * Options
-             * @default []
-             */
+            /** Options */
             options: components["schemas"]["Option"][];
-            /**
-             * Pieces
-             * @default []
-             */
+            /** Pieces */
             pieces: components["schemas"]["Piece"][];
-            /**
-             * Places
-             * @default []
-             */
+            /** Places */
             places: components["schemas"]["Place"][];
             /** Prompt */
             prompt: string;
@@ -1171,7 +1165,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    [key: string]: string | string[] | null;
+                    [key: string]: string | number | string[] | null;
                 };
             };
         };

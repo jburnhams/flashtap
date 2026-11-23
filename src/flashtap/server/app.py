@@ -15,13 +15,13 @@ else the plain stand-in `landing.html`), so a reload or a shared link opens that
 
 import os
 import re
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Query, Request, Response
+from fastapi import FastAPI, Query, Response
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 from strata_python import web
+from strata_python.db.web import DbSession, add_database
 
 from flashtap import __version__, content, rounds, settings
 from flashtap.learners import db as learner_db
@@ -78,6 +78,7 @@ def create_app() -> FastAPI:
     def get_content() -> content.ContentSummary:  # pyright: ignore[reportUnusedFunction]
         return summary  # the packs ship with the app and are read once, so the summary is built once too
 
+    add_database(app, learner_db.PROJECT, default=learner_db.default_url)
     add_learner_routes(
         app, [SkillInfo(id=s.id, title=s.title, domain=s.domain, strand=s.strand) for s in summary.skills]
     )
@@ -86,17 +87,9 @@ def create_app() -> FastAPI:
     return app
 
 
-def _records(request: Request) -> Iterator[Session]:
-    # The database is opened (and migrated) on the first request that needs it, once per app, so serving rounds never
-    # waits on it and a server nobody records on never creates one.
-    state = request.app.state
-    if getattr(state, "learner_engine", None) is None:
-        state.learner_engine = learner_db.open_engine()
-    with Session(state.learner_engine) as s:
-        yield s
-
-
-Db = Annotated[Session, Depends(_records)]
+# The learner records: opened (and migrated) on the first request that needs them, once per app, so serving rounds
+# never waits on the database and a server nobody records on never creates one (strata_python.db.web).
+Db = DbSession
 
 
 def add_learner_routes(app: FastAPI, skills: list[SkillInfo]) -> None:

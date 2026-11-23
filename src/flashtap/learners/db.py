@@ -1,48 +1,28 @@
-"""Where the learner records live, and bringing that database up to date.
+"""Where the learner records live.
 
 strata_python.db decides the URL (`STRATA_DB_URL`, then `FLASHTAP_DATABASE_URL`, then the app's schema in the shared
 Postgres named by `STRATA_DB_DATABASE`; a real Postgres also needs `STRATA_DB_LIVE=1`). When none of those is set,
 the records go in a SQLite file beside the settings (`~/.flashtap/learners.db`, moved with `FLASHTAP_HOME`), so a
 checkout plays and records with no database set up, and a deployment that has not been given one yet keeps working.
-Either way the migrations run at first use, which is safe on every start (`Project.upgrade`).
+Either way the migrations run when the database is opened (`Project.open`), which is safe on every start. The server
+opens it on the first request that needs it (`strata_python.db.web.add_database` in `server/app.py`).
 """
 
-import os
-from pathlib import Path
-
 from sqlalchemy.engine import Engine
-from strata_python.db import DatabaseNotConfigured, Project, connect, url_for
+from strata_python.db import Project, local_url
 
 from flashtap import settings
 
-APP = "flashtap"
-# Built here rather than read from pyproject.toml, which an installed wheel does not have; tests/unit/test_database.py
-# checks the two agree.
-PROJECT = Project(
-    root=Path(__file__).resolve().parents[1],
-    app=APP,
-    models="flashtap.learners.models:Base",
-    migrations_dir=Path(__file__).resolve().parents[1] / "migrations",
-)
+# src/flashtap/strata-db.toml, found from here in a checkout and in an installed wheel alike.
+PROJECT = Project.load(__file__)
 
 
-def sqlite_path() -> str:
-    return os.path.join(settings.SETTINGS.home(), "learners.db")
-
-
-def url() -> str:
-    """The configured database, or the SQLite file beside the settings when none is."""
-    try:
-        return url_for(APP)
-    except DatabaseNotConfigured:
-        return "sqlite:///" + sqlite_path()
+def default_url() -> str:
+    """The SQLite file used when no database is configured. Named `learners.db`, as it was before strata_python had
+    `local_url`, so a checkout's existing records are still found."""
+    return local_url(settings.SETTINGS, "learners")
 
 
 def open_engine(where: str | None = None) -> Engine:
-    """An engine on `where` (default `url()`), migrated to the newest revision."""
-    where = where or url()
-    if where.startswith("sqlite:///"):
-        os.makedirs(os.path.dirname(where.removeprefix("sqlite:///")) or ".", exist_ok=True)
-    engine = connect(where)
-    PROJECT.upgrade(engine)
-    return engine
+    """An engine on `where` (default: the configured database, else `default_url()`), migrated to the newest revision."""
+    return PROJECT.open(where, default=default_url())

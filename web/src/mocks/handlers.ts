@@ -50,7 +50,7 @@ export const handlers = [
   http.get(at(paths.settings), () => HttpResponse.json(mock.settings)),
   http.put(at(paths.settings), async ({ request }) => {
     const body = (await request.json()) as Partial<Settings>
-    const choices = Number(body.choices ?? mock.settings.choices)
+    const choices = body.choices ?? mock.settings.choices
     if (!(choices >= 2 && choices <= 8)) return HttpResponse.json({ detail: 'choices: must be a whole number from 2 to 8' }, { status: 400 })
     mock.settings = { ...mock.settings, ...body }
     return HttpResponse.json(mock.settings)

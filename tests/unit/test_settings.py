@@ -24,7 +24,7 @@ def test_save_validates_each_setting():
         "tries": "2",
     }
     assert settings.mode() is Mode.LETTERS
-    with pytest.raises(ValueError, match="mode must be one of"):
+    with pytest.raises(ValueError, match="mode: must be one of"):
         settings.SETTINGS.save({"mode": "spelling"})
     with pytest.raises(ValueError, match="from 2 to 8"):
         settings.SETTINGS.save({"choices": "9"})

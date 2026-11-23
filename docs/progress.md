@@ -1,5 +1,11 @@
 # Progress log
 
+## 2026-11-23: strata-python 0.2.6 adopted
+
+- Asked for: use the new versions. strata-python 0.2.6 closes #36-#41; strata-react 1.3.2 fixes none of Flashtap's seven issues (still open), so it is only a lockfile bump.
+- Each stand-in from the audit went: `flashtap openapi` is `cli.add_openapi`, its test `assert_openapi_current`; `Round` is a `contracts.ApiModel`; the `mode` setting has `choices`, so the schema names the kinds and `api.ts` no longer narrows it; `Settings(numbers=True)`, so choices and tries reach the web app as numbers; the database declaration moved into the package (`strata-db.toml`), so the hand-built `Project` and its drift check are gone; `add_database` and `DbSession` replace the lazy engine and session dependency; `local_url` gives the fallback file (kept as `learners.db`, so a checkout's records are still found); the privacy scan is `[tool.strata-public-check] deny`, applied by strata-public-check to web source too, and `test_privacy.py` keeps only that the patterns catch the usual shapes and the tree is clean.
+- strata-python's main CI had failed only because no macOS runner picked the job up in 15 minutes, which held the release back; a re-run of that job passed and released it.
+
 ## 2026-11-23: audit against strata-python and strata-react
 
 - Asked for: make full use of the common code in strata-python (0.2.5) and strata-react (1.3.1), and raise issues there for what would help. Standing rule from now on.

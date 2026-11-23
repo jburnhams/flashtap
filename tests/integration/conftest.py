@@ -5,6 +5,7 @@ from collections.abc import Callable, Iterator
 
 import pytest
 from fastapi.testclient import TestClient
+from strata_python.db.web import database
 from strata_python.testing import CliResult, run_cli, run_module
 
 SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
@@ -31,5 +32,4 @@ def client() -> Iterator[TestClient]:
 
     app = create_app()
     yield TestClient(app)
-    if (engine := getattr(app.state, "learner_engine", None)) is not None:
-        engine.dispose()
+    database(app).close()  # the learner database, if a learner route opened it

@@ -16,9 +16,8 @@ export type Mode = Schema<'Mode'>
 export const MODES = ['matching', 'colours', 'shapes', 'letters', 'counting', 'missing', 'quick_look', 'listen', 'give', 'order', 'capitals', 'sort_sounds', 'mixed'] as const satisfies readonly Mode[]
 export const isMode = (v: string | null): v is Mode => MODES.includes(v as Mode)
 
-/** `GET /api/settings`. strata-python keeps every value as a canonical string; the schema types `mode` as any
- * string, and the server refuses one that is not a Mode. */
-export type Settings = Omit<Schema<'FlashtapSettings'>, 'mode'> & { mode: Mode }
+/** `GET /api/settings`: the kind of round, and how many choices and tries, as numbers. */
+export type Settings = Schema<'FlashtapSettings'>
 /** How a round is answered. The first four by one tap (options), the rest by an arrangement (pieces into places). */
 export type Mechanic = Schema<'Mechanic'>
 export const PLACE_MECHANICS: readonly Mechanic[] = ['give_n', 'sequence', 'match_pairs', 'sort']

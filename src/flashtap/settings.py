@@ -11,21 +11,16 @@ from strata_python.settings import Setting, Settings, whole_between
 
 from flashtap.rounds import MAX_CHOICES, MIN_CHOICES, Mode
 
-
-def mode_name(value: str) -> str:
-    v = value.strip().lower()
-    if v not in set(Mode):
-        raise ValueError(f"mode must be one of {', '.join(Mode)}, not {value!r}")
-    return v
-
-
 SETTINGS = Settings(
     "flashtap",
     [
-        Setting("mode", default=Mode.MIXED.value, normalise=mode_name),
+        # choices: matched without regard to case, refused with the list, and an enum in /api/openapi.json, so the web
+        # app's generated type names the kinds. numbers: choices and tries are sent as JSON numbers with their limits.
+        Setting("mode", default=Mode.MIXED.value, choices=[m.value for m in Mode]),
         Setting("choices", default="4", normalise=whole_between(MIN_CHOICES, MAX_CHOICES)),
         Setting("tries", default="0", normalise=whole_between(0, MAX_CHOICES - 1)),
     ],
+    numbers=True,
 )
 
 

@@ -4,6 +4,15 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-23
 
+**strata-python 0.2.6 and strata-react 1.3.2: the audit's stand-ins replaced by library code (branch `claude/project-thread-y42azs`)**
+The owner asked to use the new versions. strata-python 0.2.6 released the six issues raised in the audit (#36-#41); strata-react 1.3.2 has none of Flashtap's seven yet.
+- `pyproject.toml`, `uv.lock`: strata-python 0.2.6. `[tool.strata-db]` is now `file = "src/flashtap/strata-db.toml"`; `[tool.strata-public-check] deny` holds the age and birth-date patterns.
+- `src/flashtap/strata-db.toml`: **new**, the database declaration inside the package. `src/flashtap/learners/db.py`: `Project.load(__file__)`, `default_url` (`local_url`, still `learners.db`), `open_engine` is `Project.open`. `src/flashtap/server/app.py`: `add_database` and `DbSession` replace `_records` and the engine on `app.state`.
+- `src/flashtap/cli.py`: `openapi` is strata-python's `add_openapi` (gains `--check`). `src/flashtap/mechanics.py`: `Round` is a `contracts.ApiModel`. `src/flashtap/settings.py`: `mode` takes `choices` (its own normaliser is gone; the message is now "mode: must be one of ..."), and `numbers=True` sends choices and tries as numbers.
+- `web/openapi.json`, `web/src/api.generated.ts`: regenerated. `web/src/api.ts`: `Settings` is the generated type as it is. `web/src/screens/SettingsScreen.tsx`, `web/src/mocks/fixtures.ts`, `web/src/mocks/handlers.ts`: numbers, not strings. `web/package.json`, `web/package-lock.json`: strata-react 1.3.2.
+- Tests: `tests/unit/test_privacy.py` (the patterns from pyproject.toml, and strata-public-check's scan of the tree), `test_cli.py` (`assert_openapi_current`, `--check`), `test_learners.py` (the fallback file; the package declaration is the one pyproject names), `test_settings.py`, `test_server.py`, `tests/integration/test_cli_end_to_end.py` (`set` lists the choices), `tests/integration/conftest.py`, `test_server_api.py` (`database(app).close()`), `web/tests/integration/SettingsScreen.test.tsx`. `CHANGELOG.md`: the 0.3.0 entry that quotes what the old scan caught is marked `strata-public-check: ignore`.
+- `AGENTS.md`, `docs/implementation-plan.md`, `docs/progress.md`, `tests/unit/README.md`.
+
 **Use strata-python and strata-react's common code: generated API types, strata-public-check (branch `claude/project-thread-y42azs`)**
 The owner asked that Flashtap make full use of strata-python and strata-react, with issues raised there for what is missing (a standing rule). The backend already did; the web app's hand-written API shapes are now generated from the server's schema with strata-react's `strata-api-types`, which found three places where the hand copy and the server disagreed.
 - `src/flashtap/cli.py`: `flashtap openapi [-o PATH|-]` writes the server's OpenAPI schema with sorted keys (default `web/openapi.json`), a stand-in until strata-python has the shared command (jburnhams/strata-python#36). `tests/unit/test_cli.py`: the command, and that the committed file is current.
@@ -86,7 +95,7 @@ The tap tiles were the one part of the Play screen drawn in Flashtap's own CSS u
 The owner answered the plan's open questions: Flashtap is a personal app for private use in a public repository, so it must hold nothing identifying, above all about children; and it covers every school year and ability, starting with the youngest but not limited to them, progressing by ability rather than age.
 
 - `AGENTS.md`: **new** rule 8, nothing that identifies a person (no names, ages, birth dates, year groups, schools, places, photos, voices or learner data anywhere in the repository; invented learners in tests; the learner model stores no age). "What this is" no longer says early years.
-- `tests/unit/test_privacy.py`: **new**. Scans the repository's text files for an age, a birth date or a birthday; it caught `play.css` calling the player "a three-year-old".
+- `tests/unit/test_privacy.py`: **new**. Scans the repository's text files for an age, a birth date or a birthday; it caught `play.css` calling the player "a three-year-old". <!-- strata-public-check: ignore (quotes what the scan caught) -->
 - `docs/implementation-plan.md`: decisions recorded with their answers; a Scope paragraph (curriculum stages are labels on skills, never gates; placement by probes; no age stored); PR 2's schema covers every year, PR 4's learner holds only a nickname, PR 5 places by evidence.
 - `README.md`, `docs/overview.md`, `pyproject.toml`, `src/flashtap/__init__.py`, `web/stories/introduction.mdx`: describe Flashtap by ability, not by age, and say the repository is public.
 - `web/src/speech.ts`, `web/src/styles/play.css`, `web/src/styles/theme.css`, `web/src/styles/theme.generated.css` (header comment only): comments no longer assume a young child.

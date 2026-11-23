@@ -23,18 +23,18 @@ describe('Settings', () => {
     await user.tab()
     await user.click(screen.getByRole('button', { name: 'Save settings' }))
     expect(await screen.findByText('Enter how many choices a round offers.')).toBeInTheDocument()
-    expect(mock.settings.choices).toBe('4')
+    expect(mock.settings.choices).toBe(4)
   })
 
   it('saves an empty Tries as no limit', async () => {
-    mock.settings.tries = '2'
+    mock.settings.tries = 2
     const { user } = openApp('/settings')
     const tries = await screen.findByRole('textbox', { name: 'Tries' })
     await user.clear(tries)
     await user.tab()
     await user.click(screen.getByRole('button', { name: 'Save settings' }))
     expect(await screen.findByText('Saved', { selector: '[role=status]' })).toBeInTheDocument()
-    expect(mock.settings.tries).toBe('0')
+    expect(mock.settings.tries).toBe(0)
   })
 
   it('says what happened when saving fails', async () => {
