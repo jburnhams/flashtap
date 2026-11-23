@@ -90,6 +90,8 @@ def replay(
             out.append(f"{where}: its session's start and settings are not in the log")
             continue
         a, b = _fields(d), _fields(remake(d, events, decisions, started, config, g))
+        if d.content is None:
+            b["content"] = None  # an export from before 0.7.0 recorded no packs (all were at 1): nothing to compare
         diff = [k for k in a if a[k] != b[k]]
         if diff:
             parts = [f"{k} was {a[k]!r}, remade {b[k]!r}" for k in diff if k != "candidates"]

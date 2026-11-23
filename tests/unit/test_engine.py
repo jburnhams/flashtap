@@ -522,6 +522,10 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
     assert replay.replay(log, old[:1], {}, G)[1] == [
         f"decision 0 of session {old[0].session_id}: its session's start and settings are not in the log"
     ]
+    # A decision from an export made before 0.7.0 names no packs and is still remade and compared on the rest.
+    starts = {x.id: (x.started_at, x.config) for x in store.sessions_of(db_session, fox)}
+    unrecorded = [x.model_copy(update={"content": None}) for x in old]
+    assert replay.replay(log, unrecorded, starts, G) == replay.replay(log, old, starts, G)
     # A decision for a round drawn from packs since changed is reported, not remade: its round cannot be rebuilt.
     d = next(x for x in old if x.mode is not None)
     assert d.content == rounds.content_of(d.mode)  # recorded as its attempt records it
