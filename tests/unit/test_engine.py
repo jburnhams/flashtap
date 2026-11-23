@@ -493,7 +493,7 @@ def test_replay_remakes_every_logged_decision_even_after_a_strike(db_session: Se
     assert out.scores[0].attempts == len(store.events(db_session, fox)) - 1
 
     saved = store.export(db_session, fox, [])
-    assert saved.format == "flashtap-learner@2"
+    assert saved.format == "flashtap-learner@3"
     assert saved.sessions[0].config is not None
     starts = {x.id: (x.started_at, x.config) for x in saved.sessions}
     assert replay.replay(saved.events, saved.decisions, starts, G) == (out.decisions, [])
@@ -522,6 +522,19 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
     assert replay.replay(log, old[:1], {}, G)[1] == [
         f"decision 0 of session {old[0].session_id}: its session's start and settings are not in the log"
     ]
+    # A decision from an export made before 0.7.0 names no packs and is still remade and compared on the rest.
+    starts = {x.id: (x.started_at, x.config) for x in store.sessions_of(db_session, fox)}
+    unrecorded = [x.model_copy(update={"content": None}) for x in old]
+    assert replay.replay(log, unrecorded, starts, G) == replay.replay(log, old, starts, G)
+    # A decision for a round drawn from packs since changed is reported, not remade: its round cannot be rebuilt.
+    d = next(x for x in old if x.mode is not None)
+    assert d.content == rounds.content_of(d.mode)  # recorded as its attempt records it
+    moved = d.model_copy(update={"content": {**d.content, "words": 0}})
+    now, was = (", ".join(f"{k}@{v}" for k, v in sorted(c.items())) for c in (d.content, moved.content or {}))
+    assert replay.replay(log, [moved], {}, G) == (
+        0,
+        [f"decision {d.seq} of session {d.session_id}: made from {was}, which are not kept (now {now})"],
+    )
 
 
 def test_the_log_as_it_stood_counts_only_what_was_received_and_struck_by_then() -> None:

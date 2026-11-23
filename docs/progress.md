@@ -1,5 +1,12 @@
 # Progress log
 
+## 2026-11-23: pack versions on every answer (0.7.0)
+
+- Asked for: an attempt recorded the round's template version but not the versions of the content packs it drew from, though `docs/content.md` promised it and the spec asks for "generator seed, source versions" (§14) and versioned taught-set snapshots (§19). After a pack's version was raised, an old attempt would rebuild into a different round and be described, or judged, against it.
+- Which packs a round draws from: the words and phonics packs (the lexicon every kind reads) and the packs of the skills it names. Missing number and Order use no words, but are counted as drawing from them anyway: claiming one pack too many only refuses a rebuild that would have matched, while claiming one too few would rebuild the wrong round.
+- Only the current packs are kept, as only the current template is: a round from other versions is refused when answered (400), its answer is shown by id on the Learner screen, and a replay reports its decision rather than remaking it. Keeping old packs to rebuild old rounds can come later if it is ever needed; the log now says which ones they would be.
+- Existing rows were filled in by the migration, not left empty: every pack has been at version 1 since the packs were written, so the packs each kind drew from are known exactly. A retry of a logged attempt is now matched against the log before the round is rebuilt, so it is still a duplicate after the packs move on.
+
 ## 2026-11-23: P3 adaptive engine (0.6.0)
 
 - Asked for: the plan's PR 5. The engine is `src/flashtap/engine/`; Play's "Chosen for them" uses it.

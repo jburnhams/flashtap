@@ -33,7 +33,7 @@ Without the web build, `flashtap serve` answers with a plain stand-in page that 
 | `GET /api/learners/{id}/profile` | Every skill's estimates (`bkt@1`, `rule@1`), reporting state, counts and last seen |
 | `GET /api/learners/{id}/skills/{skill}/evidence` | The rounds that touched a skill, newest first: the first answer, whether it counted and why not |
 | `GET /api/learners/{id}/export` | Everything held about a learner, as a JSON download |
-| `POST /api/attempts` | One round answered (`event_id`, the round's kind, version, choices and seed, the first answer, tries, outcome, and the engine's `decision_id` when it chose the round); idempotent by `event_id` |
+| `POST /api/attempts` | One round answered (`event_id`, the round's kind, version, choices, seed and `content` (the pack versions it drew from), the first answer, tries, outcome, and the engine's `decision_id` when it chose the round); idempotent by `event_id` |
 | `POST /api/attempts/{event_id}/strike` | Strike a round out of every estimate (`{reason}`); the round stays in the log |
 | `POST /api/v1/sessions` | Start a session the adaptive engine plans (`{learner_id}`), with a snapshot of its settings |
 | `POST /api/v1/sessions/{id}/next` | Decision number `seq` (`{seq}`): a round, an offered break or the end, with rationale codes, the reason in words and every candidate weighed; asked again, the same decision |

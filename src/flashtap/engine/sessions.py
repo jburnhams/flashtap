@@ -101,7 +101,7 @@ def _out(d: Logged, earlier: list[Logged], config: Config, titles: dict[str, str
     played = sum(1 for x in earlier if x.action is Action.ROUND and x.seq < d.seq)
     r = None
     if d.action is Action.ROUND and d.mode is not None and d.choices is not None:
-        r = rounds.generate(d.mode, d.choices, d.seed, d.version)
+        r = rounds.generate(d.mode, d.choices, d.seed, d.version, d.content)
         r.tries = rounds.tries_allowed(config.tries, r)
     return Next(
         id=d.id,
@@ -162,6 +162,7 @@ def next_decision(
             version=c.version,
             choices=c.choices,
             seed=c.seed,
+            content=c.content,
             skill=c.skill,
             rationale=[w.value for w in c.rationale],
             probability=c.probability,

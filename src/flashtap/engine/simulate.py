@@ -21,6 +21,7 @@ from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel
 
+from flashtap import rounds
 from flashtap.engine.evaluate import Fitted, Score, fit, scores
 from flashtap.engine.model import SHAPE, SHAPES, Graph, Knowledge, graph, guess
 from flashtap.engine.policy import POLICY, Action, Config, Past, Policy, decide
@@ -101,6 +102,7 @@ def play(sim: Sim, g: Graph, sessions: int, policy: Policy | None) -> list[Event
                 mode=mode.value,
                 version=shape.version,
                 choices=CONFIG.choices,
+                content=rounds.content_of(mode),
                 seed=seed,
                 mechanic=shape.mechanic.value,
                 options=options,

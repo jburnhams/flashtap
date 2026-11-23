@@ -8,8 +8,9 @@ Five tables in the app's schema (strata_python.db; migrations in `src/flashtap/m
 - `sessions`: one sitting, named by the browser (a fresh id each time Play opens for a learner), so attempts sent
   later, or twice, still land in the right one (§14: the client queues, the server reconciles idempotently).
 - `attempts`: append-only, one row per round answered, keyed by the browser's `event_id`. A row stores what is needed
-  to rebuild the round (kind, version, choices, seed) and the skills it gave evidence on *as they were when it was
-  played*, so a later change to a template cannot rewrite a learner's history. Only the first answer is judged
+  to rebuild the round (kind, version, choices, seed, and the version of each content pack it drew from) and the
+  skills it gave evidence on *as they were when it was played*, so a later change to a template or a pack cannot
+  rewrite a learner's history. Only the first answer is judged
   (§10: retries are teaching, not independent evidence); the number of tries and how the round ended are kept beside
   it for the engagement work later (P4).
 - `decisions`: what the adaptive engine chose for a session, and why (plan PR 5; the class below says more).
@@ -37,6 +38,7 @@ class Base(MappedAsDataclass, DeclarativeBase):  # written out, not make_base():
     type_annotation_map: ClassVar[dict[Any, Any]] = {
         datetime: DateTime(timezone=True),
         dict[str, Any]: JSON,
+        dict[str, int]: JSON,
         list[dict[str, str]]: JSON,
         list[dict[str, Any]]: JSON,
         list[str]: JSON,
@@ -76,11 +78,14 @@ class Attempt(Base):
     event_id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
     learner_id: Mapped[str] = mapped_column(ForeignKey("learners.id", ondelete="CASCADE"))
     session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), index=True)
-    # The round: (mode, version, choices, seed) rebuilds it exactly (rounds.generate).
+    # The round: (mode, version, choices, seed, content) rebuilds it exactly (rounds.generate). `content` is the
+    # content packs it drew from, {pack: version}: a word or sound changed in a pack changes the round a seed gives,
+    # so without it a rebuild after a pack's version is raised would show, and judge, a round nobody saw.
     mode: Mapped[str] = mapped_column(String(32))
     version: Mapped[int]
     choices: Mapped[int]
     seed: Mapped[int]
+    content: Mapped[dict[str, int]]
     mechanic: Mapped[str] = mapped_column(String(32))
     options: Mapped[int]  # how many tiles a one-tap round offered (its chance of a lucky tap); 0 for a placing round
     skills: Mapped[list[dict[str, str]]]  # [{"skill": id, "role": primary|secondary|confound}] as played
@@ -116,6 +121,7 @@ class Decision(Base):
     version: Mapped[int | None]
     choices: Mapped[int | None]
     seed: Mapped[int | None]
+    content: Mapped[dict[str, int] | None]  # the round's content packs and versions, as on its attempt; None: no round
     skill: Mapped[str | None] = mapped_column(String(80))
     rationale: Mapped[list[str]]
     probability: Mapped[float]

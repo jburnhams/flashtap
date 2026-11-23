@@ -32,7 +32,7 @@ uv run flashtap content list --json              # the shape GET /api/content re
 
 ## Writing a pack
 
-One TOML file; every table is optional; ids are global across packs (lower case words joined by dots). Keys a model does not know are refused, so a typo is an error, not a silent default. Raise `version` with every change to a pack's content: evidence will record which version a learner saw.
+One TOML file; every table is optional; ids are global across packs (lower case words joined by dots). Keys a model does not know are refused, so a typo is an error, not a silent default. Raise `version` with every change to a pack's content: every round carries the versions of the packs it drew from (`rounds.content_of`: the words and phonics packs, and the packs of the skills it names), each attempt and engine decision stores them, and only the current packs are kept, so a round made from an earlier version is never rebuilt from today's words. An attempt on such a round is refused (400) rather than judged against another round, the Learner screen shows its answer by id, and an engine replay reports the decision rather than remaking it.
 
 ```toml
 pack = "maths.place_value"
