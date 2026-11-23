@@ -1,5 +1,17 @@
 # Progress log
 
+## 2026-11-23: P4 light engagement (0.8.0)
+
+- Asked for: the plan's PR 6: a choice of two activities, the 3-face rating, session caps and breaks as the grown-up's settings, and (from a spec review) a grown-up's overrides of a skill's state (§13, §15). The hesitation and retry patterns the plan lists for P4 (§11) came with it, as an Engagement tab.
+- Engagement is kept apart from mastery (§11): ratings and picks never reach the estimates (a unit test rates rounds and gets the same estimates as with no ratings at all). They become one preference per kind, (sum of faces plus half a point per pick, minus half per pass) over (count + 3), so one face moves it a quarter of the way and forty nearly all; it adds 0.3 times that to the enjoyment term. The frustration guard is a filter, not a weight, so no preference can buy a round past it.
+- An override is evidence with its source, not an answer: BKT's estimate is set to 0.95 or 0.05 when it is said and moves on with the rounds after it; the rule estimator ignores it, so the two can disagree and the screen shows both. A told skill counts as seen, so the graph does not spread estimates over it, and a "not yet" is a prerequisite gap for what builds on it. Withdrawing keeps the row and its time, so a replay sees what each decision saw.
+- Replay: ratings, picks and overrides are stamped under the learner lock and folded as of each decision. The policy is now `utility@2`; with choice and rating off (the defaults in `Config`) it decides exactly as `utility@1`, so every logged decision still replays (a test remakes v1 decisions with v2 code).
+- Choices: the second activity is the best candidate of another mechanic (or another kind), so a pick says something about the learner's taste, not about two Counting rounds. Its seed is drawn after the first's, so a replay remakes both. A choice counts as a played round only once picked.
+- Patterns are named as hypotheses with what else could explain each (spec §11): quick and right, stuck (many tries or long pauses with few right), fewer right in the second half of longer sessions, mostly sad faces, passed over in picks. Slowness alone is not one: a slow right answer is a learner thinking.
+- Web: Play asks "Which one next?" with two pictures, and "How was that one?" with three faces after the answer when it is due (it can be left). The Learner screen has a "A grown-up says" column with Say and Withdraw (Undo), and an Engagement tab. Settings has a Sessions tab.
+- Found on the way: `web/tests/utils/setup.ts` reset MSW to the handlers of the last `server.resetHandlers(...)` a test called, so a failure handler leaked into the tests after it; it now resets to the app's handlers.
+- Issues raised: strata-react#305 (`createTypedApi` asks for a body on a POST with none; `api.withdraw` passes `json: undefined` until it is fixed) and #306 (ChoiceGrid has no neutral picked state for a choice with no right answer). strata-python had all this needed.
+
 ## 2026-11-23: pack versions on every answer (0.7.0)
 
 - Asked for: an attempt recorded the round's template version but not the versions of the content packs it drew from, though `docs/content.md` promised it and the spec asks for "generator seed, source versions" (§14) and versioned taught-set snapshots (§19). After a pack's version was raised, an old attempt would rebuild into a different round and be described, or judged, against it.

@@ -3,7 +3,7 @@
 // each. Rounds are fixed (one per mode), so screenshots do not change from run to run.
 import type { Mechanic, ModeInfo, Round, Settings } from '../api'
 
-export const defaultSettings: Settings = { mode: 'mixed', choices: 4, tries: 0 }
+export const defaultSettings: Settings = { mode: 'mixed', choices: 4, tries: 0, session_rounds: 20, session_minutes: 15, break_every: 10, choice_every: 5, rate_every: 4 }
 
 export const modes: ModeInfo[] = [
   { mode: 'matching', name: 'Matching', description: 'Find the animal, food or vehicle that was named', mechanic: 'select_one' },

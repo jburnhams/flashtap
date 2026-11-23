@@ -9,14 +9,25 @@
 // nothing). That list is the provenance the spec asks a profile to carry (§15). A round played by
 // someone else can be struck out there, with Undo while the bar shows.
 //
+// A grown-up can say what they have seen of a skill ("Can do it" or "Not yet", as a parent or a
+// teacher; spec §13 "manual overrides with source-labelled evidence"): it shows beside the state,
+// labelled with who said it and when, moves BKT's estimate and what the engine offers, and never
+// counts as an answer, so it cannot make a state alone. Withdrawing it is reversible until the Undo
+// bar goes, like a strike.
+//
+// The Engagement tab is how they play, kept apart from what they know (§11): each kind of round
+// with how it went, the faces and the picks, and the patterns worth a look, each worded as what it
+// could be and what to try, never as a label about the learner.
+//
 // Export saves everything held about the learner as one JSON file (§17); `flashtap learners
 // rebuild` checks the estimates in it against its own events. Delete removes the learner and every
 // round for good, so it is the one action behind a confirm.
 import { useQueryClient } from '@tanstack/react-query'
 import { Download, Trash2 } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { AlertDialog, Button, ButtonLink, DataTable, DataView, EmptyState, format, Metric, MetricStrip, PageHeader, RowAction, Skeleton, Status, TableSkeleton, Tabs, TextLink, UndoBar, useExpanded, useLoad, useUndoable, type Column, type Tone, type Undoable } from 'strata-react'
-import { api, exportUrl, keys, SKILL_STATES, type EvidenceRow, type Profile, type SkillReport, type SkillState } from '../api'
+import { AlertDialog, AsyncButton, Button, ButtonLink, ChoiceGroup, DataTable, DataView, Dialog, EmptyState, Field, format, Input, Metric, MetricStrip, PageHeader, RowAction, Skeleton, Status, TableSkeleton, Tabs, TextLink, UndoBar, useAsyncAction, useExpanded, useLoad, useUndoable, type Column, type Tone, type Undoable } from 'strata-react'
+import { api, exportUrl, keys, SKILL_STATES, type Engagement, type EvidenceRow, type KindRow, type OverrideIn, type Profile, type SkillReport, type SkillState, type Told } from '../api'
 import { modeLabels } from './PlayScreen'
 
 export const stateWords: Record<SkillState, { word: string; tone: Tone }> = {
@@ -31,7 +42,11 @@ export const stateWords: Record<SkillState, { word: string; tone: Tone }> = {
 const tabs = [
   { value: 'seen', label: 'Seen' },
   { value: 'all', label: 'All skills' },
+  { value: 'engagement', label: 'Engagement' },
 ]
+
+export const saysWords: Record<Told['says'], string> = { can: 'Can do it', not_yet: 'Not yet' }
+const observerWords: Record<Told['observer'], string> = { parent: 'a parent', teacher: 'a teacher' }
 
 export function LearnerScreen() {
   const { id = '' } = useParams()
@@ -65,6 +80,7 @@ function Learner({ p }: { p: Profile }) {
   const navigate = useNavigate()
   // Held here, not in a skill's evidence: closing the row must not take the Undo bar (or a failure) with it.
   const undoable = useUndoable()
+  const [telling, setTelling] = useState<SkillReport | null>(null)
   const queryClient = useQueryClient()
   const name = p.learner.nickname
   const remove = async () => {
@@ -99,19 +115,41 @@ function Learner({ p }: { p: Profile }) {
         <Metric label="Struck out" value={format.integer(p.struck)} note="rounds that count for nothing" />
       </MetricStrip>
       <Tabs param="show" items={tabs} label="Skills">
-        {tab => <Skills learner={p.learner.id} undoable={undoable} rows={tab === 'all' ? p.skills : p.skills.filter(s => s.state !== 'unobserved')} />}
+        {tab =>
+          tab === 'engagement' ? (
+            <EngagementView e={p.engagement} name={name} />
+          ) : (
+            <Skills learner={p.learner.id} name={name} undoable={undoable} onTell={setTelling} rows={tab === 'all' ? p.skills : p.skills.filter(s => s.state !== 'unobserved' || s.told)} />
+          )
+        }
       </Tabs>
       <UndoBar undoable={undoable} />
+      {telling && <Tell learner={p.learner.id} name={name} skill={telling} onClose={() => setTelling(null)} />}
       <section className="grid gap-1 type-caption text-muted-foreground">
         <h2 className="type-label text-foreground">How these are worked out</h2>
         {p.models.map(m => <p key={m.model}>{m.model}: {m.description}.</p>)}
         <p>Only a first answer counts. The states are labels drawn from those numbers; their thresholds are first guesses, to be fitted once there are real rounds to fit them to.</p>
+        <p>What a grown-up says sets BKT's estimate when it is said, and the rounds after it move it on; it is never counted as an answer.</p>
       </section>
     </>
   )
 }
 
 const estimate = (s: SkillReport, model: string) => s.estimates.find(e => e.model === model)
+
+function toldText(t: Told) {
+  return `${saysWords[t.says]}, says ${observerWords[t.observer]}`
+}
+
+/** What a grown-up said, who they are, when, and their note when they left one. */
+function ToldCell({ t }: { t: Told }) {
+  return (
+    <>
+      <span>{toldText(t)}</span>
+      <span className="block type-caption text-muted-foreground">{[format.date(t.at), t.note].filter(Boolean).join(': ')}</span>
+    </>
+  )
+}
 
 const skillColumns: Column<SkillReport>[] = [
   { key: 'title', header: 'Skill', value: s => s.title, cell: s => <><span>{s.title}</span><span className="block type-caption text-muted-foreground">{s.strand}</span></> },
@@ -129,13 +167,47 @@ const skillColumns: Column<SkillReport>[] = [
   { key: 'last_seen', header: 'Last seen', value: s => (s.last_seen ? new Date(s.last_seen) : null), cell: s => format.dateTime(s.last_seen), missing: 'Never' },
 ]
 
-function Skills({ learner, undoable, rows }: { learner: string; undoable: Undoable; rows: SkillReport[] }) {
+function Skills({ learner, name, undoable, onTell, rows }: { learner: string; name: string; undoable: Undoable; onTell: (s: SkillReport) => void; rows: SkillReport[] }) {
   const open = useExpanded({ param: 'open' })
-  if (rows.length === 0) return <EmptyState title="No skills seen yet">Every skill is still unobserved: nothing is known either way. Open All skills to see the list.</EmptyState>
+  const queryClient = useQueryClient()
+  if (rows.length === 0) return <EmptyState title="No skills seen yet">Every skill is still unobserved: nothing is known either way. Open All skills to see the list, or to say what you have seen.</EmptyState>
+  const withdraw = (s: SkillReport, t: Told) =>
+    undoable.schedule({
+      id: t.id,
+      message: `Withdrew “${saysWords[t.says]}” for ${s.title}.`,
+      failure: `“${saysWords[t.says]}” for ${s.title} is back: withdrawing it did not go through.`,
+      commit: async () => {
+        await api.withdraw(learner, t.id)
+        await queryClient.invalidateQueries({ queryKey: ['learners', learner] })
+      },
+    })
+  const columns: Column<SkillReport>[] = [
+    ...skillColumns,
+    {
+      key: 'told',
+      header: 'A grown-up says',
+      value: s => (s.told && !undoable.isRemoved(s.told.id) ? s.told.says : null),
+      // Drawn only for a row with a value, so the override is there.
+      cell: s => <ToldCell t={s.told as Told} />,
+      missing: 'Nothing yet',
+    },
+    {
+      key: 'tell',
+      header: 'Say what you have seen',
+      hideHeader: true,
+      sort: false,
+      cell: s => (
+        <span className="flex flex-wrap gap-1">
+          <RowAction label="Say" subject={`what ${name} can do: ${s.title}`} onClick={() => onTell(s)} />
+          {s.told && !undoable.isRemoved(s.told.id) && <RowAction label="Withdraw" subject={`what was said about ${s.title}`} onClick={() => withdraw(s, s.told as Told)} />}
+        </span>
+      ),
+    },
+  ]
   return (
     <DataTable
       caption="Skills"
-      columns={skillColumns}
+      columns={columns}
       rows={rows}
       rowKey={s => s.skill}
       sortParam="sort"
@@ -179,6 +251,83 @@ function Evidence({ learner, skill, undoable }: { learner: string; skill: SkillR
       <DataView state={rows} isEmpty={r => r.length === 0} skeleton={<TableSkeleton rows={3} columns={5} />} empty={<EmptyState title="No rounds touched this skill">Its evidence will show here once one does.</EmptyState>}>
         {r => <DataTable caption={`Rounds that touched ${skill.title}`} columns={columns} rows={r} rowKey={x => x.event_id} />}
       </DataView>
+    </div>
+  )
+}
+
+/** What a grown-up has seen of one skill: can do it or not yet, who they are to the learner, and a note. */
+function Tell({ learner, name, skill, onClose }: { learner: string; name: string; skill: SkillReport; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const [says, setSays] = useState<OverrideIn['says']>(skill.told?.says ?? 'can')
+  const [observer, setObserver] = useState<OverrideIn['observer']>(skill.told?.observer ?? 'parent')
+  const [note, setNote] = useState('')
+  const save = useAsyncAction(async () => {
+    await api.tell(learner, { skill: skill.skill, says, observer, note })
+    await queryClient.invalidateQueries({ queryKey: ['learners', learner] })
+    onClose()
+  })
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    void save.run()
+  }
+  return (
+    <Dialog
+      open
+      onOpenChange={onClose} // only ever asked to close: it is mounted open and unmounted to close
+      title={`What have you seen ${name} do?`}
+      description={`${skill.title}. It sets the estimate now and the rounds after it move it on; it never counts as an answer.`}
+    >
+      <form id="tell" onSubmit={onSubmit} noValidate className="grid gap-5">
+        <ChoiceGroup legend={`${name}…`} name="says" value={says} onChange={v => setSays(v as OverrideIn['says'])} choices={[{ value: 'can', label: 'Can do it', detail: 'Seen doing it, without help.' }, { value: 'not_yet', label: 'Not yet', detail: 'Tried, and it is not there yet.' }]} />
+        <ChoiceGroup legend="You are" name="observer" value={observer} onChange={v => setObserver(v as OverrideIn['observer'])} choices={[{ value: 'parent', label: 'A parent' }, { value: 'teacher', label: 'A teacher' }]} />
+        <Field label="Note" hint="Optional: what you saw, up to 200 characters. No names.">
+          <Input value={note} maxLength={200} onChange={e => setNote(e.target.value)} />
+        </Field>
+        <div className="flex flex-wrap items-center gap-3">
+          <AsyncButton type="submit" variant="default" phase={save.phase} error={save.error} labels={{ idle: 'Save what you saw', pending: 'Saving…', done: 'Saved' }} />
+          <Button onClick={onClose}>Cancel</Button>
+          {save.phase === 'error' && <p className="type-body-sm text-danger">{save.error} Nothing was saved.</p>}
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
+const facesText = (k: KindRow) => `${k.liked} \u{1F600} · ${k.okay} \u{1F610} · ${k.disliked} \u{1F641}`
+// A cell is drawn only for a row whose `value` is not null (the table prints the missing word otherwise), so each
+// cell can take its number as there. A kind can be offered in a choice without being played yet: no rounds.
+const kindColumns: Column<KindRow>[] = [
+  { key: 'title', header: 'Kind of round', value: k => k.title, cell: k => k.title },
+  { key: 'rounds', header: 'Rounds', numeric: true, value: k => k.rounds, cell: k => format.integer(k.rounds) },
+  { key: 'right', header: 'Right first time', numeric: true, value: k => (k.rounds ? k.right_first / k.rounds : null), cell: k => format.share(k.right_first / k.rounds) },
+  { key: 'seconds', header: 'Typical first answer', numeric: true, value: k => k.median_seconds, cell: k => format.withUnit(k.median_seconds as number, 's', format.decimal) },
+  { key: 'tries', header: 'Tries', numeric: true, value: k => k.mean_tries, cell: k => format.decimal(k.mean_tries as number) },
+  { key: 'faces', header: 'Faces', value: k => (k.liked + k.okay + k.disliked ? k.liked - k.disliked : null), cell: k => facesText(k), missing: 'None' },
+  { key: 'picked', header: 'Picked', numeric: true, value: k => (k.offered ? k.picked / k.offered : null), cell: k => `${k.picked} of ${k.offered}`, missing: 'Not offered' },
+]
+
+/** How they play: each kind with its numbers, then the patterns worth a look, as hypotheses. */
+function EngagementView({ e, name }: { e: Engagement; name: string }) {
+  if (e.kinds.length === 0) return <EmptyState title="Nothing played yet">Once {name} plays, how each kind of round goes, the faces and the picks show here.</EmptyState>
+  return (
+    <div className="grid gap-6">
+      <DataTable caption="Kinds of round" columns={kindColumns} rows={e.kinds} rowKey={k => k.mode} sortParam="ksort" initialSort={{ key: 'rounds', dir: 'descending' }} />
+      <section className="grid gap-3" aria-labelledby="patterns">
+        <h2 id="patterns" className="type-heading">Worth a look</h2>
+        {e.hypotheses.length === 0 ? (
+          <p className="type-body-sm text-muted-foreground">No pattern stands out yet. Patterns are named only over enough rounds, and only as what they could be.</p>
+        ) : (
+          <ul className="grid gap-3">
+            {e.hypotheses.map(h => (
+              <li key={h.seen} className="grid gap-1 rounded-surface border border-border p-4">
+                <p className="type-body">{h.seen}</p>
+                <p className="type-body-sm text-muted-foreground">Could be: {h.could_be}</p>
+                <p className="type-body-sm text-muted-foreground">To try: {h.try_}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   )
 }

@@ -2,10 +2,10 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AttemptIn } from '../../src/api'
 import { rounds } from '../../src/mocks/fixtures'
-import { attemptFails, learnersError, nextError, quickLookGoes, roundError, SESSION, sessionError } from '../../src/mocks/handlers'
+import { attemptFails, decisionFor, learnersError, nextChoice, nextError, pickFails, quickLookGoes, ratingFails, roundError, SESSION, sessionError } from '../../src/mocks/handlers'
 import { openApp, screen, within } from '../utils/render'
 import { mock, server } from '../utils/server'
-import { installFakeSpeech } from 'strata-react/testing'
+import { expectOneFilledButton, installFakeSpeech } from 'strata-react/testing'
 
 const tiles = () => within(screen.getByRole('grid', { name: 'Choices' })).getAllByRole('row')
 // A tile is named by what it shows, then its mark once it has one ("duck, not this one").
@@ -403,5 +403,89 @@ describe('Play, chosen for them', () => {
     server.resetHandlers(nextError)
     openApp(`/?mode=next&learner=${FOX}`)
     await vi.waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(0))
+  })
+
+  describe('engagement', () => {
+    const FOX = 'a'.repeat(32)
+    const choices = () => within(screen.getByRole('grid', { name: 'Which one next?' })).getAllByRole('row')
+
+    it('offers a choice of two, plays the one picked, and asks how it was', async () => {
+      server.use(nextChoice)
+      const { user } = openApp(`/?mode=next&learner=${FOX}`)
+      expect(await screen.findByRole('heading', { level: 1, name: 'Which one next?' })).toBeInTheDocument()
+      expect(choices().map(t => t.getAttribute('aria-label'))).toEqual(['Counting', 'Listen'])
+      expect(choices().map(t => t.textContent)).toEqual(['🔢', '👂'])
+      expect(screen.getByText(/^Why two: Two to pick from/)).toBeInTheDocument()
+      await user.click(screen.getByRole('row', { name: 'Listen' }))
+      expect(await screen.findByRole('heading', { level: 1, name: 'Listen, then tap the letter it starts with.' })).toBeInTheDocument()
+      expect(mock.picks).toEqual({ 0: 1 })
+      expect(screen.queryByRole('heading', { name: 'How was that one?' })).not.toBeInTheDocument() // not until it is over
+      await user.click(screen.getByRole('row', { name: tile('d') }))
+      await vi.waitFor(() => expect(mock.attempts).toHaveLength(1))
+      expect(mock.attempts[0]).toMatchObject({ decision_id: 'd0'.padEnd(32, '0'), mode: 'listen', seed: 2 })
+      expect(screen.getByRole('heading', { name: 'How was that one?' })).toBeInTheDocument()
+      expectOneFilledButton() // Next stays the one filled button: the faces are optional
+      await user.click(screen.getByRole('row', { name: 'Liked it' }))
+      expect(await screen.findByText('Thank you.')).toBeInTheDocument()
+      await vi.waitFor(() => expect(mock.ratings).toEqual([{ event_id: mock.attempts[0].event_id, value: 1 }]))
+      await user.click(screen.getByRole('button', { name: 'Next' }))
+      expect(await screen.findByRole('heading', { name: /^Played 1\sround$/ })).toBeInTheDocument()
+      expect(mock.nextRequests).toEqual([0, 1])
+    })
+
+    it('says so when a pick does not reach the server, and the faces when one is not saved', async () => {
+      server.use(nextChoice, pickFails)
+      const { user } = openApp(`/?mode=next&learner=${FOX}`)
+      await user.click(await screen.findByRole('row', { name: 'Counting' }))
+      expect(await screen.findByRole('status')).toHaveTextContent('That pick did not reach the server: tap one again.')
+      server.use(http.post('*/api/v1/sessions/:id/decisions/:seq/pick', async ({ params, request }) => {
+        mock.picks[Number(params.seq)] = ((await request.json()) as { offer: number }).offer
+        return HttpResponse.json(decisionFor(Number(params.seq)))
+      }), ratingFails)
+      await user.click(screen.getByRole('row', { name: 'Counting' }))
+      await user.click(await screen.findByRole('row', { name: tile('3') }))
+      await user.click(screen.getByRole('row', { name: 'Did not like it' }))
+      expect(await screen.findByText('That face was not saved.')).toBeInTheDocument()
+    })
+
+    it('asks how it was every few rounds when the grown-up picks the kind, only for a recorded learner', async () => {
+      mock.settings = { ...mock.settings, rate_every: 2 }
+      const { user } = openApp(`/?learner=${FOX}`)
+      await user.click(await screen.findByRole('row', { name: tile('cow') }))
+      expect(screen.queryByRole('heading', { name: 'How was that one?' })).not.toBeInTheDocument() // round 1 of 2
+      await user.click(screen.getByRole('button', { name: 'Next' }))
+      await user.click(await screen.findByRole('row', { name: tile('cow') }))
+      await user.click(await screen.findByRole('row', { name: 'It was all right' }))
+      await vi.waitFor(() => expect(mock.ratings).toEqual([{ event_id: mock.attempts[1].event_id, value: 0 }]))
+
+      mock.settings = { ...mock.settings, rate_every: 1 }
+      const nobody = openApp('/')
+      await nobody.user.click(await screen.findAllByRole('row', { name: tile('cow') }).then(r => r[r.length - 1]))
+      expect(screen.queryAllByRole('heading', { name: 'How was that one?' })).toHaveLength(0)
+    })
+
+    it('asks how an arrangement was too, once it is checked', async () => {
+      mock.plan = ['give+rate', 'end']
+      const { user } = openApp(`/?mode=next&learner=${FOX}`)
+      expect(await screen.findByRole('heading', { level: 1, name: 'Put 3 ducks in the basket.' })).toBeInTheDocument()
+      for (let i = 0; i < 3; i++) {
+        await user.click(within(screen.getByRole('group', { name: 'Pictures to place' })).getAllByRole('button')[0])
+        await user.click(screen.getByRole('button', { name: 'Put duck in the basket' }))
+      }
+      expect(screen.queryByRole('heading', { name: 'How was that one?' })).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Check' }))
+      await user.click(await screen.findByRole('row', { name: 'Liked it' }))
+      await vi.waitFor(() => expect(mock.ratings).toHaveLength(1))
+    })
+
+    it('rates a round only once it is saved: a round the server did not take is not rated', async () => {
+      mock.settings = { ...mock.settings, rate_every: 1 }
+      server.use(attemptFails)
+      const { user } = openApp(`/?learner=${FOX}`)
+      await user.click(await screen.findByRole('row', { name: tile('cow') }))
+      await user.click(screen.getByRole('row', { name: 'Liked it' }))
+      expect(await screen.findByText('That face was not saved.')).toBeInTheDocument()
+      expect(mock.ratings).toEqual([])
+    })
   })
 })

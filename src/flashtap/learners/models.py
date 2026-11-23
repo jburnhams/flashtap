@@ -1,6 +1,6 @@
 """The learner records (plan PR 4; the spec's §14 event store): who plays, when, and every round they answered.
 
-Five tables in the app's schema (strata_python.db; migrations in `src/flashtap/migrations/`):
+Seven tables in the app's schema (strata_python.db; migrations in `src/flashtap/migrations/`):
 
 - `learners`: a pseudonymous id (random, means nothing outside this database) and a nickname chosen by the grown-up.
   Nothing else: no age, birth date, year group, school or photo (AGENTS.md rule 8, spec §17). What comes next is
@@ -14,6 +14,12 @@ Five tables in the app's schema (strata_python.db; migrations in `src/flashtap/m
   (§10: retries are teaching, not independent evidence); the number of tries and how the round ended are kept beside
   it for the engagement work later (P4).
 - `decisions`: what the adaptive engine chose for a session, and why (plan PR 5; the class below says more).
+- `ratings`: how a learner said a round was, on three faces (P4, spec §11: "optional child-friendly 3-point
+  enjoyment ... scales"), one per round and scale. A voluntary report, kept apart from the evidence: it never moves an
+  estimate of what they know, only what the engine offers (a preference).
+- `overrides`: a grown-up's observation of one skill ("can do it", "not yet"; §13 "manual teacher/parent overrides
+  with source-labelled evidence", §15 `POST /v1/learners/{id}/overrides`), labelled with who said it. Append-only but
+  for `withdrawn_at`, set once: a withdrawn override counts for nothing from then on, as a struck attempt does.
 - `tombstones`: an attempt struck out by a grown-up ("someone else was playing") and why. The attempt stays, so the
   log is still append-only; every estimate skips struck attempts.
 
@@ -25,7 +31,7 @@ event log by construction, which is the PR's exit criterion.
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, MetaData, String, UniqueConstraint
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, MetaData, String, UniqueConstraint, false
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column
 from strata_python.db import NAMING_CONVENTION
 
@@ -126,6 +132,42 @@ class Decision(Base):
     rationale: Mapped[list[str]]
     probability: Mapped[float]
     candidates: Mapped[list[dict[str, Any]]]
+    # A choice between two activities (action "choice", P4): the two rounds offered, as {mode, version, choices,
+    # seed, content, skill, rationale}, and which one the learner picked and when (None until they do; a pick is
+    # refused once the session has moved past it, so a replay sees the pick exactly as the next decision did).
+    offers: Mapped[list[dict[str, Any]] | None] = mapped_column(default=None)
+    picked: Mapped[int | None] = mapped_column(default=None)
+    picked_at: Mapped[datetime | None] = mapped_column(default=None)
+    rate: Mapped[bool] = mapped_column(default=False, server_default=false())  # ask how the round was, after it
+
+
+class Rating(Base):
+    """How a round was, said by the learner on three faces: 1 (liked it), 0 (all right), -1 (did not). Optional: a
+    round nobody rated has no row. `at` is when the server took it (under the learner's lock, like a receipt), so a
+    replay knows which ratings a decision could see."""
+
+    __tablename__ = "ratings"
+    event_id: Mapped[str] = mapped_column(ForeignKey("attempts.event_id", ondelete="CASCADE"), primary_key=True)
+    scale: Mapped[str] = mapped_column(String(16), primary_key=True)  # "enjoyment"; difficulty may follow (§11)
+    learner_id: Mapped[str] = mapped_column(ForeignKey("learners.id", ondelete="CASCADE"), index=True)
+    value: Mapped[int]
+    at: Mapped[datetime]
+
+
+class Override(Base):
+    """A grown-up's observation of one skill: what they said (`says`: "can" or "not_yet"), who they are to the learner
+    (`observer`: "parent" or "teacher", the source label), an optional note, and when. Withdrawn, it stays, with the
+    time it stopped counting."""
+
+    __tablename__ = "overrides"
+    id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
+    learner_id: Mapped[str] = mapped_column(ForeignKey("learners.id", ondelete="CASCADE"), index=True)
+    skill: Mapped[str] = mapped_column(String(80))
+    says: Mapped[str] = mapped_column(String(16))
+    observer: Mapped[str] = mapped_column(String(16))
+    note: Mapped[str] = mapped_column(String(200))
+    at: Mapped[datetime]
+    withdrawn_at: Mapped[datetime | None] = mapped_column(default=None)
 
 
 class Tombstone(Base):

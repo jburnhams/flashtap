@@ -28,10 +28,17 @@
 // decision is a round (with a line for the grown-up saying why it was chosen), an offered break (keep playing or
 // stop), or the end of the session, which the server calls once its rounds or minutes are up. It needs a learner:
 // what comes next is chosen from what they have shown.
+//
+// Engagement, light (spec §11, §12; plan PR 6). Every few rounds (Settings, Sessions) the engine offers a choice of
+// two instead of a round: two big picture tiles, their names said aloud, and the learner taps one; the pick is
+// theirs and is recorded, then that round is played. And every few rounds the three faces ask how it was, under the
+// finished round: optional (Next works without a face), never counted as an answer, never about right or wrong. A
+// tile is a picture tile like any other (strata-react's ChoiceGrid), left open: neither a pick nor a face is right
+// or wrong. With the grown-up choosing the kind, the faces still come every few rounds for a learner who is recorded.
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, ButtonLink, ChoiceGrid, ChoiceGridSkeleton, DataView, Done, EmptyState, format, Field, NativeSelect, PageHeader, PlaceBoard, SayAgain, Skeleton, speak, useLoad, useSearchParam, type ChoiceState, type Load, type PlaceState } from 'strata-react'
-import { api, isPlayChoice, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type LearnerRow, type Mode, type Next, type Option, type PlayChoice, type Round, type SessionInfo, type Settings } from '../api'
+import { api, isPlayChoice, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type Face, type LearnerRow, type Mode, type Next, type OfferOut, type Option, type PlayChoice, type Round, type SessionInfo, type Settings } from '../api'
 import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRight, solution, type Placement, type Turn } from '../play'
 // Every prompt and answer is said aloud in UK English (the content's dialect): a learner who cannot read yet still
 // needs the prompt. Browser voices cannot say an isolated sound such as /m/; recorded clips replace this for phonics
@@ -91,7 +98,7 @@ function Choices({ settings, learners, session }: { settings: Settings; learners
         <WhoPlays learners={known} recording={playing !== null} failed={learners.status === 'error'} />
       </div>
       {mode !== 'next' ? (
-        <Game key={`${mode}-${playing?.id ?? ''}`} mode={mode} learner={playing} session={playing ? session(playing.id) : ''} />
+        <Game key={`${mode}-${playing?.id ?? ''}`} mode={mode} learner={playing} session={playing ? session(playing.id) : ''} rateEvery={settings.rate_every} />
       ) : playing ? (
         <Planned key={playing.id} learner={playing} />
       ) : (
@@ -116,10 +123,12 @@ function WhoPlays({ learners, recording, failed }: { learners: LearnerRow[]; rec
 /** What a round reports once it ends: the rest of an attempt comes from the round and who is playing. */
 export type Answered = Pick<AttemptIn, 'first_answer' | 'tries' | 'outcome' | 'presented_at' | 'answered_at'>
 
-/** One round after another in `mode`: each Next asks the server for a new one. */
-function Game({ mode, learner, session }: { mode: Mode; learner: LearnerRow | null; session: string }) {
+/** One round after another in `mode`: each Next asks the server for a new one. Every `rateEvery`th round a recorded
+ * learner is asked how it was. */
+function Game({ mode, learner, session, rateEvery }: { mode: Mode; learner: LearnerRow | null; session: string; rateEvery: number }) {
   const [n, setN] = useState(0)
   const [unsaved, setUnsaved] = useState(false)
+  const sent = useRef<Promise<string | null>>(Promise.resolve(null))
   const queryClient = useQueryClient()
   // A fresh round for every visit (a change of kind or of who is playing remounts this Game): a round left
   // half done and shown again with its answers forgotten would let a retry be recorded as a new first answer.
@@ -127,24 +136,35 @@ function Game({ mode, learner, session }: { mode: Mode; learner: LearnerRow | nu
   const round = useLoad({ queryKey: keys.round(mode, visit, n), queryFn: ({ signal }) => api.round(mode, signal), staleTime: Infinity })
   const record = useCallback(
     (who: LearnerRow, r: Round, a: Answered) => {
-      api.recordAttempt({ event_id: newId(), learner_id: who.id, session_id: session, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: mode, ...a }).then(
+      const id = newId()
+      sent.current = api.recordAttempt({ event_id: id, learner_id: who.id, session_id: session, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: mode, ...a }).then(
         () => {
           setUnsaved(false)
           void queryClient.invalidateQueries({ queryKey: ['learners'] })
+          return id
         },
-        () => setUnsaved(true),
+        () => {
+          setUnsaved(true)
+          return null
+        },
       )
     },
     [session, mode, queryClient],
   )
+  const asking = learner !== null && rateEvery > 0 && (n + 1) % rateEvery === 0
   return (
     <>
       <DataView state={round} isEmpty={r => r.options.length === 0 && r.pieces.length === 0} skeleton={<RoundSkeleton />} empty={<EmptyState title="Nothing to play">The server sent a round with no pictures.</EmptyState>}>
-        {r => <Board key={`${r.mode}-${r.seed}`} round={r} onNext={() => setN(x => x + 1)} onAnswered={learner ? a => record(learner, r, a) : undefined} />}
+        {r => <Board key={`${r.mode}-${r.seed}`} round={r} onNext={() => setN(x => x + 1)} onAnswered={learner ? a => record(learner, r, a) : undefined} onRated={asking ? v => rateAfter(sent.current, v) : undefined} />}
       </DataView>
       {unsaved && <p role="status" className="type-caption text-muted-foreground">The last round was not saved for {learner?.nickname}: the server did not take it.</p>}
     </>
   )
+}
+
+/** Sends a face once the round it rates has been saved; a round the server did not take is not rated. */
+function rateAfter(saved: Promise<string | null>, value: Face): Promise<unknown> {
+  return saved.then(id => (id ? api.rate(id, value) : Promise.reject(new Error('The round was not saved, so it cannot be rated.'))))
 }
 
 /** A session the engine plans for `learner`: started once per visit, then one decision after another. */
@@ -166,26 +186,37 @@ function Decisions({ session, learner }: { session: SessionInfo; learner: Learne
   const decision = useLoad({ queryKey: keys.next(session.id, seq), queryFn: () => api.next(session.id, seq), staleTime: Infinity })
   // The answer being saved, if any: the next decision is asked for only once it has landed (or failed), so the
   // engine chooses knowing it; asked too soon, a third miss would not yet show and no break would be offered.
-  const saving = useRef<Promise<unknown>>(Promise.resolve())
-  const onward = () => { void saving.current.then(() => setSeq(n => n + 1)) }
+  const saving = useRef<Promise<string | null>>(Promise.resolve(null))
+  // A face is sent after its round is saved; the next decision waits for both, so the engine sees the face too.
+  const rating = useRef<Promise<unknown>>(Promise.resolve())
+  const onward = () => { void Promise.allSettled([saving.current, rating.current]).then(() => setSeq(n => n + 1)) }
   const record = (d: Next, r: Round, a: Answered) => {
-    saving.current = api.recordAttempt({ event_id: newId(), learner_id: learner.id, session_id: session.id, decision_id: d.id, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: 'next', ...a }).then(
+    const id = newId()
+    saving.current = api.recordAttempt({ event_id: id, learner_id: learner.id, session_id: session.id, decision_id: d.id, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: 'next', ...a }).then(
       () => {
         setUnsaved(false)
         void queryClient.invalidateQueries({ queryKey: ['learners'] })
+        return id
       },
-      () => setUnsaved(true),
+      () => {
+        setUnsaved(true)
+        return null
+      },
     )
   }
+  const rate = (v: Face) => (rating.current = rateAfter(saving.current, v))
+  const picked = (n: Next) => queryClient.setQueryData(keys.next(session.id, n.seq), n)
   return (
     <>
       <DataView state={decision} isEmpty={() => false} skeleton={<RoundSkeleton />} empty={<EmptyState title="Nothing chosen">The server chose nothing.</EmptyState>}>
         {d =>
-          d.action === 'round' && d.round ? (
+          (d.action === 'round' || d.action === 'choice') && d.round ? (
             <div className="grid gap-4">
-              <Board key={d.id} round={d.round} onNext={onward} onAnswered={a => record(d, d.round as Round, a)} />
+              <Board key={d.id} round={d.round} onNext={onward} onAnswered={a => record(d, d.round as Round, a)} onRated={d.rate ? rate : undefined} />
               <p className="type-caption text-muted-foreground">Why this round: {d.why}</p>
             </div>
+          ) : d.action === 'choice' && d.offers ? (
+            <PickOne decision={d} offers={d.offers} onPicked={picked} />
           ) : d.action === 'break' ? (
             <BreakOffer decision={d} onContinue={onward} />
           ) : (
@@ -195,6 +226,54 @@ function Decisions({ session, learner }: { session: SessionInfo; learner: Learne
       </DataView>
       {unsaved && <p role="status" className="type-caption text-muted-foreground">The last round was not saved for {learner.nickname}: the server did not take it.</p>}
     </>
+  )
+}
+
+/** A choice of two: the learner taps the one they want to play next; the server keeps the pick, then it is played. */
+function PickOne({ decision, offers, onPicked }: { decision: Next; offers: OfferOut[]; onPicked: (n: Next) => void }) {
+  const [failed, setFailed] = useState(false)
+  const question = `Which one next? ${offers.map(o => o.title).join(' or ')}?`
+  useEffect(() => { say(question) }, [question])
+  const choose = (o: OfferOut) => {
+    setFailed(false)
+    api.pick(decision.session_id, decision.seq, offers.indexOf(o)).then(onPicked, () => setFailed(true))
+  }
+  return (
+    <section aria-labelledby="pick" className="grid gap-6">
+      <PageHeader title="Which one next?" actions={<SayAgain text={question} lang={LANG} verb="Say again" />} />
+      <p id="pick" className="sr-only">{question}</p>
+      <ChoiceGrid label="Which one next?" items={offers} itemKey={o => o.mode} itemLabel={o => o.title} renderPicture={o => o.picture} state={() => 'open'} marks={pickMarks} onChoose={choose} size="lg" />
+      {failed && <p role="status" className="type-caption text-muted-foreground">That pick did not reach the server: tap one again.</p>}
+      <p className="type-caption text-muted-foreground">Why two: {decision.why} {offers.map(o => `${o.title}: ${o.why}`).join(' ')}</p>
+    </section>
+  )
+}
+
+const pickMarks = { wrong: 'Not this one', right: 'Picked', answer: 'Picked' }
+
+const FACES: { value: Face; picture: string; word: string }[] = [
+  { value: 1, picture: '\u{1F600}', word: 'Liked it' },
+  { value: 0, picture: '\u{1F610}', word: 'It was all right' },
+  { value: -1, picture: '\u{1F641}', word: 'Did not like it' },
+]
+
+/** The three faces after a round. Optional: Next stays the filled button, and a face can be left untapped. */
+function HowWasIt({ onRated }: { onRated: (v: Face) => Promise<unknown> }) {
+  const [said, setSaid] = useState<'no' | 'sent' | 'failed'>('no')
+  const rate = (v: Face) => {
+    setSaid('sent')
+    onRated(v).catch(() => setSaid('failed'))
+  }
+  if (said === 'sent') return <p role="status" className="type-body text-muted-foreground">Thank you.</p>
+  return (
+    <section aria-labelledby="how" className="grid gap-3">
+      <div className="flex items-center gap-2">
+        <h2 id="how" className="type-heading">How was that one?</h2>
+        <SayAgain text="How was that one?" lang={LANG} verb="Say" />
+      </div>
+      <ChoiceGrid label="How was that one?" items={FACES} itemKey={f => String(f.value)} itemLabel={f => f.word} renderPicture={f => f.picture} state={() => 'open'} marks={pickMarks} onChoose={f => rate(f.value)} />
+      {said === 'failed' && <p role="status" className="type-caption text-muted-foreground">That face was not saved.</p>}
+    </section>
   )
 }
 
@@ -250,7 +329,7 @@ function useAttempt(report: ((a: Answered) => void) | undefined) {
 }
 
 /** A round, answered by a tap or by an arrangement as its mechanic says. */
-export function Board({ round, onNext, onAnswered }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void }) {
+export function Board({ round, onNext, onAnswered, onRated }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void; onRated?: (v: Face) => Promise<unknown> }) {
   const queryClient = useQueryClient()
   useEffect(() => { say(round.say) }, [round.say])
   const next = () => {
@@ -259,7 +338,7 @@ export function Board({ round, onNext, onAnswered }: { round: Round; onNext: () 
     queryClient.removeQueries({ queryKey: ['round'] })
     onNext()
   }
-  return PLACE_MECHANICS.includes(round.mechanic) ? <Arrange round={round} onNext={next} onAnswered={onAnswered} /> : <Choose round={round} onNext={next} onAnswered={onAnswered} />
+  return PLACE_MECHANICS.includes(round.mechanic) ? <Arrange round={round} onNext={next} onAnswered={onAnswered} onRated={onRated} /> : <Choose round={round} onNext={next} onAnswered={onAnswered} onRated={onRated} />
 }
 
 /** The heading every round shares: the prompt, Say it again, and once it is over what happened and Next. */
@@ -278,7 +357,7 @@ function RoundHeader({ round, over, onNext }: { round: Round; over: 'right' | 'm
 
 const marks = { wrong: 'Not this one', right: 'Right', answer: 'This one' }
 
-function Choose({ round, onNext, onAnswered }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void }) {
+function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void; onRated?: (v: Face) => Promise<unknown> }) {
   const [turn, setTurn] = useState<Turn>({ tapped: [] })
   const attempt = useAttempt(onAnswered)
   const state = outcome(round, turn)
@@ -311,6 +390,7 @@ function Choose({ round, onNext, onAnswered }: { round: Round; onNext: () => voi
         marks={marks}
         onChoose={o => tap(o.id)}
       />
+      {done && onRated && <HowWasIt onRated={onRated} />}
     </section>
   )
 }
@@ -334,7 +414,7 @@ function Show({ round }: { round: Round }) {
 
 const placeMarks = { held: 'Picked up', right: 'Right', wrong: 'Not yet' }
 
-function Arrange({ round, onNext, onAnswered }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void }) {
+function Arrange({ round, onNext, onAnswered, onRated }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void; onRated?: (v: Face) => Promise<unknown> }) {
   const [placement, setPlacement] = useState<Placement>({})
   const attempt = useAttempt(onAnswered)
   const [checks, setChecks] = useState(0)
@@ -391,6 +471,7 @@ function Arrange({ round, onNext, onAnswered }: { round: Round; onNext: () => vo
           Check
         </Button>
       )}
+      {done && onRated && <HowWasIt onRated={onRated} />}
     </section>
   )
 }

@@ -6,7 +6,12 @@ lost answer, a reload) the logged one comes back unchanged, so a decision is nev
 swapped for another. Asking past the next number is refused, as is asking after the session has ended.
 
 A decision is made from the learner's whole log as the server has it (`replay.as_of` at the decision's time, the same
-function a replay uses), so remaking it later from the log gives the same choice.
+function a replay uses), the grown-ups' overrides standing then and the learner's preferences then (their ratings and
+earlier picks), so remaking it later from the log gives the same choice.
+
+A choice between two activities (`Action.CHOICE`) is answered by the learner: `POST .../decisions/{seq}/pick {offer}`
+records which, once (the same pick again is acknowledged, another refused), and only while it is still the session's
+latest decision, so the next decision and a replay of it see the same pick. The round played is then the picked offer.
 """
 
 import uuid
@@ -21,12 +26,13 @@ from flashtap import rounds
 from flashtap.engine import simulate
 from flashtap.engine.evaluate import Score, scores
 from flashtap.engine.model import Graph, fold
-from flashtap.engine.policy import POLICY, Action, Candidate, Config, Logged, Why, decide, explain
-from flashtap.engine.replay import as_of, past_of, replay
+from flashtap.engine.policy import POLICY, REPLAYS, Action, Candidate, Config, Logged, Offer, Why, decide, explain
+from flashtap.engine.replay import as_of, likes_as_of, past_of, replay
 from flashtap.learners import store
+from flashtap.learners.evidence import told_as_of
 from flashtap.learners.models import Decision, Sitting, utc
 from flashtap.learners.store import Conflict, IdText, now
-from flashtap.mechanics import Round
+from flashtap.mechanics import Mode, Round
 
 
 class SessionIn(BaseModel):
@@ -47,6 +53,22 @@ class NextIn(BaseModel):
     seq: int = Field(ge=0, le=10_000)
 
 
+class OfferOut(BaseModel):
+    """One of a choice's two rounds, ready to play once picked, with its picture and name for the learner."""
+
+    mode: Mode
+    title: str  # the kind's name, said aloud: "Counting"
+    picture: str
+    skill: str
+    skill_title: str
+    round: Round
+    why: str
+
+
+class PickIn(BaseModel):
+    offer: int = Field(ge=0, le=1)
+
+
 class Next(BaseModel):
     """`POST /api/v1/sessions/{id}/next`: a round to play (`round`, checked, with its tries), an offered break, or the
     end of the session, with the rationale codes, the same in words for a grown-up, and what else was weighed."""
@@ -63,8 +85,11 @@ class Next(BaseModel):
     rationale: list[Why]
     why: str
     probability: float
-    rounds_played: int  # rounds chosen in this session before this decision
+    rounds_played: int  # rounds played in this session before this decision
     candidates: list[Candidate]
+    offers: list[OfferOut] | None = None  # a choice's two rounds; `round` is the picked one's once picked
+    picked: int | None = None
+    rate: bool = False  # ask how the round was (three faces) once it is over
 
 
 def start(db: Session, learner_id: str, config: Config, at: datetime | None = None) -> SessionInfo:
@@ -97,12 +122,35 @@ def _logged(db: Session, session_id: str) -> list[Logged]:
     ]
 
 
+def _round(o: Offer, config: Config) -> Round:
+    r = rounds.generate(o.mode, o.choices, o.seed, o.version, o.content)
+    r.tries = rounds.tries_allowed(config.tries, r)
+    return r
+
+
 def _out(d: Logged, earlier: list[Logged], config: Config, titles: dict[str, str]) -> Next:
-    played = sum(1 for x in earlier if x.action is Action.ROUND and x.seq < d.seq)
+    played = sum(1 for x in earlier if x.played() is not None and x.seq < d.seq)
     r = None
     if d.action is Action.ROUND and d.mode is not None and d.choices is not None:
         r = rounds.generate(d.mode, d.choices, d.seed, d.version, d.content)
         r.tries = rounds.tries_allowed(config.tries, r)
+    offers = None
+    if d.action is Action.CHOICE and d.offers is not None:
+        offers = [
+            OfferOut(
+                mode=o.mode,
+                title=rounds.MODE_NAMES[o.mode][0],
+                picture=rounds.PICTURES[o.mode],
+                skill=o.skill,
+                skill_title=titles.get(o.skill, o.skill),
+                round=_round(o, config),
+                why=explain(d.model_copy(update={"rationale": []}), titles, config, played, i),
+            )
+            for i, o in enumerate(d.offers)
+        ]
+        if d.picked is not None:
+            r = offers[d.picked].round
+    skill = o.skill if (o := d.offered(d.picked)) is not None else d.skill
     return Next(
         id=d.id,
         session_id=d.session_id,
@@ -111,13 +159,16 @@ def _out(d: Logged, earlier: list[Logged], config: Config, titles: dict[str, str
         policy=d.policy,
         action=d.action,
         round=r,
-        skill=d.skill,
-        skill_title=titles.get(d.skill) if d.skill else None,
+        skill=skill,
+        skill_title=titles.get(skill) if skill else None,
         rationale=d.rationale,
-        why=explain(d, titles, config, played),
+        why=explain(d, titles, config, played, d.picked),
         probability=d.probability,
         rounds_played=played,
         candidates=d.candidates,
+        offers=offers,
+        picked=d.picked,
+        rate=d.rate,
     )
 
 
@@ -142,11 +193,12 @@ def next_decision(
     log = store.events(db, sitting.learner_id)
     started = utc(sitting.started_at)
     c = decide(
-        fold(as_of(log, when), g),
+        fold(as_of(log, when), g, told=told_as_of(store.told(db, sitting.learner_id), when)),
         past_of(started, made, log, session_id, when, seq),
         config,
         f"{session_id}:{seq}",
         when,
+        likes=likes_as_of(store.ratings(db, sitting.learner_id), store.decisions(db, sitting.learner_id), when),
     )
     d = Logged(id=uuid.uuid4().hex, session_id=session_id, seq=seq, at=when, **c.model_dump())
     db.add(
@@ -167,10 +219,40 @@ def next_decision(
             rationale=[w.value for w in c.rationale],
             probability=c.probability,
             candidates=[x.model_dump(mode="json") for x in c.candidates],
+            offers=[o.model_dump(mode="json") for o in c.offers] if c.offers is not None else None,
+            rate=c.rate,
         )
     )
     db.commit()  # the unique (session, seq) backs up the lock
     return _out(d, [*made, d], config, titles)
+
+
+def pick(
+    db: Session, session_id: str, seq: int, offer: int, titles: dict[str, str], at: datetime | None = None
+) -> Next:
+    """The learner's pick of offer `offer` in choice `seq`: recorded once, and only while it is the latest decision."""
+    sitting, config = _sitting(db, session_id)
+    store.hold(db, sitting.learner_id)  # picks change what later decisions see, so they queue with them
+    x = db.scalar(select(Decision).where(Decision.session_id == session_id, Decision.seq == seq))
+    if x is None or x.action != Action.CHOICE.value or not x.offers:
+        db.rollback()
+        raise KeyError(f"No choice {seq} in session {session_id}.")
+    if x.picked is not None:
+        db.rollback()
+        if x.picked != offer:
+            raise Conflict(f"Choice {seq} was already answered with offer {x.picked}; a pick is never changed.")
+    else:
+        later = db.scalar(
+            select(func.count()).select_from(Decision).where(Decision.session_id == session_id, Decision.seq > seq)
+        )
+        if later:
+            db.rollback()
+            raise Conflict(f"The session has moved on past choice {seq}: it can no longer be picked from.")
+        x.picked = offer
+        x.picked_at = at or now()
+        db.commit()
+    made = _logged(db, session_id)
+    return _out(made[seq], made, config, titles)
 
 
 class SimulatedIn(BaseModel):
@@ -205,8 +287,9 @@ class ReplayOut(BaseModel):
 
 
 def evaluate(db: Session, body: ReplayIn, g: Graph) -> ReplayOut:
-    if body.policy != POLICY.id:
-        raise ValueError(f"Only the current policy, {POLICY.id}, is kept; {body.policy} cannot be replayed.")
+    if body.policy not in REPLAYS:
+        kept = ", ".join(sorted(REPLAYS))
+        raise ValueError(f"Only {kept} can be replayed; {body.policy} is not kept.")
     if body.simulated is not None:
         s = body.simulated
         rep = simulate.report(s.learners, s.sessions, s.seed, g)
@@ -224,7 +307,7 @@ def evaluate(db: Session, body: ReplayIn, g: Graph) -> ReplayOut:
     log = store.events(db, learner)
     made = store.decisions(db, learner)
     sittings = {x.id: (x.started_at, x.config) for x in store.sessions_of(db, learner)}
-    same, diffs = replay(log, made, sittings, g)
+    same, diffs = replay(log, made, sittings, g, store.ratings(db, learner), store.told(db, learner))
     n = db.scalar(select(func.count()).select_from(Decision).where(Decision.learner_id == learner)) or 0
     return ReplayOut(
         policy=POLICY.id,

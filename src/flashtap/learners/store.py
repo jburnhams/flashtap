@@ -1,4 +1,5 @@
-"""Reading and writing the learner records: learners, attempts (idempotent by event_id), tombstones, export and delete.
+"""Reading and writing the learner records: learners, attempts (idempotent by event_id), tombstones, ratings, a
+grown-up's overrides, export and delete.
 
 The server judges every attempt itself: the browser sends the round's (mode, version, choices, seed, content) and the
 first answer, and the round is rebuilt here to decide whether that answer was right (the spec's rule that the server
@@ -19,9 +20,22 @@ from sqlalchemy.orm import Session
 from strata_python.tasks.flight import Conflict as FlightConflict
 
 from flashtap import __version__, rounds
-from flashtap.engine.policy import Action, Candidate, Config, Logged, Why
-from flashtap.learners.evidence import Event, SkillUse
-from flashtap.learners.models import ID_LENGTH, NICKNAME_LENGTH, Attempt, Decision, Learner, Sitting, Tombstone, utc
+from flashtap.engine.policy import Action, Candidate, Config, Logged, Offer, Why
+from flashtap.learners import engagement
+from flashtap.learners.engagement import Engagement, Offered, Rated
+from flashtap.learners.evidence import Event, Observer, Says, SkillUse, Told
+from flashtap.learners.models import (
+    ID_LENGTH,
+    NICKNAME_LENGTH,
+    Attempt,
+    Decision,
+    Learner,
+    Override,
+    Rating,
+    Sitting,
+    Tombstone,
+    utc,
+)
 from flashtap.learners.report import MODELS, ModelInfo, SkillInfo, SkillReport, differences, skill_reports
 from flashtap.mechanics import PLACE, SEED_LIMIT, Mode, arranged_right
 
@@ -123,6 +137,8 @@ def delete_learner(db: Session, learner_id: str) -> None:
     get_learner(db, learner_id)
     attempts = select(Attempt.event_id).where(Attempt.learner_id == learner_id)
     db.execute(delete(Tombstone).where(Tombstone.event_id.in_(attempts)))
+    db.execute(delete(Rating).where(Rating.learner_id == learner_id))
+    db.execute(delete(Override).where(Override.learner_id == learner_id))
     db.execute(delete(Attempt).where(Attempt.learner_id == learner_id))
     db.execute(delete(Decision).where(Decision.learner_id == learner_id))
     db.execute(delete(Sitting).where(Sitting.learner_id == learner_id))
@@ -309,6 +325,11 @@ def _check_decision(db: Session, a: AttemptIn, r: rounds.Round) -> None:
     if d is None or d.learner_id != a.learner_id or d.session_id != a.session_id:
         raise ValueError(f"No decision {a.decision_id} in session {a.session_id} for this learner.")
     chosen = (d.action, d.mode, d.version, d.choices, d.seed, d.content)
+    if d.action == "choice":  # the round is the offer the learner picked
+        o = logged(d).offered(d.picked)
+        if o is None:
+            raise ValueError(f"Decision {a.decision_id} is a choice nobody has picked from yet.")
+        chosen = ("round", o.mode.value, o.version, o.choices, o.seed, o.content)
     if chosen != ("round", r.mode.value, r.version, r.choices, r.seed, r.content):
         raise ValueError(f"Decision {a.decision_id} chose a different round.")
     other = db.scalar(select(Attempt.event_id).where(Attempt.decision_id == a.decision_id))
@@ -326,6 +347,125 @@ def strike(db: Session, event_id: str, reason: str, at: datetime | None = None) 
     hold(db, x.learner_id)
     if db.get(Tombstone, event_id) is None:
         db.add(Tombstone(event_id=event_id, reason=reason, at=at or now()))
+    db.commit()
+
+
+# Ratings
+
+
+class RatingIn(BaseModel):
+    """`POST /api/attempts/{event_id}/rating`: how the learner said the round was, on three faces."""
+
+    value: Literal[-1, 0, 1]
+    scale: engagement.Scale = "enjoyment"
+
+
+class RatingAck(BaseModel):
+    event_id: str
+    scale: engagement.Scale
+    value: int
+    duplicate: bool
+
+
+def rate(db: Session, event_id: str, body: RatingIn, at: datetime | None = None) -> RatingAck:
+    """Keep a rating of a recorded round: once per round and scale. Sent again with the same face it is
+    acknowledged; with another it is refused (409), as an attempt is: a log entry is never rewritten."""
+    x = db.get(Attempt, event_id)
+    if x is None:
+        raise KeyError(f"No attempt {event_id}: a round is rated once it is recorded.")
+    hold(db, x.learner_id)
+    old = db.get(Rating, (event_id, body.scale))
+    if old is not None:
+        db.rollback()
+        if old.value != body.value:
+            raise Conflict(f"Round {event_id} is already rated {old.value}; a rating is never rewritten.")
+        return RatingAck(event_id=event_id, scale=body.scale, value=old.value, duplicate=True)
+    db.add(Rating(event_id=event_id, scale=body.scale, learner_id=x.learner_id, value=body.value, at=at or now()))
+    db.commit()
+    return RatingAck(event_id=event_id, scale=body.scale, value=body.value, duplicate=False)
+
+
+def ratings(db: Session, learner_id: str) -> list[Rated]:
+    q = (
+        select(Rating, Attempt.session_id, Attempt.mode)
+        .join(Attempt, Attempt.event_id == Rating.event_id)
+        .where(Rating.learner_id == learner_id)
+        .order_by(Rating.at, Rating.event_id)
+    )
+    return [
+        Rated(
+            event_id=r.event_id,
+            session_id=sid,
+            mode=mode,
+            scale=cast("engagement.Scale", r.scale),
+            value=r.value,
+            at=utc(r.at),
+        )
+        for r, sid, mode in db.execute(q).all()
+    ]
+
+
+# Overrides
+
+
+class OverrideIn(BaseModel):
+    """`POST /api/v1/learners/{id}/overrides`: a grown-up's observation of one skill (spec §15 "scoped human
+    observation"): the skill is its scope, `observer` its source label."""
+
+    skill: str = Field(min_length=1, max_length=80)
+    says: Says
+    observer: Observer
+    note: str = Field(default="", max_length=200)
+
+
+def told(db: Session, learner_id: str) -> list[Told]:
+    """Every override for the learner, withdrawn ones too, oldest first."""
+    q = select(Override).where(Override.learner_id == learner_id).order_by(Override.at, Override.id)
+    return [
+        Told(
+            id=x.id,
+            skill=x.skill,
+            says=cast("Says", x.says),
+            observer=cast("Observer", x.observer),
+            note=x.note,
+            at=utc(x.at),
+            withdrawn_at=utc(x.withdrawn_at) if x.withdrawn_at is not None else None,
+        )
+        for x in db.scalars(q)
+    ]
+
+
+def tell(db: Session, learner_id: str, body: OverrideIn, skills: set[str], at: datetime | None = None) -> Told:
+    get_learner(db, learner_id)
+    if body.skill not in skills:
+        raise ValueError(f"No skill {body.skill} in the content packs.")
+    note = " ".join(body.note.split())
+    hold(db, learner_id)  # stamped under the lock, as attempts are, so a replay knows which decisions saw it
+    x = Override(
+        id=uuid.uuid4().hex,
+        learner_id=learner_id,
+        skill=body.skill,
+        says=body.says,
+        observer=body.observer,
+        note=note,
+        at=at or now(),
+    )
+    db.add(x)
+    db.commit()
+    return next(t for t in told(db, learner_id) if t.id == x.id)
+
+
+def withdraw(db: Session, learner_id: str, override_id: str, at: datetime | None = None) -> None:
+    """Stop an override counting from now. Withdrawing twice keeps the first time."""
+    hold(db, learner_id)
+    # Read under the lock, fresh from the database: a copy read before it could miss a withdrawal committed meanwhile
+    # and overwrite its time, which would change what a decision made between the two saw on replay.
+    x = db.get(Override, override_id, populate_existing=True)
+    if x is None or x.learner_id != learner_id:
+        db.rollback()
+        raise KeyError(f"No override {override_id} for this learner.")
+    if x.withdrawn_at is None:
+        x.withdrawn_at = at or now()
     db.commit()
 
 
@@ -376,16 +516,47 @@ class Profile(BaseModel):
     struck: int
     models: list[ModelInfo]
     skills: list[SkillReport]
+    engagement: Engagement
 
 
-def profile(db: Session, learner_id: str, skills: list[SkillInfo], log: list[Event] | None = None) -> Profile:
+def offered(made: list[Logged]) -> list[Offered]:
+    """Every choice between two activities in the learner's decisions."""
+    out: list[Offered] = []
+    for d in made:
+        if d.action is Action.CHOICE and d.offers is not None and len(d.offers) == 2:
+            o = d.offered(d.picked)
+            out.append(
+                Offered(
+                    first=d.offers[0].mode.value,
+                    second=d.offers[1].mode.value,
+                    picked=o.mode.value if o is not None else None,
+                    at=d.picked_at,
+                )
+            )
+    return out
+
+
+def profile(
+    db: Session,
+    learner_id: str,
+    skills: list[SkillInfo],
+    log: list[Event] | None = None,
+    said: list[Told] | None = None,
+    rated: list[Rated] | None = None,
+    made: list[Logged] | None = None,
+) -> Profile:
     log = events(db, learner_id) if log is None else log
+    said = told(db, learner_id) if said is None else said
+    rated = ratings(db, learner_id) if rated is None else rated
+    made = decisions(db, learner_id) if made is None else made
+    names = {m.value: n for m, (n, _) in rounds.MODE_NAMES.items()}
     return Profile(
         learner=learner_row(db, learner_id),
         sessions=db.scalar(select(func.count()).select_from(Sitting).where(Sitting.learner_id == learner_id)) or 0,
         struck=sum(e.struck is not None for e in log),
         models=MODELS,
-        skills=skill_reports(log, skills),
+        skills=skill_reports(log, skills, said),
+        engagement=engagement.report(log, rated, offered(made), names),
     )
 
 
@@ -401,14 +572,19 @@ class Export(BaseModel):
     """Everything held about one learner (§17), and the estimates made from it, so a rebuild can be checked."""
 
     # @2 (0.6.0) adds the engine's decisions and each session's policy; @3 (0.7.0) each attempt's and decision's
-    # content packs. Older files still read, with none of what they lack.
-    format: Literal["flashtap-learner@1", "flashtap-learner@2", "flashtap-learner@3"] = "flashtap-learner@3"
+    # content packs; @4 (0.8.0) ratings, a grown-up's overrides, and choices with their picks. Older files still
+    # read, with none of what they lack.
+    format: Literal["flashtap-learner@1", "flashtap-learner@2", "flashtap-learner@3", "flashtap-learner@4"] = (
+        "flashtap-learner@4"
+    )
     exported_at: datetime
     app_version: str
     learner: LearnerRow
     sessions: list[SessionOut]
     events: list[Event]
     decisions: list[Logged] = Field(default_factory=list[Logged])
+    ratings: list[Rated] = Field(default_factory=list[Rated])
+    overrides: list[Told] = Field(default_factory=list[Told])
     models: list[ModelInfo]
     skills: list[SkillReport]
 
@@ -444,6 +620,10 @@ def logged(x: Decision) -> Logged:
         rationale=[Why(w) for w in x.rationale],
         probability=x.probability,
         candidates=[Candidate.model_validate(c) for c in x.candidates],
+        offers=[Offer.model_validate(o) for o in x.offers] if x.offers is not None else None,
+        rate=x.rate,
+        picked=x.picked,
+        picked_at=utc(x.picked_at) if x.picked_at is not None else None,
     )
 
 
@@ -459,15 +639,22 @@ def decisions(db: Session, learner_id: str) -> list[Logged]:
 def export(db: Session, learner_id: str, skills: list[SkillInfo], at: datetime | None = None) -> Export:
     # One read of the log for both the events and the estimates: a second read could see a round recorded or
     # struck in between (READ COMMITTED), and the export would then not rebuild to its own estimates.
-    log = events(db, learner_id)
-    p = profile(db, learner_id, skills, log)
+    log, said, rated, made = (
+        events(db, learner_id),
+        told(db, learner_id),
+        ratings(db, learner_id),
+        decisions(db, learner_id),
+    )
+    p = profile(db, learner_id, skills, log, said, rated, made)
     return Export(
         exported_at=at or now(),
         app_version=__version__,
         learner=p.learner,
         sessions=sessions_of(db, learner_id),
         events=log,
-        decisions=decisions(db, learner_id),
+        decisions=made,
+        ratings=rated,
+        overrides=said,
         models=p.models,
         skills=p.skills,
     )
@@ -482,4 +669,4 @@ def rebuild(saved: Export, skills: list[SkillInfo] | None = None) -> list[str]:
         if skills is not None
         else [SkillInfo(id=s.skill, title=s.title, domain=s.domain, strand=s.strand) for s in saved.skills]
     )
-    return differences(saved.skills, skill_reports(saved.events, known))
+    return differences(saved.skills, skill_reports(saved.events, known, saved.overrides))

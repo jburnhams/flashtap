@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flashtap"
-version = "0.7.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
+version = "0.8.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
 description = "Flashtap: learning games that progress by ability, a FastAPI + strata-react web app"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -45,7 +45,7 @@ artifacts = ["src/flashtap/server/static/**"]
 
 [tool.pytest.ini_options]
 strata_env_prefix = "FLASHTAP"                                        # strata-python plugin: FLASHTAP_HOME and FLASHTAP_DATA point into a tmp dir for every test
-strata_tuning_vars = ["FLASHTAP_MODE", "FLASHTAP_CHOICES", "FLASHTAP_TRIES"]   # removed from the environment for every test
+strata_tuning_vars = ["FLASHTAP_MODE", "FLASHTAP_CHOICES", "FLASHTAP_TRIES", "FLASHTAP_SESSION_ROUNDS", "FLASHTAP_SESSION_MINUTES", "FLASHTAP_BREAK_EVERY", "FLASHTAP_CHOICE_EVERY", "FLASHTAP_RATE_EVERY"]   # removed from the environment for every test
 testpaths = ["tests/unit"]
 addopts = "-ra --timeout=300 --strict-markers --strict-config"
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]       # TestClient noise from the installed starlette; remove when the dependency moves on

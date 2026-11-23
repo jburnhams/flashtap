@@ -6,19 +6,20 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from flashtap import rounds
 from flashtap.learners import db as learner_db
 from flashtap.learners import store
 from flashtap.learners.estimators import BAYES, PLACE_GUESS, RULE
-from flashtap.learners.evidence import Event, Observation, SkillUse, uses
-from flashtap.learners.models import Attempt, Learner, Sitting, Tombstone, utc
+from flashtap.learners.evidence import Event, Observation, SkillUse, Told, uses
+from flashtap.learners.models import Attempt, Learner, Override, Sitting, Tombstone, utc
 from flashtap.learners.report import SkillInfo, State, differences, evidence_rows, skill_reports
 from flashtap.mechanics import Mode
 
 T0 = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
+COUNT = "maths.counting.objects"
 SKILLS = [
     SkillInfo(id="maths.counting.objects", title="Count objects", domain="Maths", strand="Counting"),
     SkillInfo(id="maths.numerals.recognise", title="Read a numeral", domain="Maths", strand="Numerals"),
@@ -253,7 +254,7 @@ def test_a_wrong_answer_is_held_back_until_its_confound_is_shown() -> None:
 
 def test_the_estimators_fold_counted_answers() -> None:
     obs = [Observation("e", T0, c, 4, "select_one", "primary") for c in (True, True, False, True, True, True)]
-    assert RULE.estimate(obs).model_dump() == {"model": "rule@1", "p": 0.8, "used": 5}
+    assert RULE.estimate(obs).model_dump() == {"model": "rule@1", "p": 0.8, "used": 5, "told": 0}
     assert RULE.estimate([]).p == 0.0
     # P(known) by hand for one right answer from the prior: Bayes' rule, then the chance of learning.
     one = BAYES.estimate(obs[:1])
@@ -356,7 +357,7 @@ def test_profile_export_and_evidence_rows(db_session: Session, fox: str) -> None
     assert p.struck == 0
     assert [m.model for m in p.models] == ["bkt@1", "rule@1"]
     out = store.export(db_session, fox, SKILLS, at=T0)
-    assert out.format == "flashtap-learner@3"
+    assert out.format == "flashtap-learner@4"
     assert out.decisions == []
     assert out.sessions[0].policy is None
     assert len(out.events) == 2
@@ -411,3 +412,77 @@ def test_the_package_declaration_is_the_one_pyproject_names(db_project) -> None:
         db_project.migrations_dir,
         db_project.schema,
     )
+
+
+# Ratings and a grown-up's overrides (P4)
+
+
+def test_a_round_is_rated_once(db_session: Session, fox: str) -> None:
+    a = attempt(fox)
+    store.record(db_session, a)
+    ack = store.rate(db_session, a.event_id, store.RatingIn(value=1), at=T0 + timedelta(minutes=1))
+    assert (ack.value, ack.duplicate, ack.scale) == (1, False, "enjoyment")
+    assert store.rate(db_session, a.event_id, store.RatingIn(value=1)).duplicate
+    with pytest.raises(store.Conflict, match="already rated 1"):
+        store.rate(db_session, a.event_id, store.RatingIn(value=-1))
+    with pytest.raises(KeyError, match="a round is rated once it is recorded"):
+        store.rate(db_session, "f" * 32, store.RatingIn(value=0))
+    assert [(r.mode, r.value, r.session_id, r.at) for r in store.ratings(db_session, fox)] == [
+        ("counting", 1, a.session_id, T0 + timedelta(minutes=1))
+    ]
+    before = store.profile(db_session, fox, SKILLS).skills
+    store.record(db_session, b := attempt(fox, seed=2, at=T0 + timedelta(minutes=2)))
+    store.rate(db_session, b.event_id, store.RatingIn(value=-1))
+    after = store.profile(db_session, fox, SKILLS)
+    assert [s.estimates for s in after.skills] != [s.estimates for s in before]  # the second round moved them
+    unrated = skill_reports(store.events(db_session, fox), SKILLS)
+    assert after.skills == unrated  # and the faces did not: a rating is never evidence of what they know
+
+
+def test_an_override_is_source_labelled_folded_into_bkt_and_withdrawn(db_session: Session, fox: str) -> None:
+    known = {s.id for s in SKILLS}
+    with pytest.raises(ValueError, match=r"No skill maths\.flying"):
+        store.tell(db_session, fox, store.OverrideIn(skill="maths.flying", says="can", observer="parent"), known)
+    with pytest.raises(KeyError, match="No learner"):
+        store.tell(db_session, "f" * 32, store.OverrideIn(skill=COUNT, says="can", observer="parent"), known)
+    body = store.OverrideIn(skill=COUNT, says="can", observer="teacher", note="  counts   to ten  ")
+    t = store.tell(db_session, fox, body, known, at=T0)
+    assert (t.says, t.observer, t.note, t.at, t.withdrawn_at) == ("can", "teacher", "counts to ten", T0, None)
+    p = {s.skill: s for s in store.profile(db_session, fox, SKILLS).skills}
+    assert p[COUNT].state is State.UNOBSERVED  # a grown-up's word is not an answer
+    assert p[COUNT].told == t
+    assert [(e.model, e.p, e.used, e.told) for e in p[COUNT].estimates] == [("bkt@1", 0.95, 0, 1)]
+    for i in range(3):  # then rounds: BKT moves on from the override, the rule counts only answers
+        store.record(db_session, attempt(fox, seed=i + 1, at=T0 + timedelta(minutes=i + 1)))
+    p = {s.skill: s for s in store.profile(db_session, fox, SKILLS).skills}
+    bkt, rule = p[COUNT].estimates
+    assert bkt.p > 0.95
+    assert (bkt.used, bkt.told) == (3, 1)
+    assert (rule.model, rule.p, rule.told) == ("rule@1", 1.0, 0)
+    saved = store.export(db_session, fox, SKILLS)
+    assert saved.overrides == [t]
+    assert store.rebuild(saved) == []
+    assert store.rebuild(saved.model_copy(update={"overrides": []}))  # without it the estimates differ
+    with pytest.raises(KeyError, match="No override"):
+        store.withdraw(db_session, fox, "f" * 32)
+    held = db_session.get(Override, t.id)  # a copy read before another request withdraws it
+    assert held is not None
+    assert held.withdrawn_at is None
+    db_session.execute(  # the other request's withdrawal, which the held copy does not see
+        update(Override).where(Override.id == t.id).values(withdrawn_at=T0 + timedelta(hours=1)),
+        execution_options={"synchronize_session": False},
+    )
+    assert held.withdrawn_at is None
+    store.withdraw(db_session, fox, t.id, at=T0 + timedelta(hours=2))  # re-read under the lock: the first time is kept
+    assert store.told(db_session, fox)[0].withdrawn_at == T0 + timedelta(hours=1)
+    p = {s.skill: s for s in store.profile(db_session, fox, SKILLS).skills}
+    assert p[COUNT].told is None
+    assert p[COUNT].estimates[0].told == 0
+
+
+def test_a_later_override_wins_and_one_alone_says_bkt_only() -> None:
+    a = Told(id="a" * 32, skill=COUNT, says="can", observer="parent", at=T0)
+    b = Told(id="b" * 32, skill=COUNT, says="not_yet", observer="teacher", at=T0 + timedelta(days=1))
+    (r,) = [x for x in skill_reports([], SKILLS, [b, a]) if x.skill == COUNT]
+    assert r.told == b
+    assert [(e.model, e.p) for e in r.estimates] == [("bkt@1", 0.05)]

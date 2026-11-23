@@ -7,12 +7,13 @@
 // state: `server.use(roundError)` in a test, `msw.use(roundError)` in a story's beforeEach,
 // `states: { error: [roundError] }` in the visual config.
 import { delay, http, HttpResponse } from 'msw'
-import { isMode, paths, type AttemptIn, type LearnerRow, type Next, type Round, type Settings } from '../api'
+import { isMode, paths, type AttemptIn, type LearnerRow, type Next, type OfferOut, type OverrideIn, type Round, type Settings, type Told } from '../api'
 import { content } from './content'
 import { defaultSettings, modes, rounds } from './fixtures'
 import { countingEvidence, foxProfile, FOX, learners, owlProfile } from './learners'
 
-type Plan = Round['mode'] | 'break' | 'end'
+/** A round of a kind, a choice between two kinds (`pick:a/b`), a break or the end. `+rate` asks for the faces after it. */
+type Plan = Round['mode'] | `${Round['mode']}+rate` | `pick:${Round['mode']}/${Round['mode']}` | 'break' | 'end'
 const PLAN: Plan[] = ['counting', 'give', 'break', 'matching', 'end']
 
 /** What the mock server holds. Writes change it, so a test can save a setting and see it used. */
@@ -30,6 +31,13 @@ export const mock = {
   plan: [...PLAN] as Plan[],
   /** Decision numbers asked for, in order: a test sees a retry ask for the same number. */
   nextRequests: [] as number[],
+  /** Picks from a choice of two, by decision number. */
+  picks: {} as Record<number, number>,
+  /** Faces sent, in order. */
+  ratings: [] as { event_id: string; value: number }[],
+  /** A grown-up's overrides sent, and the ids withdrawn. */
+  told: [] as (OverrideIn & { learner_id: string })[],
+  withdrawn: [] as string[],
 }
 
 /** Back to the healthy state: call between tests and stories. */
@@ -42,16 +50,36 @@ export function resetMock() {
   mock.struck = []
   mock.plan = [...PLAN]
   mock.nextRequests = []
+  mock.picks = {}
+  mock.ratings = []
+  mock.told = []
+  mock.withdrawn = []
 }
 
 export const SESSION = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-const titles: Record<string, string> = { counting: 'Count a set of things', give: 'Give a number of things', matching: 'Find the picture for a spoken word' }
+const titles: Record<string, string> = { counting: 'Count a set of things', give: 'Give a number of things', matching: 'Find the picture for a spoken word', listen: 'Hear a sound and find its letter' }
+const names: Record<string, string> = Object.fromEntries(modes.map(m => [m.mode, m.name]))
+const pictures: Record<string, string> = { counting: '\u{1F522}', give: '\u{1F9FA}', matching: '\u{1F404}', listen: '\u{1F442}' }
+
+function offerFor(mode: Round['mode']): OfferOut {
+  const r = roundFor(mode)
+  const skill = r.skills[0]?.skill ?? ''
+  return { mode, title: names[mode] ?? mode, picture: pictures[mode] ?? '\u2753', skill, skill_title: titles[mode] ?? skill, round: r, why: `Practising: ${titles[mode] ?? skill}.` }
+}
 
 /** Decision `seq` of the mock session, in the server's shape (src/flashtap/engine/sessions.py `Next`). */
 export function decisionFor(seq: number): Next {
-  const step = mock.plan[seq] ?? 'end'
+  const planned = mock.plan[seq] ?? 'end'
+  const rate = planned.endsWith('+rate')
+  const step = planned.replace('+rate', '')
   const played = mock.plan.slice(0, seq).filter(p => p !== 'break' && p !== 'end').length
-  const base = { id: `d${seq}`.padEnd(32, '0'), session_id: SESSION, seq, at: '2026-11-23T09:00:00Z', policy: 'utility@1', probability: 1, rounds_played: played, candidates: [] }
+  const base = { id: `d${seq}`.padEnd(32, '0'), session_id: SESSION, seq, at: '2026-11-23T09:00:00Z', policy: 'utility@2', probability: 1, rounds_played: played, candidates: [], offers: null, picked: null, rate }
+  if (step.startsWith('pick:')) {
+    const offers = step.slice(5).split('/').map(m => offerFor(m as Round['mode']))
+    const picked = mock.picks[seq] ?? null
+    const o = picked === null ? null : offers[picked]
+    return { ...base, action: 'choice', offers, picked, round: o?.round ?? null, skill: o?.skill ?? null, skill_title: o?.skill_title ?? null, rationale: ['offered_choice'], why: `Two to pick from, so they choose what comes next.${o ? ` ${o.why}` : ''}`, probability: 0.3, rate: true }
+  }
   if (step === 'break') return { ...base, action: 'break', round: null, skill: null, skill_title: null, rationale: ['break_due'], why: `${played} round${played === 1 ? '' : 's'} played so far.` }
   if (step === 'end') return { ...base, action: 'end', round: null, skill: null, skill_title: null, rationale: ['session_cap_rounds'], why: `A session is ${played} round${played === 1 ? '' : 's'} at most.` }
   const r = roundFor(step)
@@ -111,16 +139,39 @@ export const handlers = [
   }),
   http.post(at(paths.sessions), async ({ request }) => {
     const { learner_id } = (await request.json()) as { learner_id: string }
-    return HttpResponse.json({ id: SESSION, learner_id, policy: 'utility@1', config: { choices: 4, tries: 0, max_rounds: 20, max_minutes: 15, break_every: 10 }, started_at: '2026-11-23T09:00:00Z' }, { status: 201 })
+    return HttpResponse.json({ id: SESSION, learner_id, policy: 'utility@2', config: { choices: 4, tries: 0, max_rounds: 20, max_minutes: 15, break_every: 10, choice_every: 5, rate_every: 4 }, started_at: '2026-11-23T09:00:00Z' }, { status: 201 })
   }),
   http.post(at(`${paths.sessions}/:id/next`), async ({ request }) => {
     const { seq } = (await request.json()) as { seq: number }
     mock.nextRequests.push(seq)
     return HttpResponse.json(decisionFor(seq))
   }),
+  http.post(at(`${paths.sessions}/:id/decisions/:seq/pick`), async ({ params, request }) => {
+    const { offer } = (await request.json()) as { offer: number }
+    const seq = Number(params.seq)
+    const was = mock.picks[seq]
+    if (was !== undefined && was !== offer) return HttpResponse.json({ detail: `Choice ${seq} was already answered with offer ${was}; a pick is never changed.` }, { status: 409 })
+    mock.picks[seq] = offer
+    return HttpResponse.json(decisionFor(seq))
+  }),
   http.post(at(`${paths.attempts}/:id/strike`), async ({ params, request }) => {
     const { reason } = (await request.json()) as { reason: string }
     mock.struck.push({ event_id: String(params.id), reason })
+    return new HttpResponse(null, { status: 204 })
+  }),
+  http.post(at(`${paths.attempts}/:id/rating`), async ({ params, request }) => {
+    const { value } = (await request.json()) as { value: number }
+    mock.ratings.push({ event_id: String(params.id), value })
+    return HttpResponse.json({ event_id: String(params.id), scale: 'enjoyment', value, duplicate: false })
+  }),
+  http.post(at(`${paths.overrides}/:id/overrides`), async ({ params, request }) => {
+    const body = (await request.json()) as OverrideIn
+    mock.told.push({ ...body, learner_id: String(params.id) })
+    const made: Told = { id: String(mock.told.length).padStart(32, 'f'), ...body, note: body.note ?? '', at: '2026-11-23T09:00:00Z', withdrawn_at: null }
+    return HttpResponse.json(made, { status: 201 })
+  }),
+  http.post(at(`${paths.overrides}/:id/overrides/:override/withdraw`), ({ params }) => {
+    mock.withdrawn.push(String(params.override))
     return new HttpResponse(null, { status: 204 })
   }),
 ]
@@ -163,3 +214,20 @@ export const nextError = http.post(at(`${paths.sessions}/:id/next`), down)
 export const nextBreak = http.post(at(`${paths.sessions}/:id/next`), () => HttpResponse.json({ ...decisionFor(0), action: 'break', round: null, skill: null, skill_title: null, rationale: ['break_due'], why: '10 rounds played so far.', rounds_played: 10 }))
 /** The engine ends the session at once, at 20 rounds. */
 export const nextEnd = http.post(at(`${paths.sessions}/:id/next`), () => HttpResponse.json({ ...decisionFor(0), action: 'end', round: null, skill: null, skill_title: null, rationale: ['session_cap_rounds'], why: 'A session is 20 rounds at most.', rounds_played: 20 }))
+/** A session the engine plans as `plan` says, whatever the mock held: for a story or a screenshot that starts there. */
+const planned = (plan: Plan[]) => http.post(at(`${paths.sessions}/:id/next`), async ({ request }) => {
+  const { seq } = (await request.json()) as { seq: number }
+  mock.nextRequests.push(seq)
+  mock.plan = plan
+  return HttpResponse.json(decisionFor(seq))
+})
+/** A choice of two first, Counting or Listen, asking for the faces after the one picked; then the end. */
+export const nextChoice = planned(['pick:counting/listen', 'end'])
+/** A Matching round that asks how it was once it is over. */
+export const nextRated = planned(['matching+rate', 'end'])
+export const pickFails = http.post(at(`${paths.sessions}/:id/decisions/:seq/pick`), down)
+export const ratingFails = http.post(at(`${paths.attempts}/:id/rating`), down)
+export const tellFails = http.post(at(`${paths.overrides}/:id/overrides`), down)
+export const withdrawFails = http.post(at(`${paths.overrides}/:id/overrides/:override/withdraw`), down)
+/** Fox with nothing in how they play that stands out. */
+export const profileQuiet = http.get(at(`${paths.learners}/:id/profile`), () => HttpResponse.json({ ...foxProfile, engagement: { ...foxProfile.engagement, hypotheses: [] } }))

@@ -45,6 +45,7 @@ __all__ = [
     "MIN_CHOICES",
     "MODE_NAMES",
     "MODE_SKILLS",
+    "PICTURES",
     "PLAYABLE",
     "SEED_LIMIT",
     "TEMPLATES",
@@ -138,6 +139,22 @@ TEMPLATES: dict[Mode, Template] = {
 }  # fmt: skip
 
 PLAYABLE = tuple(TEMPLATES)
+# One picture per kind, for the tiles a learner picks between when offered a choice of two (engine/policy.py): what
+# the round looks like, since a learner who cannot read yet picks by the picture and the spoken name.
+PICTURES: dict[Mode, str] = {
+    Mode.MATCHING: "\U0001f404",  # cow
+    Mode.COLOURS: "\U0001f3a8",  # palette
+    Mode.SHAPES: "\U0001f53a",  # red triangle
+    Mode.LETTERS: "\U0001f524",  # abc
+    Mode.COUNTING: "\U0001f522",  # 1234
+    Mode.MISSING: "\u2753",  # question mark
+    Mode.QUICK_LOOK: "\U0001f440",  # eyes
+    Mode.LISTEN: "\U0001f442",  # ear
+    Mode.GIVE: "\U0001f9fa",  # basket
+    Mode.ORDER: "\U0001fa9c",  # ladder
+    Mode.CAPITALS: "\U0001f520",  # ABCD
+    Mode.SORT_SOUNDS: "\U0001f5c2\ufe0f",  # card index dividers
+}
 # What each kind asks, for the list a person picks from (GET /api/modes), Mixed last.
 MODE_NAMES: dict[Mode, tuple[str, str]] = {
     **{m: (t.name, t.description) for m, t in TEMPLATES.items()},
