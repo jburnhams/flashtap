@@ -1,0 +1,1967 @@
+{
+ "components": {
+  "schemas": {
+   "Ack": {
+    "properties": {
+     "duplicate": {
+      "title": "Duplicate",
+      "type": "boolean"
+     },
+     "event_id": {
+      "title": "Event Id",
+      "type": "string"
+     },
+     "first_correct": {
+      "title": "First Correct",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "event_id",
+     "first_correct",
+     "duplicate"
+    ],
+    "title": "Ack",
+    "type": "object"
+   },
+   "AttemptIn": {
+    "description": "`POST /api/attempts`: one round answered, sent once the round is over (or left).",
+    "properties": {
+     "answered_at": {
+      "format": "date-time",
+      "title": "Answered At",
+      "type": "string"
+     },
+     "asked": {
+      "$ref": "#/components/schemas/Mode"
+     },
+     "choices": {
+      "maximum": 8.0,
+      "minimum": 2.0,
+      "title": "Choices",
+      "type": "integer"
+     },
+     "event_id": {
+      "pattern": "^[0-9a-fA-F-]{8,36}$",
+      "title": "Event Id",
+      "type": "string"
+     },
+     "first_answer": {
+      "$ref": "#/components/schemas/FirstAnswer"
+     },
+     "learner_id": {
+      "pattern": "^[0-9a-fA-F-]{8,36}$",
+      "title": "Learner Id",
+      "type": "string"
+     },
+     "mode": {
+      "$ref": "#/components/schemas/Mode"
+     },
+     "outcome": {
+      "enum": [
+       "right",
+       "missed",
+       "left"
+      ],
+      "title": "Outcome",
+      "type": "string"
+     },
+     "presented_at": {
+      "format": "date-time",
+      "title": "Presented At",
+      "type": "string"
+     },
+     "seed": {
+      "exclusiveMaximum": 2147483648.0,
+      "minimum": 0.0,
+      "title": "Seed",
+      "type": "integer"
+     },
+     "session_id": {
+      "pattern": "^[0-9a-fA-F-]{8,36}$",
+      "title": "Session Id",
+      "type": "string"
+     },
+     "tries": {
+      "maximum": 100.0,
+      "minimum": 1.0,
+      "title": "Tries",
+      "type": "integer"
+     },
+     "version": {
+      "minimum": 1.0,
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "event_id",
+     "learner_id",
+     "session_id",
+     "mode",
+     "version",
+     "choices",
+     "seed",
+     "asked",
+     "presented_at",
+     "answered_at",
+     "first_answer",
+     "tries",
+     "outcome"
+    ],
+    "title": "AttemptIn",
+    "type": "object"
+   },
+   "ContentSummary": {
+    "properties": {
+     "objectives": {
+      "items": {
+       "$ref": "#/components/schemas/ObjectiveRow"
+      },
+      "title": "Objectives",
+      "type": "array"
+     },
+     "packs": {
+      "items": {
+       "$ref": "#/components/schemas/PackRow"
+      },
+      "title": "Packs",
+      "type": "array"
+     },
+     "phonics": {
+      "items": {
+       "$ref": "#/components/schemas/PhonicsRow"
+      },
+      "title": "Phonics",
+      "type": "array"
+     },
+     "skills": {
+      "items": {
+       "$ref": "#/components/schemas/SkillRow"
+      },
+      "title": "Skills",
+      "type": "array"
+     }
+    },
+    "required": [
+     "packs",
+     "skills",
+     "objectives",
+     "phonics"
+    ],
+    "title": "ContentSummary",
+    "type": "object"
+   },
+   "EdgeRow": {
+    "properties": {
+     "confidence": {
+      "title": "Confidence",
+      "type": "string"
+     },
+     "note": {
+      "title": "Note",
+      "type": "string"
+     },
+     "relation": {
+      "title": "Relation",
+      "type": "string"
+     },
+     "skill": {
+      "title": "Skill",
+      "type": "string"
+     },
+     "source": {
+      "title": "Source",
+      "type": "string"
+     }
+    },
+    "required": [
+     "skill",
+     "relation",
+     "confidence",
+     "source",
+     "note"
+    ],
+    "title": "EdgeRow",
+    "type": "object"
+   },
+   "Estimate": {
+    "properties": {
+     "model": {
+      "title": "Model",
+      "type": "string"
+     },
+     "p": {
+      "title": "P",
+      "type": "number"
+     },
+     "used": {
+      "title": "Used",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "model",
+     "p",
+     "used"
+    ],
+    "title": "Estimate",
+    "type": "object"
+   },
+   "Event": {
+    "description": "An attempt as the log keeps it: what the database holds and what an export carries, so a replay from either\ngoes through the same code.",
+    "properties": {
+     "answered_at": {
+      "format": "date-time",
+      "title": "Answered At",
+      "type": "string"
+     },
+     "asked": {
+      "title": "Asked",
+      "type": "string"
+     },
+     "choices": {
+      "title": "Choices",
+      "type": "integer"
+     },
+     "event_id": {
+      "title": "Event Id",
+      "type": "string"
+     },
+     "first_answer": {
+      "additionalProperties": true,
+      "title": "First Answer",
+      "type": "object"
+     },
+     "first_correct": {
+      "title": "First Correct",
+      "type": "boolean"
+     },
+     "mechanic": {
+      "title": "Mechanic",
+      "type": "string"
+     },
+     "mode": {
+      "title": "Mode",
+      "type": "string"
+     },
+     "options": {
+      "title": "Options",
+      "type": "integer"
+     },
+     "outcome": {
+      "title": "Outcome",
+      "type": "string"
+     },
+     "presented_at": {
+      "format": "date-time",
+      "title": "Presented At",
+      "type": "string"
+     },
+     "seed": {
+      "title": "Seed",
+      "type": "integer"
+     },
+     "session_id": {
+      "title": "Session Id",
+      "type": "string"
+     },
+     "skills": {
+      "items": {
+       "$ref": "#/components/schemas/SkillUse"
+      },
+      "title": "Skills",
+      "type": "array"
+     },
+     "struck": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Struck"
+     },
+     "tries": {
+      "title": "Tries",
+      "type": "integer"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "event_id",
+     "session_id",
+     "mode",
+     "version",
+     "choices",
+     "seed",
+     "mechanic",
+     "options",
+     "skills",
+     "asked",
+     "presented_at",
+     "answered_at",
+     "first_answer",
+     "first_correct",
+     "tries",
+     "outcome"
+    ],
+    "title": "Event",
+    "type": "object"
+   },
+   "EvidenceRow": {
+    "description": "One attempt as it bears on one skill: the provenance behind an estimate.",
+    "properties": {
+     "answer": {
+      "title": "Answer",
+      "type": "string"
+     },
+     "at": {
+      "format": "date-time",
+      "title": "At",
+      "type": "string"
+     },
+     "choices": {
+      "title": "Choices",
+      "type": "integer"
+     },
+     "correct": {
+      "title": "Correct",
+      "type": "boolean"
+     },
+     "counted": {
+      "title": "Counted",
+      "type": "boolean"
+     },
+     "event_id": {
+      "title": "Event Id",
+      "type": "string"
+     },
+     "mode": {
+      "$ref": "#/components/schemas/Mode"
+     },
+     "outcome": {
+      "enum": [
+       "right",
+       "missed",
+       "left"
+      ],
+      "title": "Outcome",
+      "type": "string"
+     },
+     "role": {
+      "$ref": "#/components/schemas/QRole"
+     },
+     "seed": {
+      "title": "Seed",
+      "type": "integer"
+     },
+     "struck": {
+      "title": "Struck",
+      "type": "boolean"
+     },
+     "tries": {
+      "title": "Tries",
+      "type": "integer"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     },
+     "why": {
+      "title": "Why",
+      "type": "string"
+     }
+    },
+    "required": [
+     "event_id",
+     "at",
+     "mode",
+     "version",
+     "choices",
+     "seed",
+     "role",
+     "answer",
+     "correct",
+     "counted",
+     "why",
+     "struck",
+     "tries",
+     "outcome"
+    ],
+    "title": "EvidenceRow",
+    "type": "object"
+   },
+   "Export": {
+    "description": "Everything held about one learner (§17), and the estimates made from it, so a rebuild can be checked.",
+    "properties": {
+     "app_version": {
+      "title": "App Version",
+      "type": "string"
+     },
+     "events": {
+      "items": {
+       "$ref": "#/components/schemas/Event"
+      },
+      "title": "Events",
+      "type": "array"
+     },
+     "exported_at": {
+      "format": "date-time",
+      "title": "Exported At",
+      "type": "string"
+     },
+     "format": {
+      "const": "flashtap-learner@1",
+      "default": "flashtap-learner@1",
+      "title": "Format",
+      "type": "string"
+     },
+     "learner": {
+      "$ref": "#/components/schemas/LearnerRow"
+     },
+     "models": {
+      "items": {
+       "$ref": "#/components/schemas/ModelInfo"
+      },
+      "title": "Models",
+      "type": "array"
+     },
+     "sessions": {
+      "items": {
+       "$ref": "#/components/schemas/SessionOut"
+      },
+      "title": "Sessions",
+      "type": "array"
+     },
+     "skills": {
+      "items": {
+       "$ref": "#/components/schemas/SkillReport"
+      },
+      "title": "Skills",
+      "type": "array"
+     }
+    },
+    "required": [
+     "exported_at",
+     "app_version",
+     "learner",
+     "sessions",
+     "events",
+     "models",
+     "skills"
+    ],
+    "title": "Export",
+    "type": "object"
+   },
+   "FirstAnswer": {
+    "description": "The first answer given: one option's id (a one-tap round), or where each piece was at the first check.",
+    "properties": {
+     "option": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Option"
+     },
+     "placement": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Placement"
+     }
+    },
+    "title": "FirstAnswer",
+    "type": "object"
+   },
+   "FlashtapSettings": {
+    "properties": {
+     "choices": {
+      "title": "Choices",
+      "type": "string"
+     },
+     "mode": {
+      "title": "Mode",
+      "type": "string"
+     },
+     "tries": {
+      "title": "Tries",
+      "type": "string"
+     }
+    },
+    "required": [
+     "mode",
+     "choices",
+     "tries"
+    ],
+    "title": "FlashtapSettings",
+    "type": "object"
+   },
+   "GPCRow": {
+    "properties": {
+     "example": {
+      "title": "Example",
+      "type": "string"
+     },
+     "grapheme": {
+      "title": "Grapheme",
+      "type": "string"
+     },
+     "phoneme": {
+      "title": "Phoneme",
+      "type": "string"
+     }
+    },
+    "required": [
+     "grapheme",
+     "phoneme",
+     "example"
+    ],
+    "title": "GPCRow",
+    "type": "object"
+   },
+   "HTTPValidationError": {
+    "properties": {
+     "detail": {
+      "items": {
+       "$ref": "#/components/schemas/ValidationError"
+      },
+      "title": "Detail",
+      "type": "array"
+     }
+    },
+    "title": "HTTPValidationError",
+    "type": "object"
+   },
+   "LearnerRow": {
+    "properties": {
+     "attempts": {
+      "title": "Attempts",
+      "type": "integer"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "last_played": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Played"
+     },
+     "nickname": {
+      "title": "Nickname",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "nickname",
+     "created_at",
+     "attempts",
+     "last_played"
+    ],
+    "title": "LearnerRow",
+    "type": "object"
+   },
+   "Mechanic": {
+    "enum": [
+     "select_one",
+     "fill_missing",
+     "brief_exposure",
+     "audio_respond",
+     "give_n",
+     "sequence",
+     "match_pairs",
+     "sort"
+    ],
+    "title": "Mechanic",
+    "type": "string"
+   },
+   "Mode": {
+    "description": "A kind of round: one template each, plus Mixed. The first five are the original rounds (their ids are kept, so\nsaved settings still name them).",
+    "enum": [
+     "matching",
+     "colours",
+     "shapes",
+     "letters",
+     "counting",
+     "missing",
+     "quick_look",
+     "listen",
+     "give",
+     "order",
+     "capitals",
+     "sort_sounds",
+     "mixed"
+    ],
+    "title": "Mode",
+    "type": "string"
+   },
+   "ModeInfo": {
+    "properties": {
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "mechanic": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Mechanic"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "mode": {
+      "$ref": "#/components/schemas/Mode"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "mode",
+     "name",
+     "description",
+     "mechanic"
+    ],
+    "title": "ModeInfo",
+    "type": "object"
+   },
+   "ModelInfo": {
+    "properties": {
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "model": {
+      "title": "Model",
+      "type": "string"
+     }
+    },
+    "required": [
+     "model",
+     "description"
+    ],
+    "title": "ModelInfo",
+    "type": "object"
+   },
+   "NicknameIn": {
+    "properties": {
+     "nickname": {
+      "title": "Nickname",
+      "type": "string"
+     }
+    },
+    "required": [
+     "nickname"
+    ],
+    "title": "NicknameIn",
+    "type": "object"
+   },
+   "ObjectiveRow": {
+    "properties": {
+     "area": {
+      "title": "Area",
+      "type": "string"
+     },
+     "curriculum": {
+      "title": "Curriculum",
+      "type": "string"
+     },
+     "goal": {
+      "title": "Goal",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "note": {
+      "title": "Note",
+      "type": "string"
+     },
+     "out_of_scope": {
+      "title": "Out Of Scope",
+      "type": "string"
+     },
+     "skills": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Skills",
+      "type": "array"
+     },
+     "stage": {
+      "title": "Stage",
+      "type": "string"
+     },
+     "text": {
+      "title": "Text",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "curriculum",
+     "stage",
+     "area",
+     "goal",
+     "text",
+     "skills",
+     "out_of_scope",
+     "note"
+    ],
+    "title": "ObjectiveRow",
+    "type": "object"
+   },
+   "Option": {
+    "properties": {
+     "correct": {
+      "title": "Correct",
+      "type": "boolean"
+     },
+     "distractor": {
+      "default": "",
+      "title": "Distractor",
+      "type": "string"
+     },
+     "feedback": {
+      "title": "Feedback",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "picture": {
+      "title": "Picture",
+      "type": "string"
+     },
+     "word": {
+      "title": "Word",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "picture",
+     "word",
+     "correct",
+     "feedback"
+    ],
+    "title": "Option",
+    "type": "object"
+   },
+   "PackRow": {
+    "properties": {
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "id",
+     "version",
+     "title",
+     "status"
+    ],
+    "title": "PackRow",
+    "type": "object"
+   },
+   "PhonicsRow": {
+    "properties": {
+     "dialect": {
+      "title": "Dialect",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "sets": {
+      "items": {
+       "$ref": "#/components/schemas/PhonicsSetRow"
+      },
+      "title": "Sets",
+      "type": "array"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "title",
+     "dialect",
+     "sets"
+    ],
+    "title": "PhonicsRow",
+    "type": "object"
+   },
+   "PhonicsSetRow": {
+    "properties": {
+     "gpcs": {
+      "items": {
+       "$ref": "#/components/schemas/GPCRow"
+      },
+      "title": "Gpcs",
+      "type": "array"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     },
+     "words": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Words",
+      "type": "array"
+     }
+    },
+    "required": [
+     "id",
+     "title",
+     "gpcs",
+     "words"
+    ],
+    "title": "PhonicsSetRow",
+    "type": "object"
+   },
+   "Piece": {
+    "properties": {
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "picture": {
+      "title": "Picture",
+      "type": "string"
+     },
+     "word": {
+      "title": "Word",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "picture",
+     "word"
+    ],
+    "title": "Piece",
+    "type": "object"
+   },
+   "Place": {
+    "properties": {
+     "holds": {
+      "minimum": 1.0,
+      "title": "Holds",
+      "type": "integer"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "picture": {
+      "title": "Picture",
+      "type": "string"
+     },
+     "takes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Takes",
+      "type": "array"
+     },
+     "word": {
+      "title": "Word",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "picture",
+     "word",
+     "takes",
+     "holds"
+    ],
+    "title": "Place",
+    "type": "object"
+   },
+   "Profile": {
+    "description": "`GET /api/learners/{id}/profile`: the learner, what was recorded and every skill's estimates and state.",
+    "properties": {
+     "learner": {
+      "$ref": "#/components/schemas/LearnerRow"
+     },
+     "models": {
+      "items": {
+       "$ref": "#/components/schemas/ModelInfo"
+      },
+      "title": "Models",
+      "type": "array"
+     },
+     "sessions": {
+      "title": "Sessions",
+      "type": "integer"
+     },
+     "skills": {
+      "items": {
+       "$ref": "#/components/schemas/SkillReport"
+      },
+      "title": "Skills",
+      "type": "array"
+     },
+     "struck": {
+      "title": "Struck",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "learner",
+     "sessions",
+     "struck",
+     "models",
+     "skills"
+    ],
+    "title": "Profile",
+    "type": "object"
+   },
+   "QRole": {
+    "enum": [
+     "primary",
+     "secondary",
+     "confound"
+    ],
+    "title": "QRole",
+    "type": "string"
+   },
+   "Round": {
+    "properties": {
+     "answer": {
+      "default": "",
+      "title": "Answer",
+      "type": "string"
+     },
+     "choices": {
+      "title": "Choices",
+      "type": "integer"
+     },
+     "done_feedback": {
+      "default": "",
+      "title": "Done Feedback",
+      "type": "string"
+     },
+     "exposure_ms": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Exposure Ms"
+     },
+     "mechanic": {
+      "$ref": "#/components/schemas/Mechanic"
+     },
+     "mode": {
+      "$ref": "#/components/schemas/Mode"
+     },
+     "options": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/Option"
+      },
+      "title": "Options",
+      "type": "array"
+     },
+     "pieces": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/Piece"
+      },
+      "title": "Pieces",
+      "type": "array"
+     },
+     "places": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/Place"
+      },
+      "title": "Places",
+      "type": "array"
+     },
+     "prompt": {
+      "title": "Prompt",
+      "type": "string"
+     },
+     "say": {
+      "title": "Say",
+      "type": "string"
+     },
+     "seed": {
+      "exclusiveMaximum": 2147483648.0,
+      "minimum": 0.0,
+      "title": "Seed",
+      "type": "integer"
+     },
+     "show": {
+      "default": "",
+      "title": "Show",
+      "type": "string"
+     },
+     "skills": {
+      "items": {
+       "$ref": "#/components/schemas/SkillRole"
+      },
+      "title": "Skills",
+      "type": "array"
+     },
+     "tries": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Tries"
+     },
+     "version": {
+      "minimum": 1.0,
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "mode",
+     "version",
+     "choices",
+     "seed",
+     "mechanic",
+     "skills",
+     "prompt",
+     "say",
+     "show",
+     "exposure_ms",
+     "options",
+     "answer",
+     "pieces",
+     "places",
+     "done_feedback",
+     "tries"
+    ],
+    "title": "Round",
+    "type": "object"
+   },
+   "SessionOut": {
+    "properties": {
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "last_at": {
+      "format": "date-time",
+      "title": "Last At",
+      "type": "string"
+     },
+     "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "started_at",
+     "last_at"
+    ],
+    "title": "SessionOut",
+    "type": "object"
+   },
+   "SkillReport": {
+    "properties": {
+     "counted": {
+      "title": "Counted",
+      "type": "integer"
+     },
+     "domain": {
+      "title": "Domain",
+      "type": "string"
+     },
+     "estimates": {
+      "items": {
+       "$ref": "#/components/schemas/Estimate"
+      },
+      "title": "Estimates",
+      "type": "array"
+     },
+     "held": {
+      "title": "Held",
+      "type": "integer"
+     },
+     "last_seen": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Seen"
+     },
+     "mechanics": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Mechanics",
+      "type": "array"
+     },
+     "right": {
+      "title": "Right",
+      "type": "integer"
+     },
+     "skill": {
+      "title": "Skill",
+      "type": "string"
+     },
+     "state": {
+      "$ref": "#/components/schemas/State"
+     },
+     "strand": {
+      "title": "Strand",
+      "type": "string"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     }
+    },
+    "required": [
+     "skill",
+     "title",
+     "domain",
+     "strand",
+     "state",
+     "estimates",
+     "counted",
+     "right",
+     "held",
+     "mechanics",
+     "last_seen"
+    ],
+    "title": "SkillReport",
+    "type": "object"
+   },
+   "SkillRole": {
+    "properties": {
+     "role": {
+      "$ref": "#/components/schemas/QRole"
+     },
+     "skill": {
+      "title": "Skill",
+      "type": "string"
+     }
+    },
+    "required": [
+     "skill",
+     "role"
+    ],
+    "title": "SkillRole",
+    "type": "object"
+   },
+   "SkillRow": {
+    "properties": {
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "domain": {
+      "title": "Domain",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "leads_to": {
+      "items": {
+       "$ref": "#/components/schemas/EdgeRow"
+      },
+      "title": "Leads To",
+      "type": "array"
+     },
+     "misconceptions": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Misconceptions",
+      "type": "array"
+     },
+     "modes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Modes",
+      "type": "array"
+     },
+     "needs": {
+      "items": {
+       "$ref": "#/components/schemas/EdgeRow"
+      },
+      "title": "Needs",
+      "type": "array"
+     },
+     "stages": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Stages",
+      "type": "array"
+     },
+     "strand": {
+      "title": "Strand",
+      "type": "string"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "title",
+     "description",
+     "domain",
+     "strand",
+     "stages",
+     "modes",
+     "needs",
+     "leads_to",
+     "misconceptions"
+    ],
+    "title": "SkillRow",
+    "type": "object"
+   },
+   "SkillUse": {
+    "properties": {
+     "role": {
+      "title": "Role",
+      "type": "string"
+     },
+     "skill": {
+      "title": "Skill",
+      "type": "string"
+     }
+    },
+    "required": [
+     "skill",
+     "role"
+    ],
+    "title": "SkillUse",
+    "type": "object"
+   },
+   "State": {
+    "enum": [
+     "unobserved",
+     "introduced",
+     "emerging",
+     "independent",
+     "generalised",
+     "retained"
+    ],
+    "title": "State",
+    "type": "string"
+   },
+   "StrikeIn": {
+    "properties": {
+     "reason": {
+      "default": "",
+      "title": "Reason",
+      "type": "string"
+     }
+    },
+    "title": "StrikeIn",
+    "type": "object"
+   },
+   "ValidationError": {
+    "properties": {
+     "ctx": {
+      "title": "Context",
+      "type": "object"
+     },
+     "input": {
+      "title": "Input"
+     },
+     "loc": {
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer"
+        }
+       ]
+      },
+      "title": "Location",
+      "type": "array"
+     },
+     "msg": {
+      "title": "Message",
+      "type": "string"
+     },
+     "type": {
+      "title": "Error Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "loc",
+     "msg",
+     "type"
+    ],
+    "title": "ValidationError",
+    "type": "object"
+   }
+  }
+ },
+ "info": {
+  "title": "flashtap",
+  "version": "0.1.0"
+ },
+ "openapi": "3.1.0",
+ "paths": {
+  "/api/attempts": {
+   "post": {
+    "operationId": "post_attempt_api_attempts_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AttemptIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ack"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Post Attempt"
+   }
+  },
+  "/api/attempts/{event_id}/strike": {
+   "post": {
+    "operationId": "post_strike_api_attempts__event_id__strike_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "event_id",
+      "required": true,
+      "schema": {
+       "title": "Event Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/StrikeIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Post Strike"
+   }
+  },
+  "/api/content": {
+   "get": {
+    "operationId": "get_content_api_content_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ContentSummary"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Get Content"
+   }
+  },
+  "/api/health": {
+   "get": {
+    "operationId": "get_health_api_health_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Get Health Api Health Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Get Health"
+   }
+  },
+  "/api/learners": {
+   "get": {
+    "operationId": "get_learners_api_learners_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/LearnerRow"
+         },
+         "title": "Response Get Learners Api Learners Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Get Learners"
+   },
+   "post": {
+    "operationId": "post_learner_api_learners_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/NicknameIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LearnerRow"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Post Learner"
+   }
+  },
+  "/api/learners/{learner_id}": {
+   "delete": {
+    "operationId": "delete_learner_api_learners__learner_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "learner_id",
+      "required": true,
+      "schema": {
+       "title": "Learner Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Delete Learner"
+   },
+   "patch": {
+    "operationId": "patch_learner_api_learners__learner_id__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "learner_id",
+      "required": true,
+      "schema": {
+       "title": "Learner Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/NicknameIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LearnerRow"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Patch Learner"
+   }
+  },
+  "/api/learners/{learner_id}/export": {
+   "get": {
+    "operationId": "get_export_api_learners__learner_id__export_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "learner_id",
+      "required": true,
+      "schema": {
+       "title": "Learner Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Export"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Export"
+   }
+  },
+  "/api/learners/{learner_id}/profile": {
+   "get": {
+    "operationId": "get_profile_api_learners__learner_id__profile_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "learner_id",
+      "required": true,
+      "schema": {
+       "title": "Learner Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Profile"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Profile"
+   }
+  },
+  "/api/learners/{learner_id}/skills/{skill}/evidence": {
+   "get": {
+    "operationId": "get_evidence_api_learners__learner_id__skills__skill__evidence_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "learner_id",
+      "required": true,
+      "schema": {
+       "title": "Learner Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "skill",
+      "required": true,
+      "schema": {
+       "title": "Skill",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/EvidenceRow"
+         },
+         "title": "Response Get Evidence Api Learners  Learner Id  Skills  Skill  Evidence Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Evidence"
+   }
+  },
+  "/api/modes": {
+   "get": {
+    "operationId": "get_modes_api_modes_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/ModeInfo"
+         },
+         "title": "Response Get Modes Api Modes Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Get Modes"
+   }
+  },
+  "/api/round": {
+   "get": {
+    "operationId": "get_round_api_round_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "mode",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/Mode"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Mode"
+      }
+     },
+     {
+      "in": "query",
+      "name": "choices",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maximum": 8,
+         "minimum": 2,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Choices"
+      }
+     },
+     {
+      "in": "query",
+      "name": "seed",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "exclusiveMaximum": 2147483648,
+         "minimum": 0,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Seed"
+      }
+     },
+     {
+      "in": "query",
+      "name": "version",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "minimum": 1,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Version"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Round"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Round"
+   }
+  },
+  "/api/settings": {
+   "get": {
+    "operationId": "get_settings_api_settings_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FlashtapSettings"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Get Settings"
+   },
+   "put": {
+    "operationId": "put_settings_api_settings_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": {
+         "anyOf": [
+          {
+           "type": "string"
+          },
+          {
+           "items": {
+            "type": "string"
+           },
+           "type": "array"
+          },
+          {
+           "type": "null"
+          }
+         ]
+        },
+        "title": "Changes",
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FlashtapSettings"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Put Settings"
+   }
+  }
+ }
+}

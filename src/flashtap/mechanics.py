@@ -26,7 +26,7 @@ six is a reversal, not a miscount).
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 SEED_LIMIT = 2**31  # seeds fit a JavaScript number and a 32-bit column
 
@@ -100,6 +100,10 @@ class Place(BaseModel):
 
 
 class Round(BaseModel):
+    # Every field is always sent, so the API's schema says so (`required`), and the web app's generated types
+    # (web/src/api.generated.ts) need no `?` on the ones that have a default here.
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
     mode: Mode  # the kind actually played (never MIXED)
     version: int = Field(ge=1)  # the template's version: with mode, choices and seed it rebuilds the round exactly
     choices: int

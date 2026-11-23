@@ -55,6 +55,7 @@ Without the web build, `flashtap serve` answers with a plain stand-in page that 
 scripts/check                                   # the gate (strata-check): lockfile, ruff, pyright strict, ty, unit tests + coverage
 uv run pytest tests/integration                 # the CLI and HTTP API end-to-end
 cd web && npm run typecheck && npm run test:coverage:gate   # web unit + jsdom tests against coverage-floor.json
+uv run flashtap openapi && cd web && npm run api-types    # after a response model changes: the schema, then the web app's types from it
 cd web && npm run storybook                     # every screen in every server state, on :6006
 cd web && npm run test:visual                   # screenshots of the stories and routes, light and dark, against tests/visual/baselines/
 ```
