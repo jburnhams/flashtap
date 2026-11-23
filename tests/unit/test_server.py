@@ -7,7 +7,10 @@ from flashtap.server.app import create_app
 
 @pytest.fixture
 def client():
-    return TestClient(create_app())
+    app = create_app()
+    yield TestClient(app)
+    if (engine := getattr(app.state, "learner_engine", None)) is not None:
+        engine.dispose()  # the learner database the first learner route opened
 
 
 def test_landing_page_and_built_static_index(tmp_path, monkeypatch):
@@ -87,3 +90,74 @@ def test_content_lists_skills_objectives_and_phonics(client):
     assert skills["maths.subitising.perceptual"]["stages"] == ["eyfs"]
     assert sum(1 for o in s["objectives"] if o["out_of_scope"]) == 3
     assert s["phonics"][0]["sets"][0]["gpcs"][1] == {"grapheme": "a", "phoneme": "æ", "example": "ant"}
+
+
+def _attempt(learner: str, seed: int = 1, *, right: bool = True, event_id: str = "e" * 32) -> dict[str, object]:
+    from flashtap import rounds
+
+    r = rounds.generate(rounds.Mode.COUNTING, 4, seed)
+    option = r.answer if right else next(o.id for o in r.options if not o.correct)
+    return {
+        "event_id": event_id,
+        "learner_id": learner,
+        "session_id": "5" * 32,
+        "mode": "counting",
+        "version": 1,
+        "choices": 4,
+        "seed": seed,
+        "asked": "mixed",
+        "presented_at": "2026-11-02T09:00:00Z",
+        "answered_at": "2026-11-02T09:00:04Z",
+        "first_answer": {"option": option},
+        "tries": 1 if right else 2,
+        "outcome": "right",
+    }
+
+
+def test_learner_records_over_http(client):
+    assert client.get("/api/learners").json() == []
+    made = client.post("/api/learners", json={"nickname": "Fox"})
+    assert made.status_code == 201
+    fox = made.json()["id"]
+    assert client.post("/api/learners", json={"nickname": "fox"}).status_code == 409
+    assert (
+        client.post("/api/learners", json={"nickname": " "}).json()["detail"] == "A nickname needs at least one letter."
+    )
+    assert client.patch(f"/api/learners/{fox}", json={"nickname": "Red Fox"}).json()["nickname"] == "Red Fox"
+
+    ack = client.post("/api/attempts", json=_attempt(fox, right=False))
+    assert ack.json() == {"event_id": "e" * 32, "first_correct": False, "duplicate": False}
+    assert client.post("/api/attempts", json=_attempt(fox, right=False)).json()["duplicate"] is True
+    assert client.post("/api/attempts", json=_attempt(fox, seed=2)).status_code == 409  # same event id, other contents
+    assert client.post("/api/attempts", json={**_attempt(fox), "version": 9}).status_code == 400
+    assert client.post("/api/attempts", json=_attempt("0" * 32, event_id="f" * 32)).status_code == 404
+    assert client.post("/api/attempts", json={**_attempt(fox), "event_id": "not an id"}).status_code == 422
+
+    profile = client.get(f"/api/learners/{fox}/profile").json()
+    assert profile["learner"]["attempts"] == 1
+    assert profile["sessions"] == 1
+    counting = next(s for s in profile["skills"] if s["skill"] == "maths.counting.objects")
+    assert counting["state"] == "introduced"
+    assert counting["held"] == 1
+    assert counting["title"]
+    rows = client.get(f"/api/learners/{fox}/skills/maths.counting.objects/evidence").json()
+    assert rows[0]["counted"] is False
+    assert rows[0]["why"].startswith("could be ")
+
+    assert client.post(f"/api/attempts/{'e' * 32}/strike", json={"reason": "a sibling"}).status_code == 204
+    assert client.post(f"/api/attempts/{'9' * 32}/strike", json={}).status_code == 404
+    assert client.get(f"/api/learners/{fox}/profile").json()["struck"] == 1
+
+    exported = client.get(f"/api/learners/{fox}/export")
+    assert exported.headers["content-disposition"] == 'attachment; filename="flashtap-red-fox.json"'
+    assert exported.json()["events"][0]["struck"] == "a sibling"
+
+    assert client.delete(f"/api/learners/{fox}").status_code == 204
+    assert client.get(f"/api/learners/{fox}/profile").status_code == 404
+    assert client.get(f"/api/learners/{fox}/skills/x/evidence").status_code == 404
+    assert client.get("/api/learners").json() == []
+
+
+def test_an_export_of_a_nickname_with_no_letters_is_still_named(client):
+    odd = client.post("/api/learners", json={"nickname": "★★"}).json()["id"]
+    assert client.get(f"/api/learners/{odd}/export").headers["content-disposition"].endswith('"flashtap-learner.json"')

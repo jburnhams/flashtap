@@ -2,7 +2,7 @@
 
 Learning games for every school year and ability, starting with the earliest skills: a spoken question, a big picture, and two to eight tiles to tap, exactly one of them right. Progression follows what a learner can show they can do, never their age. A personal app for private use; the repository is public, so it holds no detail that identifies anyone (see `AGENTS.md`, rule 8). A Python web app (FastAPI + CLI on [strata-python](https://github.com/jburnhams/strata-python)) with a React frontend on [strata-react](https://github.com/jburnhams/strata-react), shaped like [python-app-template](https://github.com/jburnhams/python-app-template).
 
-Twelve kinds of round today, over eight ways of answering: tap one picture (Matching, Colours, Shapes, Letters, Counting), fill the missing number (Missing number), say how many after a quick look (Quick look), hear a word and tap its first letter (Listen), and four answered by moving pictures with two taps: Give a number, Order, Capitals (match pairs) and Sort by sound; plus Mixed. The server builds every round from a template, a version and a seed and checks that its answer is one and unmistakable before sending, so a round can be rebuilt exactly; each wrong option names the generator that chose it (a near number, a reversed 6 or 9, a look-alike letter, a sound one feature away). What it can teach is described in content packs (TOML in `src/flashtap/packs/`: skills with typed, sourced prerequisite edges, a phonics sequence in IPA, words with their sounds, and the EYFS Early Learning Goals mapped onto skills), shown on the Content screen; see [docs/content.md](docs/content.md). Where this is going, towards an adaptive learning engine with a skill ontology, a learner model and a scheduler, is in [docs/implementation-plan.md](docs/implementation-plan.md).
+Twelve kinds of round today, over eight ways of answering: tap one picture (Matching, Colours, Shapes, Letters, Counting), fill the missing number (Missing number), say how many after a quick look (Quick look), hear a word and tap its first letter (Listen), and four answered by moving pictures with two taps: Give a number, Order, Capitals (match pairs) and Sort by sound; plus Mixed. The server builds every round from a template, a version and a seed and checks that its answer is one and unmistakable before sending, so a round can be rebuilt exactly; each wrong option names the generator that chose it (a near number, a reversed 6 or 9, a look-alike letter, a sound one feature away). What it can teach is described in content packs (TOML in `src/flashtap/packs/`: skills with typed, sourced prerequisite edges, a phonics sequence in IPA, words with their sounds, and the EYFS Early Learning Goals mapped onto skills), shown on the Content screen; see [docs/content.md](docs/content.md). A grown-up can add learners (a nickname, nothing else) and choose who is playing; each round they answer is recorded, judged by the server from the rebuilt round, and the Learner screen shows every skill's estimates (Bayesian knowledge tracing beside a simple recent-answers rule), a reporting state (not seen yet, introduced, emerging, independent, generalised, retained) and the rounds behind each one, with export and delete. Where this is going, towards an adaptive learning engine with a skill ontology, a learner model and a scheduler, is in [docs/implementation-plan.md](docs/implementation-plan.md).
 
 Until 0.1.9 Flashtap was an npm React component library; 0.2.0 replaces it with this app (see [CHANGELOG.md](CHANGELOG.md)).
 
@@ -14,6 +14,7 @@ cd web && npm ci && npm run build && cd ..   # builds the web app into src/flash
 uv run flashtap serve                     # http://127.0.0.1:8361/
 uv run flashtap round --mode counting     # one round in the terminal; --seed N gives the same round again
 uv run flashtap content check            # the content packs: no dangling edges, no prerequisite cycles, every goal mapped or set aside
+uv run flashtap learners list             # the learners; `learners rebuild export.json` checks an export's estimates against its events
 uv run flashtap set choices 6             # settings: mode, choices (2-8), tries (0 = no limit)
 uv run flashtap doctor                    # check the environment
 ```
@@ -27,6 +28,12 @@ Without the web build, `flashtap serve` answers with a plain stand-in page that 
 | `GET /api/round?mode=&choices=&seed=&version=` | One checked round; each parameter defaults to the settings, and a fresh seed is picked (and returned) when none is sent; a template version other than the current one is refused (400) |
 | `GET /api/modes` | The kinds of round, with a name, a sentence and the mechanic each |
 | `GET /api/content` | The content packs as rows: skills (with stage labels, rounds and edges), curriculum goals, phonics sets |
+| `GET`, `POST /api/learners`; `PATCH`, `DELETE /api/learners/{id}` | List and add learners (`{nickname}`), rename, delete with everything recorded |
+| `GET /api/learners/{id}/profile` | Every skill's estimates (`bkt@1`, `rule@1`), reporting state, counts and last seen |
+| `GET /api/learners/{id}/skills/{skill}/evidence` | The rounds that touched a skill, newest first: the first answer, whether it counted and why not |
+| `GET /api/learners/{id}/export` | Everything held about a learner, as a JSON download |
+| `POST /api/attempts` | One round answered (`event_id`, the round's kind, version, choices and seed, the first answer, tries, outcome); idempotent by `event_id` |
+| `POST /api/attempts/{event_id}/strike` | Strike a round out of every estimate (`{reason}`); the round stays in the log |
 | `GET`, `PUT /api/settings` | `mode`, `choices`, `tries` (from strata-python) |
 | `GET /api/health` | `ok`, `version`, `commit` |
 | `GET /api/docs` | The OpenAPI page |

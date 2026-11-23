@@ -6,18 +6,27 @@ API (JSON): GET /api/health; GET and PUT /api/settings {mode?, choices?, tries?}
 GET /api/modes (each kind of round with its mechanic); GET /api/round?mode=&choices=&seed=&version= (each defaults to the
 settings; a fresh seed when none is given; a version other than the template's current one is refused with 400);
 GET /api/content (the content packs as rows: skills, curriculum objectives, phonics sets).
+Learner records (src/flashtap/learners/): GET and POST /api/learners {nickname}; PATCH and DELETE /api/learners/{id};
+GET /api/learners/{id}/profile (every skill's estimates and state); GET /api/learners/{id}/skills/{skill}/evidence
+(the attempts behind it, newest first); GET /api/learners/{id}/export (everything held, as a JSON download);
+POST /api/attempts (one round answered; idempotent by event_id); POST /api/attempts/{event_id}/strike {reason}.
 Every other path serves the web app (`src/flashtap/server/static/index.html` when built with `cd web && npm run build`,
 else the plain stand-in `landing.html`), so a reload or a shared link opens that screen: the app routes in the browser."""
 
 import os
-from collections.abc import Sequence
+import re
+from collections.abc import Iterator, Sequence
 from typing import Annotated
 
-from fastapi import FastAPI, Query
+from fastapi import Depends, FastAPI, Query, Request, Response
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 from strata_python import web
 
 from flashtap import __version__, content, rounds, settings
+from flashtap.learners import db as learner_db
+from flashtap.learners import store
+from flashtap.learners.report import EvidenceRow, SkillInfo, evidence_rows
 from flashtap.rounds import MAX_CHOICES, MIN_CHOICES, SEED_LIMIT, Mechanic, Mode, Round
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -30,6 +39,14 @@ class ModeInfo(BaseModel):
     name: str
     description: str
     mechanic: Mechanic | None  # None for Mixed, which plays every kind
+
+
+class NicknameIn(BaseModel):
+    nickname: str
+
+
+class StrikeIn(BaseModel):
+    reason: str = ""
 
 
 def create_app() -> FastAPI:
@@ -61,8 +78,72 @@ def create_app() -> FastAPI:
     def get_content() -> content.ContentSummary:  # pyright: ignore[reportUnusedFunction]
         return summary  # the packs ship with the app and are read once, so the summary is built once too
 
+    add_learner_routes(
+        app, [SkillInfo(id=s.id, title=s.title, domain=s.domain, strand=s.strand) for s in summary.skills]
+    )
+
     web.add_web(app, STATIC, LANDING)
     return app
+
+
+def _records(request: Request) -> Iterator[Session]:
+    # The database is opened (and migrated) on the first request that needs it, once per app, so serving rounds never
+    # waits on it and a server nobody records on never creates one.
+    state = request.app.state
+    if getattr(state, "learner_engine", None) is None:
+        state.learner_engine = learner_db.open_engine()
+    with Session(state.learner_engine) as s:
+        yield s
+
+
+Db = Annotated[Session, Depends(_records)]
+
+
+def add_learner_routes(app: FastAPI, skills: list[SkillInfo]) -> None:
+    """The learner records' routes (src/flashtap/learners/)."""
+    titles = {s.id: s.title for s in skills}
+
+    @app.get("/api/learners", response_model=list[store.LearnerRow])
+    def get_learners(s: Db) -> list[store.LearnerRow]:  # pyright: ignore[reportUnusedFunction]
+        return store.list_learners(s)
+
+    @app.post("/api/learners", response_model=store.LearnerRow, status_code=201)
+    def post_learner(body: NicknameIn, s: Db) -> store.LearnerRow:  # pyright: ignore[reportUnusedFunction]
+        return store.add_learner(s, body.nickname)
+
+    @app.patch("/api/learners/{learner_id}", response_model=store.LearnerRow)
+    def patch_learner(learner_id: str, body: NicknameIn, s: Db) -> store.LearnerRow:  # pyright: ignore[reportUnusedFunction]
+        return store.rename_learner(s, learner_id, body.nickname)
+
+    @app.delete("/api/learners/{learner_id}", status_code=204)
+    def delete_learner(learner_id: str, s: Db) -> Response:  # pyright: ignore[reportUnusedFunction]
+        store.delete_learner(s, learner_id)
+        return Response(status_code=204)
+
+    @app.get("/api/learners/{learner_id}/profile", response_model=store.Profile)
+    def get_profile(learner_id: str, s: Db) -> store.Profile:  # pyright: ignore[reportUnusedFunction]
+        return store.profile(s, learner_id, skills)
+
+    @app.get("/api/learners/{learner_id}/skills/{skill}/evidence", response_model=list[EvidenceRow])
+    def get_evidence(learner_id: str, skill: str, s: Db) -> list[EvidenceRow]:  # pyright: ignore[reportUnusedFunction]
+        store.get_learner(s, learner_id)
+        return evidence_rows(store.events(s, learner_id), skill, titles)
+
+    @app.get("/api/learners/{learner_id}/export", response_model=store.Export)
+    def get_export(learner_id: str, s: Db, response: Response) -> store.Export:  # pyright: ignore[reportUnusedFunction]
+        out = store.export(s, learner_id, skills)
+        name = re.sub(r"[^A-Za-z0-9]+", "-", out.learner.nickname).strip("-").lower() or "learner"
+        response.headers["Content-Disposition"] = f'attachment; filename="flashtap-{name}.json"'
+        return out
+
+    @app.post("/api/attempts", response_model=store.Ack)
+    def post_attempt(body: store.AttemptIn, s: Db) -> store.Ack:  # pyright: ignore[reportUnusedFunction]
+        return store.record(s, body)
+
+    @app.post("/api/attempts/{event_id}/strike", status_code=204)
+    def post_strike(event_id: str, body: StrikeIn, s: Db) -> Response:  # pyright: ignore[reportUnusedFunction]
+        store.strike(s, event_id, body.reason)
+        return Response(status_code=204)
 
 
 def main(argv: Sequence[str] | None = None) -> None:

@@ -6,6 +6,8 @@
 import type { RouteObject } from 'react-router'
 import { ContentScreen } from './screens/ContentScreen'
 import { Layout } from './screens/Layout'
+import { LearnerScreen } from './screens/LearnerScreen'
+import { LearnersScreen } from './screens/LearnersScreen'
 import { NotFoundScreen } from './screens/NotFoundScreen'
 import { PlayScreen } from './screens/PlayScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
@@ -15,6 +17,8 @@ export const routes: RouteObject[] = [
     element: <Layout />,
     children: [
       { index: true, element: <PlayScreen /> },
+      { path: 'learners', element: <LearnersScreen /> },
+      { path: 'learners/:id', element: <LearnerScreen /> },
       { path: 'content', element: <ContentScreen /> },
       { path: 'settings', element: <SettingsScreen /> },
       { path: '*', element: <NotFoundScreen /> },

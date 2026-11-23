@@ -5,7 +5,7 @@ Vitest 5, Testing Library, user-event, MSW, and strata-react's test helpers (`st
 ## Layout
 
 - `unit/`: node environment, no DOM. Pure functions: URL builders (`api.ts`), the outcome and spoken feedback of a turn and of a checked arrangement (`play.ts`), and that `index.html` inlines Strata's colour-scheme script.
-- `integration/`: jsdom. One file per screen (`PlayScreen`, `SettingsScreen`) plus `App` for the frame and routing. Each test opens the app at a URL with `openApp('/settings?tab=appearance')` (`utils/render.tsx`), which renders the app's own route tree (`src/routes.tsx`) through `renderRoutes` from `strata-react/testing`, with a fresh query client (retries off) and ThemeProvider (storage off).
+- `integration/`: jsdom. One file per screen (`PlayScreen`, `LearnersScreen`, `LearnerScreen`, `ContentScreen`, `SettingsScreen`) plus `App` for the frame and routing. Each test opens the app at a URL with `openApp('/settings?tab=appearance')` (`utils/render.tsx`), which renders the app's own route tree (`src/routes.tsx`) through `renderRoutes` from `strata-react/testing`, with a fresh query client (retries off) and ThemeProvider (storage off).
 - `utils/`: `server.ts` is the msw server over the app's mock handlers (`src/mocks/handlers.ts`: **every endpoint the app calls needs a handler there**; an unanswered request fails the test). Put the server into another state with the named handlers (`server.use(roundError)`). `speech.ts` installs a recording `speechSynthesis` (jsdom has none; it is the one true external); the store resets after each test. `setup.ts` installs Strata's layout shims so tables and lists measure in jsdom. `render.tsx` provides `openApp()`.
 - `visual/baselines/`: committed PNGs written by `strata-visual` (see below).
 
@@ -38,3 +38,6 @@ Vitest 5, Testing Library, user-event, MSW, and strata-react's test helpers (`st
 | `src/screens/SystemScreen.tsx` | 100 | done | integration/SystemScreen.test.tsx, unit/logic.test.ts |
 | `src/screens/SettingsScreen.tsx` | 100 | done | integration/SettingsScreen.test.tsx |
 | `src/screens/ContentScreen.tsx` | 100 | done | integration/ContentScreen.test.tsx |
+| `src/screens/LearnersScreen.tsx` | 100 | done | integration/LearnersScreen.test.tsx: list, add (empty and taken nicknames refused), nobody yet, nobody played, server error |
+| `src/screens/LearnerScreen.tsx` | 100 | done | integration/LearnerScreen.test.tsx: finding and both estimators, unobserved on All skills, evidence with reasons, strike with Undo and a failed strike, delete behind a confirm (and a failed one), a missing learner |
+| `src/screens/PlayScreen.tsx` (recording) | 100 | done | integration/PlayScreen.test.tsx: nothing sent for Nobody; first answer, tries and outcome sent once; a missed round, a round left half done, a placing round's first arrangement; a round the server did not take; learners that cannot load |

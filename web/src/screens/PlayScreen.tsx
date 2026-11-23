@@ -15,12 +15,19 @@
 // for an arrangement. There is no score and no streak: the spec asks for no streak pressure and no
 // punishment for mistakes (§11, §17). The kind of round lives in the URL (?mode=counting), so a
 // grown-up can bookmark one. It is a select, not a row of toggles: thirteen names do not fit.
+//
+// Who is playing is the second select, also in the URL (?learner=<id>), so "Play as Fox" on the
+// Learners screen is a link. With a learner chosen, each round is sent to the server once it ends
+// (or once Next or a change of kind leaves it half done) with its first answer, how many tries it
+// took and how it ended; the server rebuilds the round and judges the answer itself. With nobody
+// chosen nothing is sent. A round the server did not take says so in one quiet line, never to the
+// child in words.
 import { useQueryClient } from '@tanstack/react-query'
 import { Volume2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Button, ChoiceGrid, ChoiceGridSkeleton, DataView, EmptyState, Field, IconButton, NativeSelect, PageHeader, PlaceBoard, Skeleton, useLoad, type ChoiceState, type PlaceState } from 'strata-react'
-import { api, isMode, keys, MODES, PLACE_MECHANICS, type Mode, type Option, type Round } from '../api'
+import { api, isMode, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type LearnerRow, type Mode, type Option, type Round } from '../api'
 import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRight, solution, type Placement, type Turn } from '../play'
 import { say } from '../speech'
 
@@ -42,20 +49,41 @@ export const modeLabels: Record<Mode, string> = {
 
 export function PlayScreen() {
   const settings = useLoad({ queryKey: keys.settings, queryFn: api.settings })
+  const learners = useLoad({ queryKey: keys.learners, queryFn: api.learners })
   const [params, setParams] = useSearchParams()
   const asked = params.get('mode')
+  const learner = params.get('learner') ?? ''
+  // One session per learner while this page is open: the server groups the rounds by it.
+  const sessions = useRef(new Map<string, string>())
+  const session = (id: string) => {
+    let made = sessions.current.get(id)
+    if (!made) sessions.current.set(id, (made = newId()))
+    return made
+  }
+  const setParam = (key: string, value: string | null) =>
+    setParams(p => {
+      const next = new URLSearchParams(p)
+      if (value) next.set(key, value)
+      else next.delete(key)
+      return next
+    })
   return (
     <DataView state={settings} isEmpty={() => false} skeleton={<RoundSkeleton />} empty={<EmptyState title="No settings">The server sent none.</EmptyState>}>
       {s => {
         const mode = isMode(asked) ? asked : s.mode
+        const known = learners.status === 'ready' ? learners.data : []
+        const playing = known.find(x => x.id === learner) ?? null
         return (
           <div className="grid gap-6">
-            <Field label="Kind of round" className="max-w-xs">
-              <NativeSelect value={mode} onChange={e => setParams(e.target.value === s.mode ? {} : { mode: e.target.value })}>
-                {MODES.map(m => <option key={m} value={m}>{modeLabels[m]}</option>)}
-              </NativeSelect>
-            </Field>
-            <Game key={mode} mode={mode} />
+            <div className="flex flex-wrap gap-4">
+              <Field label="Kind of round" className="w-full max-w-xs">
+                <NativeSelect value={mode} onChange={e => setParam('mode', e.target.value === s.mode ? null : e.target.value)}>
+                  {MODES.map(m => <option key={m} value={m}>{modeLabels[m]}</option>)}
+                </NativeSelect>
+              </Field>
+              <WhoPlays learners={known} value={playing?.id ?? ''} failed={learners.status === 'error'} onChange={id => setParam('learner', id || null)} />
+            </div>
+            <Game key={`${mode}-${playing?.id ?? ''}`} mode={mode} learner={playing} session={playing ? session(playing.id) : ''} />
           </div>
         )
       }}
@@ -63,19 +91,80 @@ export function PlayScreen() {
   )
 }
 
-/** One round after another in `mode`: each Next asks the server for a new one. */
-function Game({ mode }: { mode: Mode }) {
-  const [n, setN] = useState(0)
-  const round = useLoad({ queryKey: keys.round(mode, n), queryFn: ({ signal }) => api.round(mode, signal), staleTime: Infinity })
+/** Who the rounds are recorded for; Nobody records nothing. A failed list still lets the child play, unrecorded. */
+function WhoPlays({ learners, value, failed, onChange }: { learners: LearnerRow[]; value: string; failed: boolean; onChange: (id: string) => void }) {
   return (
-    <DataView state={round} isEmpty={r => r.options.length === 0 && r.pieces.length === 0} skeleton={<RoundSkeleton />} empty={<EmptyState title="Nothing to play">The server sent a round with no pictures.</EmptyState>}>
-      {r => <Board key={`${r.mode}-${r.seed}`} round={r} onNext={() => setN(x => x + 1)} />}
-    </DataView>
+    <Field label="Who is playing" className="w-full max-w-xs" hint={failed ? 'The learners could not be loaded, so these rounds are not recorded.' : value ? undefined : 'Nobody: rounds are not recorded.'}>
+      <NativeSelect value={value} onChange={e => onChange(e.target.value)}>
+        <option value="">Nobody</option>
+        {learners.map(x => <option key={x.id} value={x.id}>{x.nickname}</option>)}
+      </NativeSelect>
+    </Field>
   )
 }
 
+/** What a round reports once it ends: the rest of an attempt comes from the round and who is playing. */
+export type Answered = Pick<AttemptIn, 'first_answer' | 'tries' | 'outcome' | 'presented_at' | 'answered_at'>
+
+/** One round after another in `mode`: each Next asks the server for a new one. */
+function Game({ mode, learner, session }: { mode: Mode; learner: LearnerRow | null; session: string }) {
+  const [n, setN] = useState(0)
+  const [unsaved, setUnsaved] = useState(false)
+  const queryClient = useQueryClient()
+  // A fresh round for every visit (a change of kind or of who is playing remounts this Game): a round left
+  // half done and shown again with its answers forgotten would let a retry be recorded as a new first answer.
+  const [visit] = useState(newId)
+  const round = useLoad({ queryKey: keys.round(mode, visit, n), queryFn: ({ signal }) => api.round(mode, signal), staleTime: Infinity })
+  const record = useCallback(
+    (who: LearnerRow, r: Round, a: Answered) => {
+      api.recordAttempt({ event_id: newId(), learner_id: who.id, session_id: session, mode: r.mode, version: r.version, choices: r.choices, seed: r.seed, asked: mode, ...a }).then(
+        () => {
+          setUnsaved(false)
+          void queryClient.invalidateQueries({ queryKey: ['learners'] })
+        },
+        () => setUnsaved(true),
+      )
+    },
+    [session, mode, queryClient],
+  )
+  return (
+    <>
+      <DataView state={round} isEmpty={r => r.options.length === 0 && r.pieces.length === 0} skeleton={<RoundSkeleton />} empty={<EmptyState title="Nothing to play">The server sent a round with no pictures.</EmptyState>}>
+        {r => <Board key={`${r.mode}-${r.seed}`} round={r} onNext={() => setN(x => x + 1)} onAnswered={learner ? a => record(learner, r, a) : undefined} />}
+      </DataView>
+      {unsaved && <p role="status" className="type-caption text-muted-foreground">The last round was not saved for {learner?.nickname}: the server did not take it.</p>}
+    </>
+  )
+}
+
+/**
+ * Keeps one round's attempt: when it was shown, the first answer and when, and the tries. `ended`
+ * reports it once; leaving the round half done (Next is not offered then, but a change of kind or
+ * of page is) reports it as left, as long as there was a first answer. The report function is read
+ * through a ref, so a new one on each render does not count as leaving.
+ */
+function useAttempt(report: ((a: Answered) => void) | undefined) {
+  const latest = useRef(report)
+  useEffect(() => { latest.current = report })
+  // One mutable record per round, made once when the round appears (a lazy state initialiser, not a ref read in render).
+  const [log] = useState(() => ({ presented: new Date().toISOString(), first: null as { answer: AttemptIn['first_answer']; at: string } | null, tries: 0, sent: false }))
+  const ended = useCallback((outcome: AttemptIn['outcome']) => {
+    const x = log
+    if (x.sent || !x.first) return
+    x.sent = true
+    latest.current?.({ first_answer: x.first.answer, tries: x.tries, outcome, presented_at: x.presented, answered_at: x.first.at })
+  }, [log])
+  useEffect(() => () => ended('left'), [ended])
+  const answered = (answer: AttemptIn['first_answer']) => {
+    const x = log
+    x.tries += 1
+    x.first ??= { answer, at: new Date().toISOString() }
+  }
+  return { answered, ended }
+}
+
 /** A round, answered by a tap or by an arrangement as its mechanic says. */
-export function Board({ round, onNext }: { round: Round; onNext: () => void }) {
+export function Board({ round, onNext, onAnswered }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void }) {
   const queryClient = useQueryClient()
   useEffect(() => { say(round.say) }, [round.say])
   const next = () => {
@@ -84,7 +173,7 @@ export function Board({ round, onNext }: { round: Round; onNext: () => void }) {
     queryClient.removeQueries({ queryKey: ['round'] })
     onNext()
   }
-  return PLACE_MECHANICS.includes(round.mechanic) ? <Arrange round={round} onNext={next} /> : <Choose round={round} onNext={next} />
+  return PLACE_MECHANICS.includes(round.mechanic) ? <Arrange round={round} onNext={next} onAnswered={onAnswered} /> : <Choose round={round} onNext={next} onAnswered={onAnswered} />
 }
 
 /** The heading every round shares: the prompt, Say it again, and once it is over what happened and Next. */
@@ -103,8 +192,9 @@ function RoundHeader({ round, over, onNext }: { round: Round; over: 'right' | 'm
 
 const marks = { wrong: 'Not this one', right: 'Right', answer: 'This one' }
 
-function Choose({ round, onNext }: { round: Round; onNext: () => void }) {
+function Choose({ round, onNext, onAnswered }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void }) {
   const [turn, setTurn] = useState<Turn>({ tapped: [] })
+  const attempt = useAttempt(onAnswered)
   const state = outcome(round, turn)
   const done = state !== 'playing'
 
@@ -116,6 +206,9 @@ function Choose({ round, onNext }: { round: Round; onNext: () => void }) {
     const next = { tapped: [...turn.tapped, id] }
     setTurn(next)
     say(feedback(round, next))
+    attempt.answered({ option: id })
+    const after = outcome(round, next)
+    if (after !== 'playing') attempt.ended(after)
   }
 
   return (
@@ -155,8 +248,9 @@ function Show({ round }: { round: Round }) {
 
 const placeMarks = { held: 'Picked up', right: 'Right', wrong: 'Not yet' }
 
-function Arrange({ round, onNext }: { round: Round; onNext: () => void }) {
+function Arrange({ round, onNext, onAnswered }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void }) {
   const [placement, setPlacement] = useState<Placement>({})
+  const attempt = useAttempt(onAnswered)
   const [checks, setChecks] = useState(0)
   // The arrangement at the last check: a place keeps its mark until what is in it changes.
   const [checked, setChecked] = useState<Placement | null>(null)
@@ -180,6 +274,9 @@ function Arrange({ round, onNext }: { round: Round; onNext: () => void }) {
     setChecks(n)
     setChecked(placement)
     say(placeFeedback(round, placement, n))
+    attempt.answered({ placement: Object.fromEntries(Object.entries(placement).filter((e): e is [string, string] => e[1] !== undefined)) })
+    const after = placeOutcome(round, n, arrangedRight(round, placement))
+    if (after !== 'playing') attempt.ended(after)
   }
 
   const placed = Object.values(placement).some(Boolean)

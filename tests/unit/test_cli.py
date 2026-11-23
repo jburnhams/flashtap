@@ -94,3 +94,33 @@ def test_content_list_json_is_the_api_shape(capsys):
     s = json.loads(capsys.readouterr().out)
     assert set(s) == {"packs", "skills", "objectives", "phonics"}
     assert len(s["objectives"]) == 15
+
+
+def test_learners_list_and_rebuild(capsys, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from flashtap.server.app import create_app
+
+    assert cli.main(["learners", "list"]) == 0
+    assert "no learners yet" in capsys.readouterr().out
+    app = create_app()
+    c = TestClient(app)
+    fox = c.post("/api/learners", json={"nickname": "Fox"}).json()["id"]
+    assert cli.main(["learners", "list"]) == 0
+    assert f"{fox}  Fox  0 round(s), last played never" in capsys.readouterr().out
+
+    export = c.get(f"/api/learners/{fox}/export").json()
+    saved = tmp_path / "fox.json"
+    saved.write_text(json.dumps(export), encoding="utf-8")
+    assert cli.main(["learners", "rebuild", str(saved)]) == 0
+    assert "ok: 0 event(s) rebuild the" in capsys.readouterr().out
+    assert cli.main(["learners", "rebuild", str(saved), "--current-packs"]) == 0
+    capsys.readouterr()
+
+    export["skills"][0]["state"] = "retained"
+    saved.write_text(json.dumps(export), encoding="utf-8")
+    assert cli.main(["learners", "rebuild", str(saved)]) == 1
+    out = capsys.readouterr().out
+    assert "state was 'retained', rebuilt 'unobserved'" in out
+    assert "1 difference(s) rebuilding 0 event(s)" in out
+    app.state.learner_engine.dispose()

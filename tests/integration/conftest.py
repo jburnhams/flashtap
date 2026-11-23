@@ -1,7 +1,7 @@
 """Integration-suite fixtures: the CLI (in-process and as a real process) and the HTTP API over real on-disk settings."""
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -25,8 +25,11 @@ def cli_subprocess() -> Callable[..., CliResult]:
 
 
 @pytest.fixture
-def client() -> TestClient:
-    """The HTTP API over the real settings file."""
+def client() -> Iterator[TestClient]:
+    """The HTTP API over the real settings file and a fresh learner database (tests/conftest.py)."""
     from flashtap.server.app import create_app
 
-    return TestClient(create_app())
+    app = create_app()
+    yield TestClient(app)
+    if (engine := getattr(app.state, "learner_engine", None)) is not None:
+        engine.dispose()

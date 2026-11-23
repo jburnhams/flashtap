@@ -1,5 +1,19 @@
 # Progress log
 
+## 2026-11-23: the learner baseline (plan PR 4)
+
+- Asked for: the next PR of the plan, P2: learner records on `strata_python.db`, rule and BKT estimators behind one interface, derived reporting states, an adult Learner screen with evidence provenance, export and delete. Exit: rebuilding from the event log reproduces identical estimates.
+- Estimates are not stored at all. The spec's `LearnerEstimate` is a cache, and a cache is the one thing that can disagree with the log; computing the profile from the attempts on each read makes every read a rebuild, and keeps the exit criterion true by construction. It is cheap at this size (a learner's few hundred rounds); a cache can come with P3 if the scheduler needs one, checked against this.
+- The server judges the answer. The browser sends the round's (kind, version, choices, seed) and the first answer, never whether it was right; the server rebuilds the round and decides. A version no longer kept is refused rather than guessed at.
+- Which attempts count is decided in one place (`evidence.py`), not in each estimator: only the first answer (§10); a wrong answer held back while a confound of the round is unseen (a miscount or a numeral not yet read?), counted once that skill has been shown; secondary and confound skills credited only for a right answer. Every reason is shown beside the attempt on the Learner screen.
+- A right answer where a skill was only secondary or a confound moves its estimates, but cannot make it independent: that needs three right answers in rounds written to assess it (§8: a correct multi-skill task is not proof of each prerequisite). Seen in the first run: Counting's numeral confound reached P(known) 0.997 from counting rounds alone and was reported independent; it now stays emerging.
+- Independent needs BKT's P(known) of 0.85 and 4 of the last 5 counted answers right (the rule baseline): BKT alone climbed to 0.89 on 5 right of 7 with two misses in the last five.
+- Ordering is (presented_at, event_id): attempts queued and sent late, or twice, land in the same place, and the replay test sends the same 60 attempts in shuffled order to a second learner and gets identical reports.
+- Delete is a hard delete of every row, explicit child rows first rather than trusting `ON DELETE CASCADE` alone: a SQLite connection without foreign keys on would leave the attempts behind silently. Strike-out (a tombstone) is the correction for one round and keeps the log append-only.
+- Session ids come from the browser (one per learner while Play is open), so the server needs no session endpoint until P3's scheduler asks for one. Ids are 32 hex digits from `crypto.getRandomValues`: `crypto.randomUUID` needs a secure context, and the app is often served over plain http on a home network.
+- With no database configured the records go in `~/.flashtap/learners.db`, so a checkout or a deployment that has not been given a Postgres schema yet still records. Moving to Postgres does not carry them over.
+- strata-react had every component needed (`DataTable` expansion, `useUndoable`, `AlertDialog`, `Status`, `MetricStrip`); nothing was added there. One finding: an `useUndoable` removal committed when its owner unmounts, with no `onError`, rethrows the failure as an unhandled rejection; the tests undo or flush before unmounting, as its docs say.
+
 ## 2026-11-23: the mechanics, new kinds of round (plan PR 3)
 
 - Asked for: the next PR of the plan, the eight mechanics with templates that declare their Q-matrix roles and named distractor generators.
