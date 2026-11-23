@@ -17,11 +17,18 @@
 // grown-up can bookmark one. It is a select, not a row of toggles: thirteen names do not fit.
 //
 // Who is playing is the second select, also in the URL (?learner=<id>), so "Play as Fox" on the
-// Learners screen is a link. With a learner chosen, each round is sent to the server once it ends
-// (or once Next or a change of kind leaves it half done) with its first answer, how many tries it
-// took and how it ended; the server rebuilds the round and judges the answer itself. With nobody
-// chosen nothing is sent. A round the server did not take says so in one quiet line, never to the
-// child in words.
+// Learners screen is a link. With a learner chosen, each round is kept once it ends (or once Next or
+// a change of kind leaves it half done) with its first answer, how many tries it took and how it
+// ended, and sent to the server, which rebuilds the round and judges the answer itself. With nobody
+// chosen nothing is kept.
+//
+// Offline (spec §14). Answers and faces wait on the device until the server takes them (`answers` in api.ts; the
+// Layout shows how many wait, never to the child in words). Play goes on without waiting for them. When a round
+// cannot be fetched, Play plays one the server made earlier and the device kept (src/reserve.ts), and says so in one
+// quiet line; the answer is judged by the server when it lands, like any other. "Chosen for them" cannot ask the
+// engine while the server is away (each decision follows from the answer before it), so Play keeps the learner going
+// with kept rounds of the kinds the engine chose this visit, recorded as the device's choice (asked "offline") in a
+// sitting of their own, and asks the engine again after each one: once it answers, the session goes on from there.
 //
 // "Chosen for them" (?mode=next) hands the choice to the adaptive engine (src/flashtap/engine/): Play starts a
 // session for the learner and asks for each decision by number, so a reload or a retry gets the same round back. A
@@ -38,7 +45,9 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, ButtonLink, ChoiceGrid, ChoiceGridSkeleton, DataView, Done, EmptyState, format, Field, NativeSelect, PageHeader, PlaceBoard, SayAgain, Skeleton, speak, useLoad, useSearchParam, type ChoiceState, type Load, type PlaceState } from 'strata-react'
-import { api, isPlayChoice, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type Face, type LearnerRow, type Mode, type Next, type OfferOut, type Option, type PlayChoice, type Round, type SessionInfo, type Settings } from '../api'
+import { api, isPlayChoice, keepAttempt, keepRating, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type Face, type LearnerRow, type Mode, type Next, type OfferOut, type Option, type PlayChoice, type Round, type SessionInfo, type Settings } from '../api'
+import { isRefusal, type Delivery } from '../outbox'
+import { refresh, take } from '../reserve'
 import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRight, solution, type Placement, type Turn } from '../play'
 // Every prompt and answer is said aloud in UK English (the content's dialect): a learner who cannot read yet still
 // needs the prompt. Browser voices cannot say an isolated sound such as /m/; recorded clips replace this for phonics
@@ -123,48 +132,69 @@ function WhoPlays({ learners, recording, failed }: { learners: LearnerRow[]; rec
 /** What a round reports once it ends: the rest of an attempt comes from the round and who is playing. */
 export type Answered = Pick<AttemptIn, 'first_answer' | 'tries' | 'outcome' | 'presented_at' | 'answered_at'>
 
+/** A round to play: fresh from the server, or one the device kept for when the server cannot be reached. */
+type Played = { round: Round; kept: boolean }
+
+/** A fresh round of `mode`, topping up the kept ones; when the server cannot be reached (not when it refuses), a kept one. */
+async function freshOrKept(mode: Mode): Promise<Played> {
+  try {
+    const round = await api.round(mode)
+    void refresh(mode, round)
+    return { round, kept: false }
+  } catch (e) {
+    const round = isRefusal(e) ? null : take(mode)
+    if (round) return { round, kept: true }
+    throw e
+  }
+}
+
+const KEPT = 'The server can’t be reached, so this round is one kept on this device. Answers are sent when it is back.'
+
+/** Keeps a learner's answer to send, and refreshes what the screens show of them once the server has it. */
+function useKeep() {
+  const queryClient = useQueryClient()
+  return useCallback(
+    (who: LearnerRow, attempt: Omit<AttemptIn, 'learner_id' | 'event_id'>): { id: string; delivered: Promise<Delivery> } => {
+      const id = newId()
+      const delivered = keepAttempt({ ...attempt, event_id: id, learner_id: who.id }, `${who.nickname}, ${modeLabels[attempt.mode]}`)
+      void delivered.then(d => {
+        if (d === 'sent') void queryClient.invalidateQueries({ queryKey: ['learners'] })
+      })
+      return { id, delivered }
+    },
+    [queryClient],
+  )
+}
+
+/** Keeps a face for the answer `eventId`; a face the server refused says so under the faces. */
+function rate(who: LearnerRow, eventId: string, value: Face): Promise<unknown> {
+  return keepRating(eventId, value, `${who.nickname}, a face`).then(d => (d === 'refused' ? Promise.reject(new Error('refused')) : d))
+}
+
 /** One round after another in `mode`: each Next asks the server for a new one. Every `rateEvery`th round a recorded
  * learner is asked how it was. */
 function Game({ mode, learner, session, rateEvery }: { mode: Mode; learner: LearnerRow | null; session: string; rateEvery: number }) {
   const [n, setN] = useState(0)
-  const [unsaved, setUnsaved] = useState(false)
-  const sent = useRef<Promise<string | null>>(Promise.resolve(null))
-  const queryClient = useQueryClient()
+  const last = useRef('') // the last answer kept: a face is offered only after one
+  const keep = useKeep()
   // A fresh round for every visit (a change of kind or of who is playing remounts this Game): a round left
   // half done and shown again with its answers forgotten would let a retry be recorded as a new first answer.
   const [visit] = useState(newId)
-  const round = useLoad({ queryKey: keys.round(mode, visit, n), queryFn: ({ signal }) => api.round(mode, signal), staleTime: Infinity })
-  const record = useCallback(
-    (who: LearnerRow, r: Round, a: Answered) => {
-      const id = newId()
-      sent.current = api.recordAttempt({ event_id: id, learner_id: who.id, session_id: session, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: mode, ...a }).then(
-        () => {
-          setUnsaved(false)
-          void queryClient.invalidateQueries({ queryKey: ['learners'] })
-          return id
-        },
-        () => {
-          setUnsaved(true)
-          return null
-        },
-      )
-    },
-    [session, mode, queryClient],
-  )
+  const round = useLoad({ queryKey: keys.round(mode, visit, n), queryFn: () => freshOrKept(mode), staleTime: Infinity })
+  const record = (who: LearnerRow, r: Round, a: Answered) => {
+    last.current = keep(who, { session_id: session, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: mode, ...a }).id
+  }
   const asking = learner !== null && rateEvery > 0 && (n + 1) % rateEvery === 0
   return (
-    <>
-      <DataView state={round} isEmpty={r => r.options.length === 0 && r.pieces.length === 0} skeleton={<RoundSkeleton />} empty={<EmptyState title="Nothing to play">The server sent a round with no pictures.</EmptyState>}>
-        {r => <Board key={`${r.mode}-${r.seed}`} round={r} onNext={() => setN(x => x + 1)} onAnswered={learner ? a => record(learner, r, a) : undefined} onRated={asking ? v => rateAfter(sent.current, v) : undefined} />}
-      </DataView>
-      {unsaved && <p role="status" className="type-caption text-muted-foreground">The last round was not saved for {learner?.nickname}: the server did not take it.</p>}
-    </>
+    <DataView state={round} isEmpty={p => p.round.options.length === 0 && p.round.pieces.length === 0} skeleton={<RoundSkeleton />} empty={<EmptyState title="Nothing to play">The server sent a round with no pictures.</EmptyState>}>
+      {({ round: r, kept }) => (
+        <div className="grid gap-4">
+          <Board key={`${r.mode}-${r.seed}`} round={r} onNext={() => setN(x => x + 1)} onAnswered={learner ? a => record(learner, r, a) : undefined} onRated={asking && learner ? v => rate(learner, last.current, v) : undefined} />
+          {kept && <p className="type-caption text-muted-foreground">{KEPT}</p>}
+        </div>
+      )}
+    </DataView>
   )
-}
-
-/** Sends a face once the round it rates has been saved; a round the server did not take is not rated. */
-function rateAfter(saved: Promise<string | null>, value: Face): Promise<unknown> {
-  return saved.then(id => (id ? api.rate(id, value) : Promise.reject(new Error('The round was not saved, so it cannot be rated.'))))
 }
 
 /** A session the engine plans for `learner`: started once per visit, then one decision after another. */
@@ -178,54 +208,115 @@ function Planned({ learner }: { learner: LearnerRow }) {
   )
 }
 
+/** The engine could not be reached for a decision: Play goes on with kept rounds until it can. */
+type Away = { action: 'away' }
+const AWAY: Away = { action: 'away' }
+
+/** Decision `seq`, or Away when the server cannot be reached (a refusal is still an error). */
+function nextOrAway(session: string, seq: number): Promise<Next | Away> {
+  return api.next(session, seq).catch((e: unknown) => {
+    if (isRefusal(e)) throw e
+    return AWAY
+  })
+}
+
 /** Decision `seq` of the session, asked for by number so a retry returns the same one; each Next asks for the one after. */
 function Decisions({ session, learner }: { session: SessionInfo; learner: LearnerRow }) {
   const [seq, setSeq] = useState(0)
-  const [unsaved, setUnsaved] = useState(false)
   const queryClient = useQueryClient()
-  const decision = useLoad({ queryKey: keys.next(session.id, seq), queryFn: () => api.next(session.id, seq), staleTime: Infinity })
-  // The answer being saved, if any: the next decision is asked for only once it has landed (or failed), so the
-  // engine chooses knowing it; asked too soon, a third miss would not yet show and no break would be offered.
-  const saving = useRef<Promise<string | null>>(Promise.resolve(null))
-  // A face is sent after its round is saved; the next decision waits for both, so the engine sees the face too.
-  const rating = useRef<Promise<unknown>>(Promise.resolve())
-  const onward = () => { void Promise.allSettled([saving.current, rating.current]).then(() => setSeq(n => n + 1)) }
+  const keep = useKeep()
+  const decision = useLoad({ queryKey: keys.next(session.id, seq), queryFn: () => nextOrAway(session.id, seq), staleTime: Infinity })
+  // The kinds the engine chose this visit, newest first: what Play falls back on while the server is away.
+  const [chosen, setChosen] = useState<Mode[]>([])
+  // The answer and face being sent, if any: the next decision is asked for only once their first try is over, so the
+  // engine chooses knowing them; asked too soon, a third miss would not yet show and no break would be offered. A try
+  // that found the server away does not hold Play up: the next decision then finds it away too.
+  const sending = useRef<Promise<unknown>[]>([])
+  const onward = () => { void Promise.allSettled(sending.current).then(() => setSeq(n => n + 1)) }
+  const last = useRef('') // the last answer kept: a face is offered only after one
   const record = (d: Next, r: Round, a: Answered) => {
-    const id = newId()
-    saving.current = api.recordAttempt({ event_id: id, learner_id: learner.id, session_id: session.id, decision_id: d.id, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: 'next', ...a }).then(
-      () => {
-        setUnsaved(false)
-        void queryClient.invalidateQueries({ queryKey: ['learners'] })
-        return id
-      },
-      () => {
-        setUnsaved(true)
-        return null
-      },
-    )
+    const kept = keep(learner, { session_id: session.id, decision_id: d.id, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: 'next', ...a })
+    last.current = kept.id
+    sending.current = [kept.delivered]
   }
-  const rate = (v: Face) => (rating.current = rateAfter(saving.current, v))
-  const picked = (n: Next) => queryClient.setQueryData(keys.next(session.id, n.seq), n)
+  const rated = (v: Face) => {
+    const p = rate(learner, last.current, v)
+    sending.current = [...sending.current, p]
+    return p
+  }
+  const back = (n: Next) => queryClient.setQueryData(keys.next(session.id, n.seq), n)
   return (
-    <>
-      <DataView state={decision} isEmpty={() => false} skeleton={<RoundSkeleton />} empty={<EmptyState title="Nothing chosen">The server chose nothing.</EmptyState>}>
-        {d =>
-          (d.action === 'round' || d.action === 'choice') && d.round ? (
-            <div className="grid gap-4">
-              <Board key={d.id} round={d.round} onNext={onward} onAnswered={a => record(d, d.round as Round, a)} onRated={d.rate ? rate : undefined} />
-              <p className="type-caption text-muted-foreground">Why this round: {d.why}</p>
-            </div>
-          ) : d.action === 'choice' && d.offers ? (
-            <PickOne decision={d} offers={d.offers} onPicked={picked} />
-          ) : d.action === 'break' ? (
-            <BreakOffer decision={d} onContinue={onward} />
-          ) : (
-            <SessionOver learner={learner} decision={d} />
-          )
-        }
-      </DataView>
-      {unsaved && <p role="status" className="type-caption text-muted-foreground">The last round was not saved for {learner.nickname}: the server did not take it.</p>}
-    </>
+    <DataView state={decision} isEmpty={() => false} skeleton={<RoundSkeleton />} empty={<EmptyState title="Nothing chosen">The server chose nothing.</EmptyState>}>
+      {d =>
+        d.action === 'away' ? (
+          <AwayRounds key={seq} session={session} seq={seq} learner={learner} kinds={chosen} onBack={back} />
+        ) : (d.action === 'round' || d.action === 'choice') && d.round ? (
+          <div className="grid gap-4">
+            <Chosen round={d.round} onChosen={m => setChosen(k => [m, ...k.filter(x => x !== m)])} />
+            <Board key={d.id} round={d.round} onNext={onward} onAnswered={a => record(d, d.round as Round, a)} onRated={d.rate ? rated : undefined} />
+            <p className="type-caption text-muted-foreground">Why this round: {d.why}</p>
+          </div>
+        ) : d.action === 'choice' && d.offers ? (
+          <PickOne decision={d} offers={d.offers} onPicked={back} />
+        ) : d.action === 'break' ? (
+          <BreakOffer decision={d} onContinue={onward} />
+        ) : (
+          <SessionOver learner={learner} decision={d} />
+        )
+      }
+    </DataView>
+  )
+}
+
+/** Notes a kind the engine chose and tops up the rounds kept of it, so they are there if the server goes. */
+function Chosen({ round, onChosen }: { round: Round; onChosen: (m: Mode) => void }) {
+  const latest = useRef(onChosen)
+  useEffect(() => { latest.current = onChosen })
+  useEffect(() => {
+    latest.current(round.mode)
+    void refresh(round.mode, round)
+  }, [round])
+  return null
+}
+
+/** The first kept round of the kinds the engine chose, newest kind first. */
+function takeKept(kinds: readonly Mode[]): Round | null {
+  for (const k of kinds) {
+    const r = take(k)
+    if (r) return r
+  }
+  return null
+}
+
+/**
+ * While the engine cannot be reached: kept rounds of the kinds it chose this visit, answered into a sitting of their
+ * own as the device's choice (asked "offline", no decision), and after each Next the engine is asked again for the
+ * decision Play was waiting for. Once it answers, `onBack` puts that decision on screen and the session goes on.
+ */
+function AwayRounds({ session, seq, learner, kinds, onBack }: { session: SessionInfo; seq: number; learner: LearnerRow; kinds: readonly Mode[]; onBack: (n: Next) => void }) {
+  const [sitting] = useState(newId)
+  const [round, setRound] = useState<Round | null>(() => takeKept(kinds))
+  const [asking, setAsking] = useState(false)
+  const keep = useKeep()
+  const again = () => {
+    setAsking(true)
+    api.next(session.id, seq).then(onBack, () => {
+      setAsking(false)
+      setRound(takeKept(kinds))
+    })
+  }
+  const record = (r: Round, a: Answered) => { keep(learner, { session_id: sitting, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: 'offline', ...a }) }
+  if (!round)
+    return (
+      <EmptyState title="No rounds kept on this device" action={<Button variant="default" onClick={again} disabled={asking}>Try the server again</Button>}>
+        The server can’t be reached, and the rounds this device keeps for that have all been played. Answers already given are kept here and sent when it is back.
+      </EmptyState>
+    )
+  return (
+    <div className="grid gap-4">
+      <Board key={`${round.mode}-${round.seed}`} round={round} onNext={again} onAnswered={a => record(round, a)} />
+      <p className="type-caption text-muted-foreground">{KEPT}</p>
+    </div>
   )
 }
 

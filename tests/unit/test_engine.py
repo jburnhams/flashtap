@@ -615,6 +615,75 @@ def test_answers_and_decisions_sent_at_once_still_replay_exactly() -> None:
     assert (out.reproduced, out.differences) == (out.decisions, [])
 
 
+def _kept(
+    learner: str, r: rounds.Round, shown: datetime, *, session: str, asked: str, decision: str | None = None
+) -> store.AttemptIn:
+    """An answer the device kept while offline: answered (right) at `shown`, sent whenever the test records it."""
+    first = (
+        store.FirstAnswer(placement={k: s.id for s in r.places for k in s.takes[: s.holds]})
+        if r.places
+        else store.FirstAnswer(option=r.answer)
+    )
+    return store.AttemptIn.model_validate(
+        {
+            "event_id": uuid.uuid4().hex,
+            "learner_id": learner,
+            "session_id": session,
+            "mode": r.mode,
+            "version": r.version,
+            "choices": r.choices,
+            "seed": r.seed,
+            "content": r.content,
+            "asked": asked,
+            "presented_at": shown,
+            "answered_at": shown + timedelta(seconds=4),
+            "first_answer": first,
+            "tries": 1,
+            "outcome": "right",
+            "decision_id": decision,
+        }
+    )
+
+
+def test_answers_kept_offline_and_sent_late_leave_every_decision_replaying_exactly(
+    db_session: Session, fox: str
+) -> None:
+    """The device loses the server after decision 0: its answer and the rounds it plays from its reserve wait on the
+    device (asked "offline", their own sitting), and land ten minutes later, one of them twice (an acknowledgement
+    lost). A decision made while they waited did not see them, one made after did, and both replay exactly: a decision
+    is remade from what had been received by its time, whenever the answers were played."""
+    info = sessions.start(db_session, fox, Config(choices=4, tries=0, max_rounds=20, break_every=0), at=T0)
+    d0 = sessions.next_decision(db_session, info.id, 0, G, TITLES, at=T0)
+    assert d0.round is not None
+    kept = [_kept(fox, d0.round, T0 + timedelta(seconds=1), session=info.id, asked="next", decision=d0.id)]
+    away = uuid.uuid4().hex
+    for i in range(4):
+        r = rounds.generate(d0.round.mode, 4)  # from GET /api/rounds, kept on the device
+        kept.append(_kept(fox, r, T0 + timedelta(minutes=1 + i), session=away, asked="offline"))
+    d1 = sessions.next_decision(db_session, info.id, 1, G, TITLES, at=T0 + timedelta(minutes=5))  # a flaky moment
+    back = T0 + timedelta(minutes=10)
+    acks = [store.record(db_session, a, at=back + timedelta(seconds=i)) for i, a in enumerate(kept)]
+    assert [a.duplicate for a in acks] == [False] * 5
+    assert store.record(db_session, kept[0], at=back + timedelta(minutes=1)).duplicate  # sent again: logged once
+    d2 = sessions.next_decision(db_session, info.id, 2, G, TITLES, at=back + timedelta(minutes=2))
+    log = store.events(db_session, fox)
+    assert [e.asked for e in log] == ["next", "offline", "offline", "offline", "offline"]
+    assert all(e.received_at is not None and e.received_at >= back for e in log)
+    out = sessions.evaluate(db_session, sessions.ReplayIn(learner_id=fox), G)
+    assert (out.decisions, out.reproduced, out.differences) == (3, 3, [])
+    # What d1 knew and what d2 knew differ by exactly the late answers.
+    assert len(replay.as_of(log, d1.at)) == 0
+    assert len(replay.as_of(log, d2.at)) == 5
+
+
+def test_a_round_the_device_chose_offline_answers_no_decision(db_session: Session, fox: str) -> None:
+    info = sessions.start(db_session, fox, CONFIG, at=T0)
+    d0 = sessions.next_decision(db_session, info.id, 0, G, TITLES, at=T0)
+    assert d0.round is not None
+    with pytest.raises(ValueError, match="answers no engine decision"):
+        store.record(db_session, _kept(fox, d0.round, T0, session=info.id, asked="offline", decision=d0.id))
+
+
 # P4: choices of two, ratings, overrides
 
 
