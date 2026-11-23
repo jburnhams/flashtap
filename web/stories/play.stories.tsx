@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { quickLookGoes, quickLookStays, roundError, roundLoading } from '../src/mocks/handlers'
+import { FOX } from '../src/mocks/learners'
 import { AppAt } from './app-at'
 
 const meta = {
@@ -24,6 +25,8 @@ export const GiveANumber: Story = { render: () => <AppAt route="/?mode=give" /> 
 export const Order: Story = { render: () => <AppAt route="/?mode=order" /> }
 export const Capitals: Story = { render: () => <AppAt route="/?mode=capitals" /> }
 export const SortBySound: Story = { render: () => <AppAt route="/?mode=sort_sounds" /> }
+/** A learner chosen in Who is playing: each round is recorded for them. */
+export const PlayingAsFox: Story = { render: () => <AppAt route={`/?learner=${FOX}`} /> }
 export const Loading: Story = { beforeEach: ({ msw }) => msw.use(roundLoading) }
 export const ServerError: Story = { beforeEach: ({ msw }) => msw.use(roundError) }
 export const Phone: Story = { tags: ['visual-phone'] }

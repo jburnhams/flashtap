@@ -73,6 +73,73 @@ export interface ContentSummary {
   phonics: { id: string; title: string; dialect: string; sets: PhonicsSetRow[] }[]
 }
 
+/** A learner: a random id and a nickname, nothing else (AGENTS.md rule 8). */
+export interface LearnerRow { id: string; nickname: string; created_at: string; attempts: number; last_played: string | null }
+/** Derived reporting states (src/flashtap/learners/report.py), lowest first. Unobserved is not "not mastered". */
+export const SKILL_STATES = ['unobserved', 'introduced', 'emerging', 'independent', 'generalised', 'retained'] as const
+export type SkillState = (typeof SKILL_STATES)[number]
+/** One estimator's number for a skill: `bkt@1` P(known), or `rule@1` the share right of the last five. */
+export interface Estimate { model: string; p: number; used: number }
+export interface SkillReport {
+  skill: string
+  title: string
+  domain: string
+  strand: string
+  state: SkillState
+  /** BKT first; empty while unobserved (a prior is not evidence). */
+  estimates: Estimate[]
+  counted: number
+  right: number
+  /** Attempts that touched the skill but did not count, each with its reason in the evidence. */
+  held: number
+  mechanics: Mechanic[]
+  last_seen: string | null
+}
+/** `GET /api/learners/{id}/profile`. */
+export interface Profile { learner: LearnerRow; sessions: number; struck: number; models: { model: string; description: string }[]; skills: SkillReport[] }
+/** `GET /api/learners/{id}/skills/{skill}/evidence`: one attempt as it bears on one skill, newest first. */
+export interface EvidenceRow {
+  event_id: string
+  at: string
+  mode: Exclude<Mode, 'mixed'>
+  version: number
+  choices: number
+  seed: number
+  role: 'primary' | 'secondary' | 'confound'
+  /** The first answer in words. */
+  answer: string
+  correct: boolean
+  counted: boolean
+  /** Why it did not count; empty when it did. */
+  why: string
+  struck: boolean
+  tries: number
+  outcome: 'right' | 'missed' | 'left'
+}
+/** `POST /api/attempts`: one round answered. The server rebuilds the round and judges `first_answer` itself. */
+export interface AttemptIn {
+  event_id: string
+  learner_id: string
+  session_id: string
+  mode: Exclude<Mode, 'mixed'>
+  version: number
+  choices: number
+  seed: number
+  /** The kind the grown-up picked: mixed, or the kind itself. */
+  asked: Mode
+  presented_at: string
+  answered_at: string
+  first_answer: { option: string } | { placement: Record<string, string> }
+  tries: number
+  outcome: 'right' | 'missed' | 'left'
+}
+
+/** A random 32-hex-digit id for an event or a session. Not `crypto.randomUUID`: that needs a secure context, and the
+ * app is often served over plain http on a home network; `getRandomValues` works anywhere. */
+export function newId(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('')
+}
+
 // Where the app is served from: '' at the server's own root, '/prefix' behind a reverse proxy. Read
 // from the page's base URL: the server gives every page a relative <base> back to its root, and
 // assets are relative (vite.config.ts base './'), so one build works in both places.
@@ -86,6 +153,8 @@ export const paths = {
   modes: '/api/modes',
   round: '/api/round',
   content: '/api/content',
+  learners: '/api/learners',
+  attempts: '/api/attempts',
 } as const
 
 /** The query keys the screens share, so a write can invalidate every read it changes. */
@@ -94,6 +163,9 @@ export const keys = {
   modes: ['modes'],
   content: ['content'],
   round: (mode: Mode, n: number) => ['round', mode, n],
+  learners: ['learners'],
+  profile: (id: string) => ['learners', id, 'profile'],
+  evidence: (id: string, skill: string) => ['learners', id, 'evidence', skill],
 } as const
 
 export function roundUrl(mode: Mode) {
@@ -108,7 +180,17 @@ export const api = {
   modes: () => fetchJson<ModeInfo[]>(withBase(paths.modes)),
   round: (mode: Mode, signal?: AbortSignal) => fetchJson<Round>(roundUrl(mode), { signal }),
   content: () => fetchJson<ContentSummary>(withBase(paths.content)),
+  learners: () => fetchJson<LearnerRow[]>(withBase(paths.learners)),
+  addLearner: (nickname: string) => fetchJson<LearnerRow>(withBase(paths.learners), send('POST', { nickname })),
+  deleteLearner: (id: string) => fetchJson<undefined>(withBase(`${paths.learners}/${id}`), { method: 'DELETE' }),
+  profile: (id: string) => fetchJson<Profile>(withBase(`${paths.learners}/${id}/profile`)),
+  evidence: (id: string, skill: string) => fetchJson<EvidenceRow[]>(withBase(`${paths.learners}/${id}/skills/${skill}/evidence`)),
+  recordAttempt: (a: AttemptIn) => fetchJson<{ event_id: string; first_correct: boolean; duplicate: boolean }>(withBase(paths.attempts), send('POST', a)),
+  strike: (eventId: string, reason: string) => fetchJson<undefined>(withBase(`${paths.attempts}/${eventId}/strike`), send('POST', { reason })),
 }
+
+/** The export download: a plain link, so the browser saves the file the server names. */
+export const exportUrl = (id: string) => withBase(`${paths.learners}/${id}/export`)
 
 // The server's own limits (src/flashtap/rounds.py), checked here too so the field says why before sending.
 export const limits = { minChoices: 2, maxChoices: 8 } as const

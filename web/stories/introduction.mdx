@@ -11,10 +11,14 @@ switch between light and dark.
 
 - **Play**: a round per kind (`?mode=`), its prompt as the `PageHeader` title, large tiles from
   strata-react's `ChoiceGrid` (or its `PlaceBoard` for a round answered by moving pictures, with
-  Check), a `NativeSelect` for the kind of round with its choice in the URL.
+  Check), a `NativeSelect` for the kind of round and one for who is playing, both in the URL.
 - **Content**: the content packs for the grown-up. A `MetricStrip`, `Tabs` (Skills, Curriculum,
   Phonics) with the tab in the URL, a `DataTable` of skills whose rows open in place (`useExpanded`,
   open rows in the URL) to show their links, and `Status` for a curriculum goal that is out of scope.
+- **Learners**: a one-field form (`Field action=` with an `AsyncButton`) and a `DataTable` of learners.
+- **Learner**: a learner's skills with their reporting state (`Status`), both estimators and a
+  `DataTable` row that opens to the rounds behind it; striking a round out goes through
+  `useUndoable` and `UndoBar`; deleting the learner is the one `AlertDialog`.
 - **Settings**: `Tabs` with the tab in the URL, a form started from the server's values
   (`NativeSelect`, `NumberField`, `AsyncButton`), `ColorSchemeChoice`.
 

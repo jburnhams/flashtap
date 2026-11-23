@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { quickLookGoes, roundError } from '../../src/mocks/handlers'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { attemptFails, learnersError, quickLookGoes, roundError } from '../../src/mocks/handlers'
 import { openApp, screen, within } from '../utils/render'
 import { mock, server } from '../utils/server'
 import { installSpeech } from '../utils/speech'
@@ -223,5 +223,85 @@ describe('Play, the new kinds of round', () => {
     }
     await user.click(screen.getByRole('button', { name: 'Check' }))
     expect(screen.getByText('That’s right.')).toBeInTheDocument()
+  })
+})
+
+describe('Play records rounds for the learner playing', () => {
+  const FOX = 'a'.repeat(32)
+
+  it('records nothing while nobody is chosen', async () => {
+    const { user } = openApp('/')
+    expect(await screen.findByRole('combobox', { name: 'Who is playing' })).toHaveValue('')
+    expect(screen.getByText('Nobody: rounds are not recorded.')).toBeInTheDocument()
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await screen.findByRole('row', { name: tile('pig') })
+    expect(mock.attempts).toEqual([])
+  })
+
+  it('sends the first answer, the tries and how the round ended, once', async () => {
+    const { user, router } = openApp('/')
+    const who = await screen.findByRole('combobox', { name: 'Who is playing' })
+    await screen.findByRole('option', { name: 'Fox' })
+    await user.selectOptions(who, FOX)
+    expect(router.state.location.search).toBe(`?learner=${FOX}`)
+    await user.click(await screen.findByRole('row', { name: tile('duck') }))
+    expect(mock.attempts).toEqual([]) // still playing
+    await user.click(screen.getByRole('row', { name: tile('cow') }))
+    await vi.waitFor(() => expect(mock.attempts).toHaveLength(1))
+    const [a] = mock.attempts
+    expect(a).toMatchObject({ learner_id: FOX, mode: 'matching', version: 1, choices: 4, seed: 7, asked: 'mixed', first_answer: { option: 'duck' }, tries: 2, outcome: 'right' })
+    expect(a.event_id).toMatch(/^[0-9a-f]{32}$/)
+    expect(Date.parse(a.answered_at)).toBeGreaterThanOrEqual(Date.parse(a.presented_at))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await screen.findByRole('row', { name: tile('pig') })
+    await user.click(screen.getByRole('row', { name: tile('cow') }))
+    await vi.waitFor(() => expect(mock.attempts).toHaveLength(2))
+    expect(mock.attempts[1]).toMatchObject({ first_answer: { option: 'cow' }, tries: 1, outcome: 'right', session_id: a.session_id })
+    expect(mock.attempts[1].event_id).not.toBe(a.event_id)
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Who is playing' }), '')
+    expect(router.state.location.search).toBe('')
+  })
+
+  it('reports a round left half done, and a missed one', async () => {
+    mock.tries = 1
+    const { user } = openApp(`/?learner=${FOX}&mode=counting`)
+    await user.click(await screen.findByRole('row', { name: tile('5') }))
+    await vi.waitFor(() => expect(mock.attempts).toHaveLength(1))
+    expect(mock.attempts[0]).toMatchObject({ mode: 'counting', asked: 'counting', outcome: 'missed', tries: 1 })
+    mock.tries = null
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Kind of round' }), 'matching')
+    await user.click(await screen.findByRole('row', { name: tile('pig') }))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Kind of round' }), 'colours')
+    await vi.waitFor(() => expect(mock.attempts).toHaveLength(2))
+    expect(mock.attempts[1]).toMatchObject({ mode: 'matching', first_answer: { option: 'pig' }, tries: 1, outcome: 'left' })
+  })
+
+  it('sends a placing round’s arrangement at its first check', async () => {
+    mock.tries = 1
+    const { user } = openApp(`/?learner=${FOX}&mode=order`)
+    for (const [n, where] of [['1', 'first'], ['9', 'second']]) {
+      await user.click(await screen.findByRole('button', { name: n }))
+      await user.click(screen.getByRole('button', { name: `Put ${n} in ${where}` }))
+    }
+    await user.click(screen.getByRole('button', { name: 'Check' }))
+    await vi.waitFor(() => expect(mock.attempts).toHaveLength(1))
+    expect(mock.attempts[0]).toMatchObject({ mode: 'order', first_answer: { placement: { n1: 'first', n9: 'second' } }, tries: 1, outcome: 'missed' })
+  })
+
+  it('says quietly when the server did not take a round', async () => {
+    server.use(attemptFails)
+    const { user } = openApp(`/?learner=${FOX}`)
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    expect(await screen.findByText('The last round was not saved for Fox: the server did not take it.')).toBeInTheDocument()
+  })
+
+  it('lets the child play when the learners cannot be loaded', async () => {
+    server.use(learnersError)
+    const { user } = openApp(`/?learner=${FOX}`)
+    expect(await screen.findByText('The learners could not be loaded, so these rounds are not recorded.')).toBeInTheDocument()
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(mock.attempts).toEqual([])
   })
 })

@@ -12,6 +12,7 @@
 // baselines. Look at a diff in tests/visual/output/ before accepting it.
 import { defineVisualConfig } from 'strata-react/visual'
 import { handlers } from './src/mocks/handlers'
+import { FOX } from './src/mocks/learners'
 
 export default defineVisualConfig({
   storybook: 'storybook-static',
@@ -59,6 +60,21 @@ export default defineVisualConfig({
         },
       },
       { name: 'give', path: '/?mode=give' },
+      { name: 'learners', path: '/learners' },
+      {
+        name: 'learner',
+        path: `/learners/${FOX}`,
+        states: {
+          seen: [],
+          evidence: { path: `/learners/${FOX}?open=maths.counting.objects` },
+          delete: {
+            setup: async page => {
+              await page.getByRole('button', { name: 'Delete' }).click()
+              await page.getByRole('alertdialog').waitFor()
+            },
+          },
+        },
+      },
       { name: 'content', path: '/content', states: { skills: [], curriculum: { path: '/content?tab=curriculum' } } },
       { name: 'settings', path: '/settings', states: { play: [], appearance: { path: '/settings?tab=appearance' } } },
     ],
