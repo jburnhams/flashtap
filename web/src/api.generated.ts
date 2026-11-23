@@ -210,6 +210,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/evaluations/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Replay */
+        post: operations["post_replay_api_v1_evaluations_replay_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Session */
+        post: operations["post_session_api_v1_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Next */
+        post: operations["post_next_api_v1_sessions__session_id__next_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -224,6 +275,11 @@ export interface components {
             first_correct: boolean;
         };
         /**
+         * Action
+         * @enum {string}
+         */
+        Action: "round" | "break" | "end";
+        /**
          * AttemptIn
          * @description `POST /api/attempts`: one round answered, sent once the round is over (or left).
          */
@@ -233,9 +289,12 @@ export interface components {
              * Format: date-time
              */
             answered_at: string;
-            asked: components["schemas"]["Mode"];
+            /** Asked */
+            asked: components["schemas"]["Mode"] | "next";
             /** Choices */
             choices: number;
+            /** Decision Id */
+            decision_id?: string | null;
             /** Event Id */
             event_id: string;
             first_answer: components["schemas"]["FirstAnswer"];
@@ -260,6 +319,61 @@ export interface components {
             tries: number;
             /** Version */
             version: number;
+        };
+        /** Candidate */
+        Candidate: {
+            action: components["schemas"]["Why"];
+            /** Contrast */
+            contrast: boolean;
+            /** Diagnostic */
+            diagnostic: number;
+            /** Enjoyment */
+            enjoyment: number;
+            /** Frustration */
+            frustration: number;
+            /** Information */
+            information: number;
+            /** Learning */
+            learning: number;
+            mode: components["schemas"]["Mode"];
+            /** P Right */
+            p_right: number;
+            /** Probability */
+            probability: number;
+            /** Repetition */
+            repetition: number;
+            /** Retention */
+            retention: number;
+            set_aside: components["schemas"]["SetAside"] | null;
+            /** Skill */
+            skill: string;
+            /** Utility */
+            utility: number;
+        };
+        /**
+         * Config
+         * @description A session's settings, snapshotted when it starts (§15 "consent/config snapshot"), so a replay uses the same.
+         */
+        Config: {
+            /**
+             * Break Every
+             * @default 10
+             */
+            break_every: number;
+            /** Choices */
+            choices: number;
+            /**
+             * Max Minutes
+             * @default 15
+             */
+            max_minutes: number;
+            /**
+             * Max Rounds
+             * @default 20
+             */
+            max_rounds: number;
+            /** Tries */
+            tries: number;
         };
         /** ContentSummary */
         ContentSummary: {
@@ -309,6 +423,8 @@ export interface components {
             asked: string;
             /** Choices */
             choices: number;
+            /** Decision Id */
+            decision_id?: string | null;
             /** Event Id */
             event_id: string;
             /** First Answer */
@@ -330,6 +446,8 @@ export interface components {
              * Format: date-time
              */
             presented_at: string;
+            /** Received At */
+            received_at?: string | null;
             /** Seed */
             seed: number;
             /** Session Id */
@@ -338,6 +456,8 @@ export interface components {
             skills: components["schemas"]["SkillUse"][];
             /** Struck */
             struck?: string | null;
+            /** Struck At */
+            struck_at?: string | null;
             /** Tries */
             tries: number;
             /** Version */
@@ -388,6 +508,8 @@ export interface components {
         Export: {
             /** App Version */
             app_version: string;
+            /** Decisions */
+            decisions?: components["schemas"]["Logged"][];
             /** Events */
             events: components["schemas"]["Event"][];
             /**
@@ -397,10 +519,10 @@ export interface components {
             exported_at: string;
             /**
              * Format
-             * @default flashtap-learner@1
-             * @constant
+             * @default flashtap-learner@2
+             * @enum {string}
              */
-            format: "flashtap-learner@1";
+            format: "flashtap-learner@1" | "flashtap-learner@2";
             learner: components["schemas"]["LearnerRow"];
             /** Models */
             models: components["schemas"]["ModelInfo"][];
@@ -442,6 +564,15 @@ export interface components {
             /** Phoneme */
             phoneme: string;
         };
+        /** Gain */
+        Gain: {
+            /** Known After */
+            known_after: number;
+            /** Known Before */
+            known_before: number;
+            /** Policy */
+            policy: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -462,6 +593,41 @@ export interface components {
             last_played: string | null;
             /** Nickname */
             nickname: string;
+        };
+        /**
+         * Logged
+         * @description A decision as stored and exported: the choice, where it was made and when.
+         */
+        Logged: {
+            action: components["schemas"]["Action"];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Candidates */
+            candidates?: components["schemas"]["Candidate"][];
+            /** Choices */
+            choices?: number | null;
+            /** Id */
+            id: string;
+            mode?: components["schemas"]["Mode"] | null;
+            /** Policy */
+            policy: string;
+            /** Probability */
+            probability: number;
+            /** Rationale */
+            rationale: components["schemas"]["Why"][];
+            /** Seed */
+            seed?: number | null;
+            /** Seq */
+            seq: number;
+            /** Session Id */
+            session_id: string;
+            /** Skill */
+            skill?: string | null;
+            /** Version */
+            version?: number | null;
         };
         /**
          * Mechanic
@@ -490,6 +656,47 @@ export interface components {
             description: string;
             /** Model */
             model: string;
+        };
+        /**
+         * Next
+         * @description `POST /api/v1/sessions/{id}/next`: a round to play (`round`, checked, with its tries), an offered break, or the
+         *     end of the session, with the rationale codes, the same in words for a grown-up, and what else was weighed.
+         */
+        Next: {
+            action: components["schemas"]["Action"];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Candidates */
+            candidates: components["schemas"]["Candidate"][];
+            /** Id */
+            id: string;
+            /** Policy */
+            policy: string;
+            /** Probability */
+            probability: number;
+            /** Rationale */
+            rationale: components["schemas"]["Why"][];
+            round: components["schemas"]["Round"] | null;
+            /** Rounds Played */
+            rounds_played: number;
+            /** Seq */
+            seq: number;
+            /** Session Id */
+            session_id: string;
+            /** Skill */
+            skill: string | null;
+            /** Skill Title */
+            skill_title: string | null;
+            /** Why */
+            why: string;
+        };
+        /** NextIn */
+        NextIn: {
+            /** Seq */
+            seq: number;
         };
         /** NicknameIn */
         NicknameIn: {
@@ -610,6 +817,37 @@ export interface components {
          * @enum {string}
          */
         QRole: "primary" | "secondary" | "confound";
+        /**
+         * ReplayIn
+         * @description `POST /api/v1/evaluations/replay`: the policy to replay with (only the current one is kept) and the data, one of
+         *     a learner's records or a simulation.
+         */
+        ReplayIn: {
+            /** Learner Id */
+            learner_id?: string | null;
+            /**
+             * Policy
+             * @default utility@1
+             */
+            policy: string;
+            simulated?: components["schemas"]["SimulatedIn"] | null;
+        };
+        /** ReplayOut */
+        ReplayOut: {
+            /** Dataset */
+            dataset: string;
+            /** Decisions */
+            decisions: number;
+            /** Differences */
+            differences: string[];
+            /** Policy */
+            policy: string;
+            /** Reproduced */
+            reproduced: number;
+            /** Scores */
+            scores: components["schemas"]["Score"][];
+            simulation: components["schemas"]["SimReport"] | null;
+        };
         /** Round */
         Round: {
             /**
@@ -652,8 +890,45 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** Score */
+        Score: {
+            /** Attempts */
+            attempts: number;
+            /** Brier */
+            brier: number;
+            /** Description */
+            description: string;
+            /** Log Loss */
+            log_loss: number;
+            /** Model */
+            model: string;
+        };
+        /** SessionIn */
+        SessionIn: {
+            /** Learner Id */
+            learner_id: string;
+        };
+        /**
+         * SessionInfo
+         * @description `POST /api/v1/sessions`: the session, the policy that will plan it and the settings it runs with.
+         */
+        SessionInfo: {
+            config: components["schemas"]["Config"];
+            /** Id */
+            id: string;
+            /** Learner Id */
+            learner_id: string;
+            /** Policy */
+            policy: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+        };
         /** SessionOut */
         SessionOut: {
+            config?: components["schemas"]["Config"] | null;
             /** Id */
             id: string;
             /**
@@ -661,11 +936,59 @@ export interface components {
              * Format: date-time
              */
             last_at: string;
+            /** Policy */
+            policy?: string | null;
             /**
              * Started At
              * Format: date-time
              */
             started_at: string;
+        };
+        /**
+         * SetAside
+         * @enum {string}
+         */
+        SetAside: "prerequisite_gap" | "frustration_guard" | "just_played";
+        /** SimReport */
+        SimReport: {
+            /** Attempts */
+            attempts: number;
+            /** Beats Rule */
+            beats_rule: boolean;
+            /** Fitted */
+            fitted: string;
+            /** Gains */
+            gains: components["schemas"]["Gain"][];
+            /** Held Out */
+            held_out: number;
+            /** Learners */
+            learners: number;
+            /** Scores */
+            scores: components["schemas"]["Score"][];
+            /** Seed */
+            seed: number;
+            /** Sessions */
+            sessions: number;
+            /** Trained On */
+            trained_on: number;
+        };
+        /** SimulatedIn */
+        SimulatedIn: {
+            /**
+             * Learners
+             * @default 40
+             */
+            learners: number;
+            /**
+             * Seed
+             * @default 1
+             */
+            seed: number;
+            /**
+             * Sessions
+             * @default 6
+             */
+            sessions: number;
         };
         /** SkillReport */
         SkillReport: {
@@ -753,6 +1076,12 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /**
+         * Why
+         * @description Rationale codes (§15 "validated item + rationale codes"): what a decision is for.
+         * @enum {string}
+         */
+        Why: "placement_probe" | "introduce" | "practise" | "spaced_review" | "consolidate" | "diagnostic_contrast" | "easier_after_misses" | "exploration" | "break_due" | "frustration_break" | "session_cap_rounds" | "session_cap_minutes";
     };
     responses: never;
     parameters: never;
@@ -1177,6 +1506,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FlashtapSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_replay_api_v1_evaluations_replay_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplayIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplayOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_session_api_v1_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_next_api_v1_sessions__session_id__next_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NextIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Next"];
                 };
             };
             /** @description Validation Error */

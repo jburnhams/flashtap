@@ -1,5 +1,6 @@
 """Command line: `doctor` checks the environment, `round` prints a round, `content check` and `content list` read the
-content packs, `learners list` and `learners rebuild` read the learner records, `openapi` writes the API's schema (the
+content packs, `learners list` and `learners rebuild` read the learner records, `engine simulate` runs the adaptive
+engine on simulated learners, `openapi` writes the API's schema (the
 source of the web app's types), `set` shows or changes a setting, `serve` starts the web server."""
 
 import argparse
@@ -17,6 +18,8 @@ from flashtap.server.app import PORT
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+
+    from flashtap.learners import store
 
 
 def _create_app() -> "FastAPI":
@@ -132,13 +135,38 @@ def cmd_learners_rebuild(args: argparse.Namespace) -> int:
     _utf8()
     saved = store.Export.model_validate_json(Path(args.export).read_text(encoding="utf-8"))
     problems = store.rebuild(saved, _skills() if args.current_packs else None)
-    for line in problems:
+    same, remade = _replay(saved)
+    for line in [*problems, *remade]:
         print(line)
-    if problems:
-        print(f"{len(problems)} difference(s) rebuilding {len(saved.events)} event(s)")
+    if problems or remade:
+        print(
+            f"{len(problems) + len(remade)} difference(s) rebuilding {len(saved.events)} event(s) and {len(saved.decisions)} decision(s)"
+        )
         return 1
     print(f"ok: {len(saved.events)} event(s) rebuild the {len(saved.skills)} skill estimates exactly")
+    if saved.decisions:
+        print(f"ok: {same} engine decision(s) remade exactly")
     return 0
+
+
+def _replay(saved: "store.Export") -> tuple[int, list[str]]:
+    from flashtap.engine import model, replay
+
+    starts = {x.id: (x.started_at, x.config) for x in saved.sessions}
+    return replay.replay(saved.events, saved.decisions, starts, model.graph())
+
+
+def cmd_engine_simulate(args: argparse.Namespace) -> int:
+    """The plan's exit test (PR 5): exit 1 when the engine's model does not beat the rule baseline on held-out learners."""
+    from flashtap.engine import simulate
+
+    r = simulate.report(args.learners, args.sessions, args.seed)
+    if args.json:
+        print(r.model_dump_json(indent=1))
+    else:
+        for line in simulate.describe(r):
+            print(line)
+    return 0 if r.beats_rule else 1
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -168,6 +196,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     rb.add_argument("export", help="a file from the Learner screen's Export (GET /api/learners/{id}/export)")
     rb.add_argument("--current-packs", action="store_true", help="report on today's skills, not the export's")
     rb.set_defaults(fn=cmd_learners_rebuild)
+    en = sub.add_parser("engine", help="the adaptive engine")
+    esub = en.add_subparsers(dest="engine_cmd", required=True)
+    sm = esub.add_parser(
+        "simulate", help="simulated learners: held-out log loss of each model, skills learnt per policy"
+    )
+    sm.add_argument("--learners", type=int, default=200, help="how many (at least 4; 30%% are held out)")
+    sm.add_argument("--sessions", type=int, default=6, help="sessions each, one to three days apart")
+    sm.add_argument("--seed", type=int, default=1)
+    sm.add_argument("--json", action="store_true")
+    sm.set_defaults(fn=cmd_engine_simulate)
     shared.add_openapi(sub, _create_app)  # web/openapi.json, from the repository root; --check in CI
     shared.add_set(sub, settings.SETTINGS)
     shared.add_serve(sub, run_server, default_port=PORT)

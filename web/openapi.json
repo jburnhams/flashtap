@@ -24,6 +24,15 @@
     "title": "Ack",
     "type": "object"
    },
+   "Action": {
+    "enum": [
+     "round",
+     "break",
+     "end"
+    ],
+    "title": "Action",
+    "type": "string"
+   },
    "AttemptIn": {
     "description": "`POST /api/attempts`: one round answered, sent once the round is over (or left).",
     "properties": {
@@ -33,13 +42,34 @@
       "type": "string"
      },
      "asked": {
-      "$ref": "#/components/schemas/Mode"
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Mode"
+       },
+       {
+        "const": "next",
+        "type": "string"
+       }
+      ],
+      "title": "Asked"
      },
      "choices": {
       "maximum": 8.0,
       "minimum": 2.0,
       "title": "Choices",
       "type": "integer"
+     },
+     "decision_id": {
+      "anyOf": [
+       {
+        "pattern": "^[0-9a-fA-F-]{8,36}$",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Decision Id"
      },
      "event_id": {
       "pattern": "^[0-9a-fA-F-]{8,36}$",
@@ -110,6 +140,133 @@
      "outcome"
     ],
     "title": "AttemptIn",
+    "type": "object"
+   },
+   "Candidate": {
+    "properties": {
+     "action": {
+      "$ref": "#/components/schemas/Why"
+     },
+     "contrast": {
+      "title": "Contrast",
+      "type": "boolean"
+     },
+     "diagnostic": {
+      "title": "Diagnostic",
+      "type": "number"
+     },
+     "enjoyment": {
+      "title": "Enjoyment",
+      "type": "number"
+     },
+     "frustration": {
+      "title": "Frustration",
+      "type": "number"
+     },
+     "information": {
+      "title": "Information",
+      "type": "number"
+     },
+     "learning": {
+      "title": "Learning",
+      "type": "number"
+     },
+     "mode": {
+      "$ref": "#/components/schemas/Mode"
+     },
+     "p_right": {
+      "title": "P Right",
+      "type": "number"
+     },
+     "probability": {
+      "title": "Probability",
+      "type": "number"
+     },
+     "repetition": {
+      "title": "Repetition",
+      "type": "number"
+     },
+     "retention": {
+      "title": "Retention",
+      "type": "number"
+     },
+     "set_aside": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SetAside"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "skill": {
+      "title": "Skill",
+      "type": "string"
+     },
+     "utility": {
+      "title": "Utility",
+      "type": "number"
+     }
+    },
+    "required": [
+     "mode",
+     "skill",
+     "action",
+     "contrast",
+     "p_right",
+     "learning",
+     "information",
+     "retention",
+     "enjoyment",
+     "frustration",
+     "repetition",
+     "diagnostic",
+     "utility",
+     "probability",
+     "set_aside"
+    ],
+    "title": "Candidate",
+    "type": "object"
+   },
+   "Config": {
+    "description": "A session's settings, snapshotted when it starts (§15 \"consent/config snapshot\"), so a replay uses the same.",
+    "properties": {
+     "break_every": {
+      "default": 10,
+      "minimum": 1.0,
+      "title": "Break Every",
+      "type": "integer"
+     },
+     "choices": {
+      "maximum": 8.0,
+      "minimum": 2.0,
+      "title": "Choices",
+      "type": "integer"
+     },
+     "max_minutes": {
+      "default": 15,
+      "minimum": 1.0,
+      "title": "Max Minutes",
+      "type": "integer"
+     },
+     "max_rounds": {
+      "default": 20,
+      "minimum": 1.0,
+      "title": "Max Rounds",
+      "type": "integer"
+     },
+     "tries": {
+      "minimum": 0.0,
+      "title": "Tries",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "choices",
+     "tries"
+    ],
+    "title": "Config",
     "type": "object"
    },
    "ContentSummary": {
@@ -224,6 +381,17 @@
       "title": "Choices",
       "type": "integer"
      },
+     "decision_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Decision Id"
+     },
      "event_id": {
       "title": "Event Id",
       "type": "string"
@@ -258,6 +426,18 @@
       "title": "Presented At",
       "type": "string"
      },
+     "received_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Received At"
+     },
      "seed": {
       "title": "Seed",
       "type": "integer"
@@ -283,6 +463,18 @@
        }
       ],
       "title": "Struck"
+     },
+     "struck_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Struck At"
      },
      "tries": {
       "title": "Tries",
@@ -404,6 +596,13 @@
       "title": "App Version",
       "type": "string"
      },
+     "decisions": {
+      "items": {
+       "$ref": "#/components/schemas/Logged"
+      },
+      "title": "Decisions",
+      "type": "array"
+     },
      "events": {
       "items": {
        "$ref": "#/components/schemas/Event"
@@ -417,8 +616,11 @@
       "type": "string"
      },
      "format": {
-      "const": "flashtap-learner@1",
-      "default": "flashtap-learner@1",
+      "default": "flashtap-learner@2",
+      "enum": [
+       "flashtap-learner@1",
+       "flashtap-learner@2"
+      ],
       "title": "Format",
       "type": "string"
      },
@@ -556,6 +758,29 @@
     "title": "GPCRow",
     "type": "object"
    },
+   "Gain": {
+    "properties": {
+     "known_after": {
+      "title": "Known After",
+      "type": "number"
+     },
+     "known_before": {
+      "title": "Known Before",
+      "type": "number"
+     },
+     "policy": {
+      "title": "Policy",
+      "type": "string"
+     }
+    },
+    "required": [
+     "policy",
+     "known_before",
+     "known_after"
+    ],
+    "title": "Gain",
+    "type": "object"
+   },
    "HTTPValidationError": {
     "properties": {
      "detail": {
@@ -609,6 +834,119 @@
      "last_played"
     ],
     "title": "LearnerRow",
+    "type": "object"
+   },
+   "Logged": {
+    "description": "A decision as stored and exported: the choice, where it was made and when.",
+    "properties": {
+     "action": {
+      "$ref": "#/components/schemas/Action"
+     },
+     "at": {
+      "format": "date-time",
+      "title": "At",
+      "type": "string"
+     },
+     "candidates": {
+      "items": {
+       "$ref": "#/components/schemas/Candidate"
+      },
+      "title": "Candidates",
+      "type": "array"
+     },
+     "choices": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Choices"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "mode": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Mode"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "policy": {
+      "title": "Policy",
+      "type": "string"
+     },
+     "probability": {
+      "title": "Probability",
+      "type": "number"
+     },
+     "rationale": {
+      "items": {
+       "$ref": "#/components/schemas/Why"
+      },
+      "title": "Rationale",
+      "type": "array"
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seed"
+     },
+     "seq": {
+      "title": "Seq",
+      "type": "integer"
+     },
+     "session_id": {
+      "title": "Session Id",
+      "type": "string"
+     },
+     "skill": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Skill"
+     },
+     "version": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Version"
+     }
+    },
+    "required": [
+     "policy",
+     "action",
+     "rationale",
+     "probability",
+     "id",
+     "session_id",
+     "seq",
+     "at"
+    ],
+    "title": "Logged",
     "type": "object"
    },
    "Mechanic": {
@@ -694,6 +1032,126 @@
      "description"
     ],
     "title": "ModelInfo",
+    "type": "object"
+   },
+   "Next": {
+    "description": "`POST /api/v1/sessions/{id}/next`: a round to play (`round`, checked, with its tries), an offered break, or the\nend of the session, with the rationale codes, the same in words for a grown-up, and what else was weighed.",
+    "properties": {
+     "action": {
+      "$ref": "#/components/schemas/Action"
+     },
+     "at": {
+      "format": "date-time",
+      "title": "At",
+      "type": "string"
+     },
+     "candidates": {
+      "items": {
+       "$ref": "#/components/schemas/Candidate"
+      },
+      "title": "Candidates",
+      "type": "array"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "policy": {
+      "title": "Policy",
+      "type": "string"
+     },
+     "probability": {
+      "title": "Probability",
+      "type": "number"
+     },
+     "rationale": {
+      "items": {
+       "$ref": "#/components/schemas/Why"
+      },
+      "title": "Rationale",
+      "type": "array"
+     },
+     "round": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Round"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "rounds_played": {
+      "title": "Rounds Played",
+      "type": "integer"
+     },
+     "seq": {
+      "title": "Seq",
+      "type": "integer"
+     },
+     "session_id": {
+      "title": "Session Id",
+      "type": "string"
+     },
+     "skill": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Skill"
+     },
+     "skill_title": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Skill Title"
+     },
+     "why": {
+      "title": "Why",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "session_id",
+     "seq",
+     "at",
+     "policy",
+     "action",
+     "round",
+     "skill",
+     "skill_title",
+     "rationale",
+     "why",
+     "probability",
+     "rounds_played",
+     "candidates"
+    ],
+    "title": "Next",
+    "type": "object"
+   },
+   "NextIn": {
+    "properties": {
+     "seq": {
+      "maximum": 10000.0,
+      "minimum": 0.0,
+      "title": "Seq",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "seq"
+    ],
+    "title": "NextIn",
     "type": "object"
    },
    "NicknameIn": {
@@ -1004,6 +1462,94 @@
     "title": "QRole",
     "type": "string"
    },
+   "ReplayIn": {
+    "description": "`POST /api/v1/evaluations/replay`: the policy to replay with (only the current one is kept) and the data, one of\na learner's records or a simulation.",
+    "properties": {
+     "learner_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Learner Id"
+     },
+     "policy": {
+      "default": "utility@1",
+      "title": "Policy",
+      "type": "string"
+     },
+     "simulated": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SimulatedIn"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "ReplayIn",
+    "type": "object"
+   },
+   "ReplayOut": {
+    "properties": {
+     "dataset": {
+      "title": "Dataset",
+      "type": "string"
+     },
+     "decisions": {
+      "title": "Decisions",
+      "type": "integer"
+     },
+     "differences": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Differences",
+      "type": "array"
+     },
+     "policy": {
+      "title": "Policy",
+      "type": "string"
+     },
+     "reproduced": {
+      "title": "Reproduced",
+      "type": "integer"
+     },
+     "scores": {
+      "items": {
+       "$ref": "#/components/schemas/Score"
+      },
+      "title": "Scores",
+      "type": "array"
+     },
+     "simulation": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SimReport"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "required": [
+     "policy",
+     "dataset",
+     "decisions",
+     "reproduced",
+     "differences",
+     "scores",
+     "simulation"
+    ],
+    "title": "ReplayOut",
+    "type": "object"
+   },
    "Round": {
     "properties": {
      "answer": {
@@ -1122,8 +1668,99 @@
     "title": "Round",
     "type": "object"
    },
+   "Score": {
+    "properties": {
+     "attempts": {
+      "title": "Attempts",
+      "type": "integer"
+     },
+     "brier": {
+      "title": "Brier",
+      "type": "number"
+     },
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "log_loss": {
+      "title": "Log Loss",
+      "type": "number"
+     },
+     "model": {
+      "title": "Model",
+      "type": "string"
+     }
+    },
+    "required": [
+     "model",
+     "description",
+     "attempts",
+     "log_loss",
+     "brier"
+    ],
+    "title": "Score",
+    "type": "object"
+   },
+   "SessionIn": {
+    "properties": {
+     "learner_id": {
+      "pattern": "^[0-9a-fA-F-]{8,36}$",
+      "title": "Learner Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "learner_id"
+    ],
+    "title": "SessionIn",
+    "type": "object"
+   },
+   "SessionInfo": {
+    "description": "`POST /api/v1/sessions`: the session, the policy that will plan it and the settings it runs with.",
+    "properties": {
+     "config": {
+      "$ref": "#/components/schemas/Config"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "learner_id": {
+      "title": "Learner Id",
+      "type": "string"
+     },
+     "policy": {
+      "title": "Policy",
+      "type": "string"
+     },
+     "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "learner_id",
+     "policy",
+     "config",
+     "started_at"
+    ],
+    "title": "SessionInfo",
+    "type": "object"
+   },
    "SessionOut": {
     "properties": {
+     "config": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Config"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "id": {
       "title": "Id",
       "type": "string"
@@ -1132,6 +1769,17 @@
       "format": "date-time",
       "title": "Last At",
       "type": "string"
+     },
+     "policy": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Policy"
      },
      "started_at": {
       "format": "date-time",
@@ -1145,6 +1793,105 @@
      "last_at"
     ],
     "title": "SessionOut",
+    "type": "object"
+   },
+   "SetAside": {
+    "enum": [
+     "prerequisite_gap",
+     "frustration_guard",
+     "just_played"
+    ],
+    "title": "SetAside",
+    "type": "string"
+   },
+   "SimReport": {
+    "properties": {
+     "attempts": {
+      "title": "Attempts",
+      "type": "integer"
+     },
+     "beats_rule": {
+      "title": "Beats Rule",
+      "type": "boolean"
+     },
+     "fitted": {
+      "title": "Fitted",
+      "type": "string"
+     },
+     "gains": {
+      "items": {
+       "$ref": "#/components/schemas/Gain"
+      },
+      "title": "Gains",
+      "type": "array"
+     },
+     "held_out": {
+      "title": "Held Out",
+      "type": "integer"
+     },
+     "learners": {
+      "title": "Learners",
+      "type": "integer"
+     },
+     "scores": {
+      "items": {
+       "$ref": "#/components/schemas/Score"
+      },
+      "title": "Scores",
+      "type": "array"
+     },
+     "seed": {
+      "title": "Seed",
+      "type": "integer"
+     },
+     "sessions": {
+      "title": "Sessions",
+      "type": "integer"
+     },
+     "trained_on": {
+      "title": "Trained On",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "seed",
+     "learners",
+     "sessions",
+     "trained_on",
+     "held_out",
+     "attempts",
+     "fitted",
+     "scores",
+     "beats_rule",
+     "gains"
+    ],
+    "title": "SimReport",
+    "type": "object"
+   },
+   "SimulatedIn": {
+    "properties": {
+     "learners": {
+      "default": 40,
+      "maximum": 200.0,
+      "minimum": 4.0,
+      "title": "Learners",
+      "type": "integer"
+     },
+     "seed": {
+      "default": 1,
+      "minimum": 0.0,
+      "title": "Seed",
+      "type": "integer"
+     },
+     "sessions": {
+      "default": 6,
+      "maximum": 20.0,
+      "minimum": 1.0,
+      "title": "Sessions",
+      "type": "integer"
+     }
+    },
+    "title": "SimulatedIn",
     "type": "object"
    },
    "SkillReport": {
@@ -1393,6 +2140,25 @@
     ],
     "title": "ValidationError",
     "type": "object"
+   },
+   "Why": {
+    "description": "Rationale codes (§15 \"validated item + rationale codes\"): what a decision is for.",
+    "enum": [
+     "placement_probe",
+     "introduce",
+     "practise",
+     "spaced_review",
+     "consolidate",
+     "diagnostic_contrast",
+     "easier_after_misses",
+     "exploration",
+     "break_due",
+     "frustration_break",
+     "session_cap_rounds",
+     "session_cap_minutes"
+    ],
+    "title": "Why",
+    "type": "string"
    }
   }
  },
@@ -1983,6 +2749,131 @@
      }
     },
     "summary": "Put Settings"
+   }
+  },
+  "/api/v1/evaluations/replay": {
+   "post": {
+    "operationId": "post_replay_api_v1_evaluations_replay_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ReplayIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ReplayOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Post Replay"
+   }
+  },
+  "/api/v1/sessions": {
+   "post": {
+    "operationId": "post_session_api_v1_sessions_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SessionIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionInfo"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Post Session"
+   }
+  },
+  "/api/v1/sessions/{session_id}/next": {
+   "post": {
+    "operationId": "post_next_api_v1_sessions__session_id__next_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "session_id",
+      "required": true,
+      "schema": {
+       "title": "Session Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/NextIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Next"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Post Next"
    }
   }
  }

@@ -1,6 +1,6 @@
 """The learner records (plan PR 4; the spec's §14 event store): who plays, when, and every round they answered.
 
-Four tables in the app's schema (strata_python.db; migrations in `src/flashtap/migrations/`):
+Five tables in the app's schema (strata_python.db; migrations in `src/flashtap/migrations/`):
 
 - `learners`: a pseudonymous id (random, means nothing outside this database) and a nickname chosen by the grown-up.
   Nothing else: no age, birth date, year group, school or photo (AGENTS.md rule 8, spec §17). What comes next is
@@ -12,6 +12,7 @@ Four tables in the app's schema (strata_python.db; migrations in `src/flashtap/m
   played*, so a later change to a template cannot rewrite a learner's history. Only the first answer is judged
   (§10: retries are teaching, not independent evidence); the number of tries and how the round ended are kept beside
   it for the engagement work later (P4).
+- `decisions`: what the adaptive engine chose for a session, and why (plan PR 5; the class below says more).
 - `tombstones`: an attempt struck out by a grown-up ("someone else was playing") and why. The attempt stays, so the
   log is still append-only; every estimate skips struck attempts.
 
@@ -23,7 +24,7 @@ event log by construction, which is the PR's exit criterion.
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, MetaData, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, MetaData, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column
 from strata_python.db import NAMING_CONVENTION
 
@@ -37,6 +38,8 @@ class Base(MappedAsDataclass, DeclarativeBase):  # written out, not make_base():
         datetime: DateTime(timezone=True),
         dict[str, Any]: JSON,
         list[dict[str, str]]: JSON,
+        list[dict[str, Any]]: JSON,
+        list[str]: JSON,
     }
 
 
@@ -58,8 +61,12 @@ class Sitting(Base):
     __tablename__ = "sessions"
     id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
     learner_id: Mapped[str] = mapped_column(ForeignKey("learners.id", ondelete="CASCADE"), index=True)
-    started_at: Mapped[datetime]  # the earliest attempt's presented_at
+    started_at: Mapped[datetime]  # when the engine started it, or else the earliest attempt's presented_at
     last_at: Mapped[datetime]  # the latest attempt's answered_at
+    # Set for a session the adaptive engine plans (POST /api/v1/sessions): its policy and the settings it started
+    # with (engine/policy.py `Config`), so every decision in it replays with the same. None for one the browser named.
+    policy: Mapped[str | None] = mapped_column(String(32), default=None)
+    config: Mapped[dict[str, Any] | None] = mapped_column(default=None)
 
 
 class Attempt(Base):
@@ -85,6 +92,34 @@ class Attempt(Base):
     tries: Mapped[int]  # taps or checks used, the first included
     outcome: Mapped[str] = mapped_column(String(16))  # right, missed (ran out of tries) or left (moved on unanswered)
     received_at: Mapped[datetime]
+    # The engine's decision this round answered (None when the grown-up chose the kind). Not a foreign key: a
+    # decision and its attempt are deleted together with their learner, and the store checks it matches on the way in.
+    decision_id: Mapped[str | None] = mapped_column(String(ID_LENGTH), default=None, index=True)
+
+
+class Decision(Base):
+    """One decision of the adaptive engine (spec §12, §14): what it chose and why, every candidate it weighed with
+    its utility and its chance of being picked, and the policy that made it. Append-only, like the attempts: a
+    replay (engine/replay.py) remakes each one from the log as it stood and compares."""
+
+    __tablename__ = "decisions"
+    __table_args__ = (UniqueConstraint("session_id", "seq"),)
+
+    id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
+    learner_id: Mapped[str] = mapped_column(ForeignKey("learners.id", ondelete="CASCADE"), index=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"))
+    seq: Mapped[int]  # 0, 1, 2 ... within the session: the browser asks for the next by number, so a retry is safe
+    at: Mapped[datetime]
+    policy: Mapped[str] = mapped_column(String(32))
+    action: Mapped[str] = mapped_column(String(16))  # round, break or end
+    mode: Mapped[str | None] = mapped_column(String(32))
+    version: Mapped[int | None]
+    choices: Mapped[int | None]
+    seed: Mapped[int | None]
+    skill: Mapped[str | None] = mapped_column(String(80))
+    rationale: Mapped[list[str]]
+    probability: Mapped[float]
+    candidates: Mapped[list[dict[str, Any]]]
 
 
 class Tombstone(Base):

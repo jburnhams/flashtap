@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flashtap"
-version = "0.5.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
+version = "0.6.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
 description = "Flashtap: learning games that progress by ability, a FastAPI + strata-react web app"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -76,6 +76,7 @@ ignore = ["E501"]        # the formatter wraps code; long comments and docstring
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S104", "S105", "S106", "S108", "S310", "S311", "S603", "S607"]    # asserts, fake secrets, tmp paths, plain random, subprocess of our own CLI
 "src/flashtap/rounds.py" = ["S311"]    # random.Random(seed) on purpose: rounds must be reproducible from their seed, not secret
+"src/flashtap/engine/{policy,simulate}.py" = ["S311"]    # the same: a decision's draw and a simulated learner replay from their seed
 
 [tool.pyright]
 include = ["src"]
