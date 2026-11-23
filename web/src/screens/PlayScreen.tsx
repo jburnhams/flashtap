@@ -150,20 +150,10 @@ async function freshOrKept(mode: Mode): Promise<Played> {
 
 const KEPT = 'The server can’t be reached, so this round is one kept on this device. Answers are sent when it is back.'
 
-/** Keeps a learner's answer to send, and refreshes what the screens show of them once the server has it. */
-function useKeep() {
-  const queryClient = useQueryClient()
-  return useCallback(
-    (who: LearnerRow, attempt: Omit<AttemptIn, 'learner_id' | 'event_id'>): { id: string; delivered: Promise<Delivery> } => {
-      const id = newId()
-      const delivered = keepAttempt({ ...attempt, event_id: id, learner_id: who.id }, `${who.nickname}, ${modeLabels[attempt.mode]}`)
-      void delivered.then(d => {
-        if (d === 'sent') void queryClient.invalidateQueries({ queryKey: ['learners'] })
-      })
-      return { id, delivered }
-    },
-    [queryClient],
-  )
+/** Keeps a learner’s answer to send (the shell refreshes the learners’ records whenever one is sent). */
+function keep(who: LearnerRow, attempt: Omit<AttemptIn, 'learner_id' | 'event_id'>): { id: string; delivered: Promise<Delivery> } {
+  const id = newId()
+  return { id, delivered: keepAttempt({ ...attempt, event_id: id, learner_id: who.id }, `${who.nickname}, ${modeLabels[attempt.mode]}`) }
 }
 
 /** Keeps a face for the answer `eventId`; a face the server refused says so under the faces. */
@@ -176,7 +166,6 @@ function rate(who: LearnerRow, eventId: string, value: Face): Promise<unknown> {
 function Game({ mode, learner, session, rateEvery }: { mode: Mode; learner: LearnerRow | null; session: string; rateEvery: number }) {
   const [n, setN] = useState(0)
   const last = useRef('') // the last answer kept: a face is offered only after one
-  const keep = useKeep()
   // A fresh round for every visit (a change of kind or of who is playing remounts this Game): a round left
   // half done and shown again with its answers forgotten would let a retry be recorded as a new first answer.
   const [visit] = useState(newId)
@@ -224,7 +213,6 @@ function nextOrAway(session: string, seq: number): Promise<Next | Away> {
 function Decisions({ session, learner }: { session: SessionInfo; learner: LearnerRow }) {
   const [seq, setSeq] = useState(0)
   const queryClient = useQueryClient()
-  const keep = useKeep()
   const decision = useLoad({ queryKey: keys.next(session.id, seq), queryFn: () => nextOrAway(session.id, seq), staleTime: Infinity })
   // The kinds the engine chose this visit, newest first: what Play falls back on while the server is away.
   const [chosen, setChosen] = useState<Mode[]>([])
@@ -297,7 +285,6 @@ function AwayRounds({ session, seq, learner, kinds, onBack }: { session: Session
   const [sitting] = useState(newId)
   const [round, setRound] = useState<Round | null>(() => takeKept(kinds))
   const [asking, setAsking] = useState(false)
-  const keep = useKeep()
   const again = () => {
     setAsking(true)
     api.next(session.id, seq).then(onBack, () => {

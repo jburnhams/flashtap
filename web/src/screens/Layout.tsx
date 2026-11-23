@@ -2,8 +2,11 @@
 // region, from Strata's AppShell. Play is the learner's screen; Learners, Content and Settings are for the grown-up.
 // Answers waiting on this device (the server out of reach, or refusing one) are said above every screen, in words for
 // the grown-up, so they can check before closing the tab; the queue starts here, so what an earlier visit left is sent
-// whichever screen opens first.
+// whichever screen opens first. Every answer the server takes, whenever it goes (at once, on a retry, or left by an
+// earlier visit), refreshes the learners' records, so a report never lags behind what was sent.
+import { useQueryClient } from '@tanstack/react-query'
 import { Gamepad2, Library, Settings, Users } from 'lucide-react'
+import { useEffect } from 'react'
 import { Outlet } from 'react-router'
 import { AppShell, type NavItem } from 'strata-react'
 import { answers } from '../api'
@@ -20,6 +23,8 @@ export const product = 'Flashtap'
 
 export function Layout() {
   useOutboxStarted(answers)
+  const queryClient = useQueryClient()
+  useEffect(() => answers.onSent(() => void queryClient.invalidateQueries({ queryKey: ['learners'] })), [queryClient])
   return (
     <AppShell product={product} nav={nav}>
       <div className="grid max-w-5xl gap-8 pb-16">

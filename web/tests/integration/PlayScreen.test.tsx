@@ -316,10 +316,14 @@ describe('Play records rounds for the learner playing', () => {
     await user.click(screen.getByRole('button', { name: 'Next' })) // play goes on without it
     expect(await screen.findByRole('heading', { level: 1, name: 'Find the cow.' })).toBeInTheDocument()
     server.resetHandlers(...handlers)
+    // Sent late, the answer still refreshes the learners' records, as one sent at once does.
+    let reads = 0
+    server.use(http.get('*/api/learners', () => { reads += 1 }))
     await user.click(screen.getByRole('button', { name: 'Send now' }))
     await vi.waitFor(() => expect(mock.attempts).toHaveLength(1))
     expect(mock.attempts[0]).toMatchObject({ learner_id: FOX, first_answer: { option: 'cow' }, asked: 'mixed' })
     await vi.waitFor(() => expect(screen.queryByText(/kept on this device/)).not.toBeInTheDocument())
+    await vi.waitFor(() => expect(reads).toBeGreaterThan(0))
   })
 
   it('lists an answer the server refused, with its reason, until dismissed', async () => {
