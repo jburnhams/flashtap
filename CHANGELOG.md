@@ -4,6 +4,26 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-23
 
+**Flashtap 0.4.0: the mechanics, seven new kinds of round (branch `claude/project-thread-3qzxl1`)**
+The owner asked for the next PR of the plan (PR 3, the mechanics): templates that declare their Q-matrix roles, the eight mechanics and named distractor generators, with every round rebuilt from (template, version, seed) and 1,000 seeds per template checked for an ambiguous key.
+
+- `src/flashtap/mechanics.py`: **new**. `Mode` (now 12 kinds plus Mixed), `Mechanic` (8, in two families), `QRole` and `SkillRole`, `Option` (gains `distractor`), `Piece`, `Place` (`takes`, `holds`), `Round` (gains `version`, `choices`, `mechanic`, `skills`, `say`, `exposure_ms`, `pieces`, `places`, `done_feedback`), `check` for both families, `arranged_right`.
+- `src/flashtap/distractors.py`: **new**. Near numbers, reversals (6 and 9, 12 and 21), confusable letters (b d p q, m w, n u), phonological neighbours (one feature apart, from a draft feature table), and `fill`.
+- `src/flashtap/kinds/`: **new**. `choose.py` (the five original kinds, now with named distractors, Letters preferring look-alike and near-sound words; Missing number, Quick look, Listen) and `place.py` (Give a number, Order, Capitals, Sort by sound).
+- `src/flashtap/rounds.py`: now the template table (kind, version, mechanic, name, description, skills with roles, body), `generate(mode, choices, seed, version)` and `tries_allowed(tries, round)` (checks, on a placing round). **Correction**: a Mixed round's reported kind and seed did not rebuild it (the kind was drawn from the round's own generator first); Mixed now picks the kind and then the round's own seed.
+- `src/flashtap/lexicon.py`: `letters` (the one-letter GPCs) and `sound_words`.
+- `src/flashtap/server/app.py`: `GET /api/round` takes `version` (another version: 400 with the reason); `GET /api/modes` gives each kind's mechanic. `landing.html`: plays one-tap rounds, hides a quick look's picture after `exposure_ms` (Codex review), and says a placing round needs the web app.
+- `src/flashtap/cli.py`: `round --version`; the text output names the version, mechanic, what is said, each wrong option's generator, and where pieces go.
+- `tests/unit/test_rounds.py` (rewritten: 1,000 seeds of every template, per-kind rules, `check` refusals for both families), `test_distractors.py` (**new**), `test_cli.py`, `test_server.py`, `tests/integration/test_server_api.py`.
+- `web/package.json`, `web/package-lock.json`: strata-react ^1.3.0, for `PlaceBoard` (strata-react PR #285); a checked place's mark is in its name ("first, right"), so `PlayScreen.test.tsx` asks for it there.
+- `web/src/screens/PlayScreen.tsx`: a round is answered by `ChoiceGrid` or, for the four placing mechanics, by `PlaceBoard` and a Check button (each place marked Right or Not yet until its contents change; running out of checks shows the arrangement). A quick look hides its picture after `exposure_ms`, keeping its room; the spoken text is the round's `say`.
+- `web/src/play.ts`: `placeRight`, `arrangedRight`, `solution`, `placeOutcome`, `placeFeedback` (giving a number says how many were given). `web/src/api.ts`: the new kinds and round fields.
+- `web/src/mocks/fixtures.ts`, `handlers.ts`: a round per new kind (from `flashtap round --json`), modes with mechanics, `quickLookGoes` and `quickLookStays`.
+- `web/tests/unit/logic.test.ts`, `web/tests/integration/PlayScreen.test.tsx`: the arrangement logic and each new kind on the screen; web coverage stays 100%.
+- `web/stories/play.stories.tsx`, `web/strata-visual.config.ts`, `web/tests/visual/baselines/`: **new** shots for the seven new kinds, a checked Order and Give a number (24 baselines); the 78 others are unchanged.
+- `pyproject.toml`, `uv.lock`: version 0.4.0.
+- `docs/implementation-plan.md`, `docs/progress.md`, `docs/overview.md`, `README.md`, `AGENTS.md`, `tests/unit/README.md`, `web/tests/README.md`, `web/stories/introduction.mdx`: the mechanics, templates and the new kinds.
+
 **Flashtap 0.3.0: content packs, the P0 ontology seed, with an adult Content screen (branch `claude/project-thread-ghe3ix`)**
 The owner asked for the next PR of the plan: content packs for the earliest skills (numbers to 10, early phonics) in a structure that grows through every school year, by ability and never by age. YAML became TOML (standard library, no new dependency).
 

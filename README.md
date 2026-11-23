@@ -2,7 +2,7 @@
 
 Learning games for every school year and ability, starting with the earliest skills: a spoken question, a big picture, and two to eight tiles to tap, exactly one of them right. Progression follows what a learner can show they can do, never their age. A personal app for private use; the repository is public, so it holds no detail that identifies anyone (see `AGENTS.md`, rule 8). A Python web app (FastAPI + CLI on [strata-python](https://github.com/jburnhams/strata-python)) with a React frontend on [strata-react](https://github.com/jburnhams/strata-react), shaped like [python-app-template](https://github.com/jburnhams/python-app-template).
 
-Five kinds of round today: Matching, Colours, Shapes, Letters and Counting, plus Mixed. The server builds every round from a seed and checks it before sending (one right answer, no repeats), so a round can be rebuilt exactly. What it can teach is described in content packs (TOML in `src/flashtap/packs/`: skills with typed, sourced prerequisite edges, a phonics sequence in IPA, words with their sounds, and the EYFS Early Learning Goals mapped onto skills), shown on the Content screen; see [docs/content.md](docs/content.md). Where this is going, towards an adaptive learning engine with a skill ontology, a learner model and a scheduler, is in [docs/implementation-plan.md](docs/implementation-plan.md).
+Twelve kinds of round today, over eight ways of answering: tap one picture (Matching, Colours, Shapes, Letters, Counting), fill the missing number (Missing number), say how many after a quick look (Quick look), hear a word and tap its first letter (Listen), and four answered by moving pictures with two taps: Give a number, Order, Capitals (match pairs) and Sort by sound; plus Mixed. The server builds every round from a template, a version and a seed and checks that its answer is one and unmistakable before sending, so a round can be rebuilt exactly; each wrong option names the generator that chose it (a near number, a reversed 6 or 9, a look-alike letter, a sound one feature away). What it can teach is described in content packs (TOML in `src/flashtap/packs/`: skills with typed, sourced prerequisite edges, a phonics sequence in IPA, words with their sounds, and the EYFS Early Learning Goals mapped onto skills), shown on the Content screen; see [docs/content.md](docs/content.md). Where this is going, towards an adaptive learning engine with a skill ontology, a learner model and a scheduler, is in [docs/implementation-plan.md](docs/implementation-plan.md).
 
 Until 0.1.9 Flashtap was an npm React component library; 0.2.0 replaces it with this app (see [CHANGELOG.md](CHANGELOG.md)).
 
@@ -24,8 +24,8 @@ Without the web build, `flashtap serve` answers with a plain stand-in page that 
 
 | Endpoint | What it does |
 | --- | --- |
-| `GET /api/round?mode=&choices=&seed=` | One checked round; each parameter defaults to the settings, and a fresh seed is picked (and returned) when none is sent |
-| `GET /api/modes` | The kinds of round, with a name and a sentence each |
+| `GET /api/round?mode=&choices=&seed=&version=` | One checked round; each parameter defaults to the settings, and a fresh seed is picked (and returned) when none is sent; a template version other than the current one is refused (400) |
+| `GET /api/modes` | The kinds of round, with a name, a sentence and the mechanic each |
 | `GET /api/content` | The content packs as rows: skills (with stage labels, rounds and edges), curriculum goals, phonics sets |
 | `GET`, `PUT /api/settings` | `mode`, `choices`, `tries` (from strata-python) |
 | `GET /api/health` | `ok`, `version`, `commit` |

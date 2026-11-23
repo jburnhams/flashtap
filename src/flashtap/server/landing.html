@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Flashtap</title>
-<!-- The stand-in served when the web app has not been built (`cd web && npm run build`): enough to play a round against the real API. -->
+<!-- The stand-in served when the web app has not been built (`cd web && npm run build`): enough to play a one-tap round against the real API; a quick look hides its picture after `exposure_ms`; a placing round says it needs the web app. -->
 <style>
 :root{color-scheme:light dark;--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--line:#d8d8dc}
 @media(prefers-color-scheme:dark){:root{--bg:#161618;--fg:#ececee;--mut:#9a9aa2;--line:#33333a}}
@@ -14,8 +14,12 @@ button[disabled]{opacity:.35}
 <p id="prompt"></p><div id="show"></div><div id="opts"></div>
 </main><script>
 const $=id=>document.getElementById(id);
+let hide;
 const say=t=>{try{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(t))}catch(e){}};
-async function next(){const r=await (await fetch('api/round')).json();$('prompt').textContent=r.prompt;$('show').textContent=r.show;say(r.prompt);
+async function next(){const r=await (await fetch('api/round')).json();$('prompt').textContent=r.prompt;$('show').textContent=r.show;say(r.say);
+// A quick look hides its picture after exposure_ms, so the learner says how many they saw, not how many they counted.
+clearTimeout(hide);if(r.exposure_ms!==null)hide=setTimeout(()=>{$('show').textContent='\u00a0'},r.exposure_ms);
+if(!r.options.length){$('opts').replaceChildren('This kind of round is answered by moving pictures, which needs the web app.');const b=document.createElement('button');b.textContent='Next';b.style.fontSize='18px';b.onclick=next;$('opts').append(b);return}
 $('opts').replaceChildren(...r.options.map(o=>{const b=document.createElement('button');b.textContent=o.picture;b.setAttribute('aria-label',o.word);
 b.onclick=()=>{say(o.feedback);if(o.correct)setTimeout(next,1500);else b.disabled=true};return b}))}
 next();

@@ -30,8 +30,17 @@ def test_landing_page_and_built_static_index(tmp_path, monkeypatch):
 
 def test_modes_lists_every_mode(client):
     modes = client.get("/api/modes").json()
-    assert [m["mode"] for m in modes] == ["matching", "colours", "shapes", "letters", "counting", "mixed"]
-    assert modes[0]["name"] == "Matching"
+    assert [m["mode"] for m in modes] == [
+        "matching", "colours", "shapes", "letters", "counting",
+        "missing", "quick_look", "listen", "give", "order", "capitals", "sort_sounds", "mixed",
+    ]  # fmt: skip
+    assert modes[0] == {
+        "mode": "matching",
+        "name": "Matching",
+        "description": modes[0]["description"],
+        "mechanic": "select_one",
+    }
+    assert modes[-1]["mechanic"] is None
 
 
 def test_round_takes_its_defaults_from_the_settings(client):
@@ -51,9 +60,19 @@ def test_round_query_overrides_and_no_limit_on_tries(client):
     assert sum(o["correct"] for o in r["options"]) == 1
 
 
-@pytest.mark.parametrize("params", [{"choices": 9}, {"choices": 1}, {"mode": "spelling"}, {"seed": -1}])
+@pytest.mark.parametrize("params", [{"choices": 9}, {"choices": 1}, {"mode": "spelling"}, {"seed": -1}, {"version": 0}])
 def test_bad_round_queries_are_refused(client, params):
     assert client.get("/api/round", params=params).status_code == 422
+
+
+def test_a_place_round_and_a_template_version_no_longer_kept(client):
+    r = client.get("/api/round", params={"mode": "give", "seed": 5, "version": 1}).json()
+    assert r["mechanic"] == "give_n"
+    assert r["options"] == []
+    assert r["places"][0]["word"] == "the basket"
+    bad = client.get("/api/round", params={"mode": "give", "seed": 5, "version": 2})
+    assert bad.status_code == 400
+    assert "version 2 is not kept" in bad.json()["detail"]
 
 
 def test_settings_refuse_a_bad_value(client):

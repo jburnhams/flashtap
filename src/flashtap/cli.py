@@ -23,14 +23,29 @@ def run_server(host: str, port: int) -> None:
 def cmd_round(args: argparse.Namespace) -> int:
     _utf8()
     r = rounds.generate(
-        rounds.Mode(args.mode) if args.mode else settings.mode(), args.choices or settings.choices(), args.seed
+        rounds.Mode(args.mode) if args.mode else settings.mode(),
+        args.choices or settings.choices(),
+        args.seed,
+        args.version,
     )
     if args.json:
         print(r.model_dump_json(indent=1))
         return 0
-    print(f"{r.prompt}  {r.show}   ({r.mode}, seed {r.seed})")
+    print(f"{r.prompt}  {r.show}   ({r.mode} v{r.version}, {r.mechanic}, seed {r.seed})")
+    if r.say != r.prompt:
+        print(f"  said: {r.say}")
     for o in r.options:
-        print(f"  {'*' if o.correct else ' '} {o.picture}  {o.word}")
+        print(f"  {'*' if o.correct else ' '} {o.picture}  {o.word}" + (f"  ({o.distractor})" if o.distractor else ""))
+    if r.pieces:
+        print("  pieces: " + " ".join(p.picture for p in r.pieces))
+    words = {p.id: p.picture for p in r.pieces}
+    for s in r.places:
+        wanted = "".join(words[k] for k in s.takes)
+        print(
+            f"  {s.picture or s.word}: {s.holds} of {wanted}"
+            if s.holds < len(s.takes)
+            else f"  {s.picture or s.word}: {wanted}"
+        )
     return 0
 
 
@@ -83,6 +98,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--mode", choices=[m.value for m in rounds.Mode])
     r.add_argument("--choices", type=int, choices=range(rounds.MIN_CHOICES, rounds.MAX_CHOICES + 1))
     r.add_argument("--seed", type=int)
+    r.add_argument("--version", type=int, help="the template version to rebuild (only the current one is kept)")
     r.add_argument("--json", action="store_true")
     r.set_defaults(fn=cmd_round)
     c = sub.add_parser("content", help="check or list the content packs")

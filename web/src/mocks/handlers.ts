@@ -71,3 +71,6 @@ export const contentError = http.get(at(paths.content), down)
 export const contentEmpty = http.get(at(paths.content), () => HttpResponse.json({ ...content, skills: [], objectives: [], phonics: [] }))
 /** Every pack reviewed: the header's warning goes. */
 export const contentReviewed = http.get(at(paths.content), () => HttpResponse.json({ ...content, packs: content.packs.map(p => ({ ...p, status: 'reviewed' })) }))
+/** A quick look whose pictures go at once (a test need not wait 1.5 s), and one whose pictures stay (a screenshot of them). */
+export const quickLookGoes = http.get(at(paths.round), () => HttpResponse.json({ ...roundFor('quick_look'), exposure_ms: 10 }))
+export const quickLookStays = http.get(at(paths.round), () => HttpResponse.json({ ...roundFor('quick_look'), exposure_ms: 3_600_000 }))

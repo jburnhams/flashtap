@@ -50,6 +50,7 @@ class Thing:
 @dataclass(frozen=True)
 class Lexicon:
     everything: tuple[Thing, ...]
+    letters: tuple[GPC, ...] = ()  # the one-letter GPCs of the phonics inventory: the letters a learner is taught
 
     def category(self, name: str) -> tuple[Thing, ...]:
         return tuple(t for t in self.everything if t.category == name)
@@ -85,6 +86,12 @@ class Lexicon:
         """Words with a plain first sound, for Letters."""
         return tuple(t for t in self.animals + self.food if t.letter is not None)
 
+    @property
+    def sound_words(self) -> tuple[Thing, ...]:
+        """Every picture whose word starts with a one-letter grapheme, for Listen and Sort by sound (not the shapes,
+        whose words are two: "red circle")."""
+        return tuple(t for t in self.everything if t.letter is not None and t.category != "shapes")
+
 
 @cache
 def words() -> Lexicon:
@@ -106,5 +113,6 @@ def words() -> Lexicon:
             )
             for w in r.words.values()
             if w.picture
-        )
+        ),
+        tuple(g for g in r.gpcs() if len(g.grapheme) == 1),
     )
