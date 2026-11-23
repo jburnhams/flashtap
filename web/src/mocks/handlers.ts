@@ -7,10 +7,13 @@
 // state: `server.use(roundError)` in a test, `msw.use(roundError)` in a story's beforeEach,
 // `states: { error: [roundError] }` in the visual config.
 import { delay, http, HttpResponse } from 'msw'
-import { isMode, paths, type AttemptIn, type LearnerRow, type Round, type Settings } from '../api'
+import { isMode, paths, type AttemptIn, type LearnerRow, type Next, type Round, type Settings } from '../api'
 import { content } from './content'
 import { defaultSettings, modes, rounds } from './fixtures'
 import { countingEvidence, foxProfile, FOX, learners, owlProfile } from './learners'
+
+type Plan = Round['mode'] | 'break' | 'end'
+const PLAN: Plan[] = ['counting', 'give', 'break', 'matching', 'end']
 
 /** What the mock server holds. Writes change it, so a test can save a setting and see it used. */
 export const mock = {
@@ -23,6 +26,10 @@ export const mock = {
   attempts: [] as AttemptIn[],
   /** Event ids struck out, with the reason. */
   struck: [] as { event_id: string; reason: string }[],
+  /** What the engine decides, by number: a round of that kind, a break or the end; past the list, the end. */
+  plan: [...PLAN] as Plan[],
+  /** Decision numbers asked for, in order: a test sees a retry ask for the same number. */
+  nextRequests: [] as number[],
 }
 
 /** Back to the healthy state: call between tests and stories. */
@@ -33,6 +40,23 @@ export function resetMock() {
   mock.learners = [...learners]
   mock.attempts = []
   mock.struck = []
+  mock.plan = [...PLAN]
+  mock.nextRequests = []
+}
+
+export const SESSION = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+const titles: Record<string, string> = { counting: 'Count a set of things', give: 'Give a number of things', matching: 'Find the picture for a spoken word' }
+
+/** Decision `seq` of the mock session, in the server's shape (src/flashtap/engine/sessions.py `Next`). */
+export function decisionFor(seq: number): Next {
+  const step = mock.plan[seq] ?? 'end'
+  const played = mock.plan.slice(0, seq).filter(p => p !== 'break' && p !== 'end').length
+  const base = { id: `d${seq}`.padEnd(32, '0'), session_id: SESSION, seq, at: '2026-11-23T09:00:00Z', policy: 'utility@1', probability: 1, rounds_played: played, candidates: [] }
+  if (step === 'break') return { ...base, action: 'break', round: null, skill: null, skill_title: null, rationale: ['break_due'], why: `${played} round${played === 1 ? '' : 's'} played so far.` }
+  if (step === 'end') return { ...base, action: 'end', round: null, skill: null, skill_title: null, rationale: ['session_cap_rounds'], why: `A session is ${played} round${played === 1 ? '' : 's'} at most.` }
+  const r = roundFor(step)
+  const skill = r.skills[0]?.skill ?? ''
+  return { ...base, action: 'round', round: r, skill, skill_title: titles[step] ?? skill, rationale: ['practise'], why: `Practising: ${titles[step] ?? skill}.`, probability: 0.42 }
 }
 
 // Matched as paths, so they answer whatever origin and base the app runs under.
@@ -85,6 +109,15 @@ export const handlers = [
     mock.attempts.push(a)
     return HttpResponse.json({ event_id: a.event_id, first_correct: 'option' in a.first_answer && a.tries === 1 && a.outcome === 'right', duplicate: false })
   }),
+  http.post(at(paths.sessions), async ({ request }) => {
+    const { learner_id } = (await request.json()) as { learner_id: string }
+    return HttpResponse.json({ id: SESSION, learner_id, policy: 'utility@1', config: { choices: 4, tries: 0, max_rounds: 20, max_minutes: 15, break_every: 10 }, started_at: '2026-11-23T09:00:00Z' }, { status: 201 })
+  }),
+  http.post(at(`${paths.sessions}/:id/next`), async ({ request }) => {
+    const { seq } = (await request.json()) as { seq: number }
+    mock.nextRequests.push(seq)
+    return HttpResponse.json(decisionFor(seq))
+  }),
   http.post(at(`${paths.attempts}/:id/strike`), async ({ params, request }) => {
     const { reason } = (await request.json()) as { reason: string }
     mock.struck.push({ event_id: String(params.id), reason })
@@ -123,3 +156,10 @@ export const evidenceLoading = http.get(at(`${paths.learners}/:id/skills/:skill/
 export const attemptFails = http.post(at(paths.attempts), down)
 export const strikeFails = http.post(at(`${paths.attempts}/:id/strike`), down)
 export const deleteFails = http.delete(at(`${paths.learners}/:id`), down)
+export const sessionError = http.post(at(paths.sessions), down)
+export const nextLoading = http.post(at(`${paths.sessions}/:id/next`), async () => { await delay('infinite'); return HttpResponse.json(null) })
+export const nextError = http.post(at(`${paths.sessions}/:id/next`), down)
+/** The engine offers a break first, after 10 rounds (a story shows the offer without playing them). */
+export const nextBreak = http.post(at(`${paths.sessions}/:id/next`), () => HttpResponse.json({ ...decisionFor(0), action: 'break', round: null, skill: null, skill_title: null, rationale: ['break_due'], why: '10 rounds played so far.', rounds_played: 10 }))
+/** The engine ends the session at once, at 20 rounds. */
+export const nextEnd = http.post(at(`${paths.sessions}/:id/next`), () => HttpResponse.json({ ...decisionFor(0), action: 'end', round: null, skill: null, skill_title: null, rationale: ['session_cap_rounds'], why: 'A session is 20 rounds at most.', rounds_played: 20 }))

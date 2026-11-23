@@ -57,6 +57,14 @@ export type EvidenceRow = Schema<'EvidenceRow'>
 /** `POST /api/attempts`: one round answered. The server rebuilds the round and judges `first_answer` itself. */
 export type AttemptIn = Omit<Schema<'AttemptIn'>, 'first_answer'> & { first_answer: { option: string } | { placement: Record<string, string> } }
 
+/** What Play is asked for: a kind of round, or `next`, the adaptive engine choosing each one for the learner. */
+export type PlayChoice = Mode | 'next'
+export const isPlayChoice = (v: string | null): v is PlayChoice => v === 'next' || isMode(v)
+/** `POST /api/v1/sessions`: a session the engine plans, with the settings it runs with. */
+export type SessionInfo = Schema<'SessionInfo'>
+/** `POST /api/v1/sessions/{id}/next`: a round, an offered break or the end, with why (src/flashtap/engine/policy.py). */
+export type Next = Omit<Schema<'Next'>, 'round'> & { round: Round | null }
+
 /** A random 32-hex-digit id for an event or a session. Not `crypto.randomUUID`: that needs a secure context, and the
  * app is often served over plain http on a home network; `getRandomValues` works anywhere. */
 export function newId(): string {
@@ -72,6 +80,7 @@ export const paths = {
   content: '/api/content',
   learners: '/api/learners',
   attempts: '/api/attempts',
+  sessions: '/api/v1/sessions',
 } as const
 
 /** The query keys the screens share, so a write can invalidate every read it changes. */
@@ -80,6 +89,8 @@ export const keys = {
   modes: ['modes'],
   content: ['content'],
   round: (mode: Mode, visit: string, n: number) => ['round', mode, visit, n],
+  session: (learner: string, visit: string) => ['session', learner, visit],
+  next: (session: string, seq: number) => ['next', session, seq],
   learners: ['learners'],
   profile: (id: string) => ['learners', id, 'profile'],
   evidence: (id: string, skill: string) => ['learners', id, 'evidence', skill],
@@ -104,6 +115,9 @@ export const api = {
   profile: (id: string) => http.get('/api/learners/{learner_id}/profile', { path: { learner_id: id } }),
   evidence: (id: string, skill: string) => http.get('/api/learners/{learner_id}/skills/{skill}/evidence', { path: { learner_id: id, skill } }),
   recordAttempt: (a: AttemptIn) => http.post('/api/attempts', { json: a }),
+  startSession: (learnerId: string) => http.post('/api/v1/sessions', { json: { learner_id: learnerId } }),
+  // The server answers a round's played kind (never Mixed), as for `round` above.
+  next: (sessionId: string, seq: number) => http.post('/api/v1/sessions/{session_id}/next', { path: { session_id: sessionId }, json: { seq } }) as Promise<Next>,
   strike: (eventId: string, reason: string) => http.post('/api/attempts/{event_id}/strike', { path: { event_id: eventId }, json: { reason } }),
 }
 

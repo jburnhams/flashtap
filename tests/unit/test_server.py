@@ -165,3 +165,27 @@ def test_learner_records_over_http(client):
 def test_an_export_of_a_nickname_with_no_letters_is_still_named(client):
     odd = client.post("/api/learners", json={"nickname": "★★"}).json()["id"]
     assert client.get(f"/api/learners/{odd}/export").headers["content-disposition"].endswith('"flashtap-learner.json"')
+
+
+def test_engine_sessions_next_and_replay(client):
+    fox = client.post("/api/learners", json={"nickname": "Fox"}).json()["id"]
+    client.put("/api/settings", json={"choices": 3, "tries": 1})
+    r = client.post("/api/v1/sessions", json={"learner_id": fox})
+    assert r.status_code == 201
+    s = r.json()
+    assert s["policy"] == "utility@1"
+    assert s["config"] == {"choices": 3, "tries": 1, "max_rounds": 20, "max_minutes": 15, "break_every": 10}
+    n = client.post(f"/api/v1/sessions/{s['id']}/next", json={"seq": 0}).json()
+    assert n["action"] == "round"
+    assert n["round"]["choices"] == 3
+    assert n["round"]["tries"] == 1
+    assert n["rationale"][0] == "placement_probe"
+    assert len(n["candidates"]) == 12
+    assert client.post(f"/api/v1/sessions/{s['id']}/next", json={"seq": 0}).json() == n
+    assert client.post(f"/api/v1/sessions/{s['id']}/next", json={"seq": 5}).status_code == 400
+    assert client.post(f"/api/v1/sessions/{'f' * 32}/next", json={"seq": 0}).status_code == 404
+    assert client.post("/api/v1/sessions", json={"learner_id": "f" * 32}).status_code == 404
+    out = client.post("/api/v1/evaluations/replay", json={"learner_id": fox}).json()
+    assert (out["decisions"], out["reproduced"], out["differences"]) == (1, 1, [])
+    assert client.post("/api/v1/evaluations/replay", json={}).status_code in (400, 422)
+    assert client.post("/api/v1/evaluations/replay", json={"policy": "utility@0", "learner_id": fox}).status_code == 400

@@ -1,5 +1,7 @@
+import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { attemptFails, learnersError, quickLookGoes, roundError } from '../../src/mocks/handlers'
+import type { AttemptIn } from '../../src/api'
+import { attemptFails, learnersError, nextError, quickLookGoes, roundError, SESSION, sessionError } from '../../src/mocks/handlers'
 import { openApp, screen, within } from '../utils/render'
 import { mock, server } from '../utils/server'
 import { installFakeSpeech } from 'strata-react/testing'
@@ -116,7 +118,7 @@ describe('Play, the new kinds of round', () => {
     openApp('/')
     const kind = await screen.findByRole('combobox', { name: 'Kind of round' })
     expect(within(kind).getAllByRole('option').map(o => o.textContent)).toEqual([
-      'Matching', 'Colours', 'Shapes', 'Letters', 'Counting', 'Missing number', 'Quick look', 'Listen', 'Give a number', 'Order', 'Capitals', 'Sort by sound', 'Mixed',
+      'Chosen for them', 'Matching', 'Colours', 'Shapes', 'Letters', 'Counting', 'Missing number', 'Quick look', 'Listen', 'Give a number', 'Order', 'Capitals', 'Sort by sound', 'Mixed',
     ])
   })
 
@@ -316,5 +318,89 @@ describe('Play records rounds for the learner playing', () => {
     await user.click(await screen.findByRole('row', { name: tile('cow') }))
     await user.click(screen.getByRole('button', { name: 'Next' }))
     expect(mock.attempts).toEqual([])
+  })
+})
+
+describe('Play, chosen for them', () => {
+  const FOX = 'a'.repeat(32)
+
+  it('asks who is playing before choosing for them', async () => {
+    openApp('/?mode=next')
+    expect(await screen.findByText('Choose who is playing')).toBeInTheDocument()
+    expect(mock.nextRequests).toEqual([])
+  })
+
+  it('plays the rounds the engine chooses, says why, and records each against its decision', async () => {
+    const { user } = openApp(`/?mode=next&learner=${FOX}`)
+    expect(await screen.findByRole('heading', { level: 1, name: 'How many apples are there?' })).toBeInTheDocument()
+    expect(screen.getByText('Why this round: Practising: Count a set of things.')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Kind of round' })).toHaveValue('next')
+    await user.click(screen.getByRole('row', { name: tile('3') }))
+    await vi.waitFor(() => expect(mock.attempts).toHaveLength(1))
+    expect(mock.attempts[0]).toMatchObject({ learner_id: FOX, session_id: SESSION, decision_id: 'd0'.padEnd(32, '0'), mode: 'counting', seed: 5, asked: 'next', first_answer: { option: 'n3' }, tries: 1, outcome: 'right' })
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Put 3 ducks in the basket.' })).toBeInTheDocument()
+    expect(mock.nextRequests).toEqual([0, 1])
+  })
+
+  it('offers a break: keep playing asks for the next decision, stopping ends here', async () => {
+    mock.plan = ['break', 'matching']
+    const { user } = openApp(`/?mode=next&learner=${FOX}`)
+    expect(await screen.findByRole('heading', { name: 'Time for a break?' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button').filter(b => b.getAttribute('data-variant') === 'default').map(b => b.textContent)).toEqual(['Keep playing'])
+    await user.click(screen.getByRole('button', { name: 'Keep playing' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Find the cow.' })).toBeInTheDocument()
+
+    mock.plan = ['break']
+    mock.nextRequests = []
+    const again = openApp(`/?mode=next&learner=${FOX}`)
+    await again.user.click(await screen.findByRole('button', { name: 'Stop for now' }))
+    expect(await screen.findByRole('heading', { name: /^Played 0\srounds$/ })).toBeInTheDocument()
+    expect(mock.nextRequests).toEqual([0])
+  })
+
+  it('ends when the engine says the session is over, with a way to see what was shown', async () => {
+    mock.plan = ['matching', 'end']
+    const { user, router } = openApp(`/?mode=next&learner=${FOX}`)
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByRole('heading', { name: /^Played 1\sround$/ })).toBeInTheDocument()
+    expect(screen.getByText(/A session is 1 round at most\. The next session picks up/)).toBeInTheDocument()
+    await user.click(screen.getByRole('link', { name: 'See what Fox has shown' }))
+    expect(router.state.location.pathname).toBe(`/learners/${FOX}`)
+  })
+
+  it('asks for the next decision only once the answer is saved, so the engine knows it', async () => {
+    let land = () => {}
+    const landed = new Promise<void>(resolve => { land = resolve })
+    server.use(http.post('*/api/attempts', async ({ request }) => {
+      mock.attempts.push((await request.json()) as AttemptIn)
+      await landed
+      return HttpResponse.json({ event_id: 'x', first_correct: true, duplicate: false })
+    }))
+    const { user } = openApp(`/?mode=next&learner=${FOX}`)
+    await user.click(await screen.findByRole('row', { name: tile('3') }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await vi.waitFor(() => expect(mock.attempts).toHaveLength(1))
+    expect(mock.nextRequests).toEqual([0])
+    land()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Put 3 ducks in the basket.' })).toBeInTheDocument()
+    expect(mock.nextRequests).toEqual([0, 1])
+  })
+
+  it('says quietly when the server did not take a chosen round', async () => {
+    server.use(attemptFails)
+    const { user } = openApp(`/?mode=next&learner=${FOX}`)
+    await user.click(await screen.findByRole('row', { name: tile('3') }))
+    expect(await screen.findByRole('status')).toHaveTextContent('The last round was not saved for Fox')
+  })
+
+  it('says the server could not start a session or choose a round', async () => {
+    server.use(sessionError)
+    openApp(`/?mode=next&learner=${FOX}`)
+    expect(await screen.findByRole('alert')).toHaveTextContent('The server could not answer (503)')
+    server.resetHandlers(nextError)
+    openApp(`/?mode=next&learner=${FOX}`)
+    await vi.waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(0))
   })
 })

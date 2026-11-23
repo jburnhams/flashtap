@@ -133,6 +133,43 @@ def test_learners_list_and_rebuild(capsys, tmp_path):
     database(app).close()
 
 
+def test_engine_simulate_prints_the_scores_and_exits_1_when_the_rule_wins(capsys):
+    from flashtap.engine import simulate
+
+    r = simulate.report(8, 2, 3)
+    assert cli.main(["engine", "simulate", "--learners", "8", "--sessions", "2", "--seed", "3"]) == (
+        0 if r.beats_rule else 1
+    )
+    assert capsys.readouterr().out.splitlines() == list(simulate.describe(r))
+    cli.main(["engine", "simulate", "--learners", "8", "--sessions", "2", "--seed", "3", "--json"])
+    assert simulate.SimReport.model_validate_json(capsys.readouterr().out) == r
+
+
+def test_rebuild_remakes_the_engine_decisions_in_an_export(capsys, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from flashtap.server.app import create_app
+
+    app = create_app()
+    c = TestClient(app)
+    fox = c.post("/api/learners", json={"nickname": "Fox"}).json()["id"]
+    sid = c.post("/api/v1/sessions", json={"learner_id": fox}).json()["id"]
+    for seq in range(3):
+        c.post(f"/api/v1/sessions/{sid}/next", json={"seq": seq})
+    export = c.get(f"/api/learners/{fox}/export").json()
+    saved = tmp_path / "fox.json"
+    saved.write_text(json.dumps(export), encoding="utf-8")
+    assert cli.main(["learners", "rebuild", str(saved)]) == 0
+    assert "ok: 3 engine decision(s) remade exactly" in capsys.readouterr().out
+    export["decisions"][1]["seed"] = 1
+    saved.write_text(json.dumps(export), encoding="utf-8")
+    assert cli.main(["learners", "rebuild", str(saved)]) == 1
+    out = capsys.readouterr().out
+    assert f"decision 1 of session {sid}: seed was 1, remade" in out
+    assert "1 difference(s) rebuilding 0 event(s) and 3 decision(s)" in out
+    database(app).close()
+
+
 def test_openapi_writes_the_schema_and_the_committed_file_is_current(capsys, tmp_path):
     # web/openapi.json is what the web app's types are generated from (web CI checks that step with --check), so a
     # change to a response model that is not written back fails here, naming the command that fixes it.

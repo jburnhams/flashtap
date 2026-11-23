@@ -10,20 +10,22 @@ logged, is never rewritten (§14).
 import re
 import uuid
 from datetime import UTC, datetime
-from typing import Literal, Self
+from typing import Literal, Self, cast
 
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 from strata_python.tasks.flight import Conflict as FlightConflict
 
 from flashtap import __version__, rounds
+from flashtap.engine.policy import Action, Candidate, Config, Logged, Why
 from flashtap.learners.evidence import Event, SkillUse
-from flashtap.learners.models import ID_LENGTH, NICKNAME_LENGTH, Attempt, Learner, Sitting, Tombstone, utc
+from flashtap.learners.models import ID_LENGTH, NICKNAME_LENGTH, Attempt, Decision, Learner, Sitting, Tombstone, utc
 from flashtap.learners.report import MODELS, ModelInfo, SkillInfo, SkillReport, differences, skill_reports
 from flashtap.mechanics import PLACE, SEED_LIMIT, Mode, arranged_right
 
 IdText = Field(pattern=rf"^[0-9a-fA-F-]{{8,{ID_LENGTH}}}$")  # a UUID, with or without its dashes
+IdOrNone = Field(default=None, pattern=rf"^[0-9a-fA-F-]{{8,{ID_LENGTH}}}$")
 
 
 class Conflict(FlightConflict):
@@ -121,6 +123,7 @@ def delete_learner(db: Session, learner_id: str) -> None:
     attempts = select(Attempt.event_id).where(Attempt.learner_id == learner_id)
     db.execute(delete(Tombstone).where(Tombstone.event_id.in_(attempts)))
     db.execute(delete(Attempt).where(Attempt.learner_id == learner_id))
+    db.execute(delete(Decision).where(Decision.learner_id == learner_id))
     db.execute(delete(Sitting).where(Sitting.learner_id == learner_id))
     db.execute(delete(Learner).where(Learner.id == learner_id))
     db.commit()
@@ -152,12 +155,13 @@ class AttemptIn(BaseModel):
     version: int = Field(ge=1)
     choices: int = Field(ge=rounds.MIN_CHOICES, le=rounds.MAX_CHOICES)
     seed: int = Field(ge=0, lt=SEED_LIMIT)
-    asked: Mode  # the kind the grown-up picked: mixed, or the kind itself
+    asked: Mode | Literal["next"]  # the kind the grown-up picked: mixed, the kind itself, or next (the engine chose)
     presented_at: AwareDatetime
     answered_at: AwareDatetime
     first_answer: FirstAnswer
     tries: int = Field(ge=1, le=100)
     outcome: Literal["right", "missed", "left"]
+    decision_id: str | None = IdOrNone  # the engine's decision this round answers (POST /api/v1/sessions/{id}/next)
 
 
 class Ack(BaseModel):
@@ -203,7 +207,7 @@ def _row(a: AttemptIn, r: rounds.Round, right: bool, received: datetime) -> Atte
         mechanic=r.mechanic.value,
         options=0 if r.mechanic in PLACE else len(r.options),
         skills=[{"skill": s.skill, "role": s.role.value} for s in r.skills],
-        asked=a.asked.value,
+        asked=str(a.asked),  # a Mode is a StrEnum: its value
         presented_at=a.presented_at.astimezone(UTC),
         answered_at=a.answered_at.astimezone(UTC),
         first_answer=a.first_answer.model_dump(exclude_none=True),
@@ -211,10 +215,23 @@ def _row(a: AttemptIn, r: rounds.Round, right: bool, received: datetime) -> Atte
         tries=a.tries,
         outcome=a.outcome,
         received_at=received,
+        decision_id=a.decision_id,
     )
 
 
-_SAME = ("learner_id", "session_id", "mode", "version", "choices", "seed", "asked", "first_answer", "tries", "outcome")
+_SAME = (
+    "learner_id",
+    "session_id",
+    "mode",
+    "version",
+    "choices",
+    "seed",
+    "asked",
+    "first_answer",
+    "tries",
+    "outcome",
+    "decision_id",
+)
 
 
 def _same(old: Attempt, new: Attempt) -> bool:
@@ -223,9 +240,20 @@ def _same(old: Attempt, new: Attempt) -> bool:
     )
 
 
+def hold(db: Session, learner_id: str) -> None:
+    """Take the learner's row lock until this transaction ends, before reading the clock for a receipt, a strike or an
+    engine decision. Those three are then serialised per learner, so a time stamped under the lock orders them as the
+    database saw them: an attempt stamped before a decision was committed before the decision read the log, and one
+    stamped after waited for it. Without it, an attempt stamped first but committed after a decision's read would be
+    missing from the decision and present in its replay (engine/replay.py `as_of`). A no-op UPDATE locks the row on
+    Postgres and takes SQLite's write lock."""
+    db.execute(update(Learner).where(Learner.id == learner_id).values(nickname=Learner.nickname))
+
+
 def record(db: Session, a: AttemptIn, at: datetime | None = None) -> Ack:
     get_learner(db, a.learner_id)
     r, right = _judge(a)
+    hold(db, a.learner_id)
     row = _row(a, r, right, at or now())
     old = db.get(Attempt, a.event_id)
     if old is not None:
@@ -233,7 +261,10 @@ def record(db: Session, a: AttemptIn, at: datetime | None = None) -> Ack:
             raise Conflict(
                 f"Event {a.event_id} is already logged with different contents; an event is never rewritten."
             )
+        db.rollback()  # nothing to write: let the lock go
         return Ack(event_id=a.event_id, first_correct=old.first_correct, duplicate=True)
+    if a.decision_id is not None:
+        _check_decision(db, a)
     sitting = db.get(Sitting, a.session_id)
     if sitting is None:
         db.add(Sitting(id=a.session_id, learner_id=a.learner_id, started_at=row.presented_at, last_at=row.answered_at))
@@ -241,28 +272,43 @@ def record(db: Session, a: AttemptIn, at: datetime | None = None) -> Ack:
     elif sitting.learner_id != a.learner_id:
         raise Conflict(f"Session {a.session_id} belongs to another learner.")
     else:
-        sitting.started_at = min(utc(sitting.started_at), row.presented_at)
+        if sitting.policy is None:  # an engine session keeps the start it was given: its time limit counts from there
+            sitting.started_at = min(utc(sitting.started_at), row.presented_at)
         sitting.last_at = max(utc(sitting.last_at), row.answered_at)
     db.add(row)
     db.commit()
     return Ack(event_id=a.event_id, first_correct=right, duplicate=False)
 
 
+def _check_decision(db: Session, a: AttemptIn) -> None:
+    """An attempt that names a decision answers the round that decision chose, in its session, once."""
+    d = db.get(Decision, a.decision_id)
+    if d is None or d.learner_id != a.learner_id or d.session_id != a.session_id:
+        raise ValueError(f"No decision {a.decision_id} in session {a.session_id} for this learner.")
+    if (d.action, d.mode, d.version, d.choices, d.seed) != ("round", a.mode.value, a.version, a.choices, a.seed):
+        raise ValueError(f"Decision {a.decision_id} chose a different round.")
+    other = db.scalar(select(Attempt.event_id).where(Attempt.decision_id == a.decision_id))
+    if other is not None:
+        raise Conflict(f"Decision {a.decision_id} was already answered by event {other}.")
+
+
 def strike(db: Session, event_id: str, reason: str, at: datetime | None = None) -> None:
     """Strike an attempt out of every estimate (a tombstone; the attempt itself stays in the log). Striking twice keeps
     the first reason."""
-    if db.get(Attempt, event_id) is None:
+    x = db.get(Attempt, event_id)
+    if x is None:
         raise KeyError(f"No attempt {event_id}.")
     reason = " ".join(reason.split())[:200] or "struck out by a grown-up"
+    hold(db, x.learner_id)
     if db.get(Tombstone, event_id) is None:
         db.add(Tombstone(event_id=event_id, reason=reason, at=at or now()))
-        db.commit()
+    db.commit()
 
 
 def events(db: Session, learner_id: str) -> list[Event]:
     """The learner's log, oldest first, each attempt with its tombstone's reason when struck."""
     q = (
-        select(Attempt, Tombstone.reason)
+        select(Attempt, Tombstone.reason, Tombstone.at)
         .outerjoin(Tombstone, Tombstone.event_id == Attempt.event_id)
         .where(Attempt.learner_id == learner_id)
         .order_by(Attempt.presented_at, Attempt.event_id)
@@ -286,8 +332,11 @@ def events(db: Session, learner_id: str) -> list[Event]:
             tries=x.tries,
             outcome=x.outcome,
             struck=reason,
+            received_at=utc(x.received_at),
+            struck_at=utc(at) if (at := cast("datetime | None", struck_at)) is not None else None,  # None: not struck
+            decision_id=x.decision_id,
         )
-        for x, reason in db.execute(q).all()
+        for x, reason, struck_at in db.execute(q).all()
     ]
 
 
@@ -319,19 +368,65 @@ class SessionOut(BaseModel):
     id: str
     started_at: datetime
     last_at: datetime
+    policy: str | None = None  # an engine session's policy and settings (absent before 0.6.0)
+    config: Config | None = None
 
 
 class Export(BaseModel):
     """Everything held about one learner (§17), and the estimates made from it, so a rebuild can be checked."""
 
-    format: Literal["flashtap-learner@1"] = "flashtap-learner@1"
+    # @2 (0.6.0) adds the engine's decisions and each session's policy; an @1 file still reads, with none of either.
+    format: Literal["flashtap-learner@1", "flashtap-learner@2"] = "flashtap-learner@2"
     exported_at: datetime
     app_version: str
     learner: LearnerRow
     sessions: list[SessionOut]
     events: list[Event]
+    decisions: list[Logged] = Field(default_factory=list[Logged])
     models: list[ModelInfo]
     skills: list[SkillReport]
+
+
+def sessions_of(db: Session, learner_id: str) -> list[SessionOut]:
+    rows = db.scalars(select(Sitting).where(Sitting.learner_id == learner_id).order_by(Sitting.started_at, Sitting.id))
+    return [
+        SessionOut(
+            id=x.id,
+            started_at=utc(x.started_at),
+            last_at=utc(x.last_at),
+            policy=x.policy,
+            config=Config.model_validate(x.config) if x.config is not None else None,
+        )
+        for x in rows
+    ]
+
+
+def logged(x: Decision) -> Logged:
+    return Logged(
+        id=x.id,
+        session_id=x.session_id,
+        seq=x.seq,
+        at=utc(x.at),
+        policy=x.policy,
+        action=Action(x.action),
+        mode=Mode(x.mode) if x.mode is not None else None,
+        version=x.version,
+        choices=x.choices,
+        seed=x.seed,
+        skill=x.skill,
+        rationale=[Why(w) for w in x.rationale],
+        probability=x.probability,
+        candidates=[Candidate.model_validate(c) for c in x.candidates],
+    )
+
+
+def decisions(db: Session, learner_id: str) -> list[Logged]:
+    q = (
+        select(Decision)
+        .where(Decision.learner_id == learner_id)
+        .order_by(Decision.at, Decision.session_id, Decision.seq)
+    )
+    return [logged(x) for x in db.scalars(q)]
 
 
 def export(db: Session, learner_id: str, skills: list[SkillInfo], at: datetime | None = None) -> Export:
@@ -339,13 +434,13 @@ def export(db: Session, learner_id: str, skills: list[SkillInfo], at: datetime |
     # struck in between (READ COMMITTED), and the export would then not rebuild to its own estimates.
     log = events(db, learner_id)
     p = profile(db, learner_id, skills, log)
-    sittings = db.scalars(select(Sitting).where(Sitting.learner_id == learner_id).order_by(Sitting.started_at))
     return Export(
         exported_at=at or now(),
         app_version=__version__,
         learner=p.learner,
-        sessions=[SessionOut(id=s.id, started_at=utc(s.started_at), last_at=utc(s.last_at)) for s in sittings],
+        sessions=sessions_of(db, learner_id),
         events=log,
+        decisions=decisions(db, learner_id),
         models=p.models,
         skills=p.skills,
     )

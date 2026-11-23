@@ -22,10 +22,16 @@
 // took and how it ended; the server rebuilds the round and judges the answer itself. With nobody
 // chosen nothing is sent. A round the server did not take says so in one quiet line, never to the
 // child in words.
+//
+// "Chosen for them" (?mode=next) hands the choice to the adaptive engine (src/flashtap/engine/): Play starts a
+// session for the learner and asks for each decision by number, so a reload or a retry gets the same round back. A
+// decision is a round (with a line for the grown-up saying why it was chosen), an offered break (keep playing or
+// stop), or the end of the session, which the server calls once its rounds or minutes are up. It needs a learner:
+// what comes next is chosen from what they have shown.
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, ChoiceGrid, ChoiceGridSkeleton, DataView, EmptyState, Field, NativeSelect, PageHeader, PlaceBoard, SayAgain, Skeleton, speak, useLoad, useSearchParam, type ChoiceState, type Load, type PlaceState } from 'strata-react'
-import { api, isMode, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type LearnerRow, type Mode, type Option, type Round, type Settings } from '../api'
+import { Button, ButtonLink, ChoiceGrid, ChoiceGridSkeleton, DataView, Done, EmptyState, format, Field, NativeSelect, PageHeader, PlaceBoard, SayAgain, Skeleton, speak, useLoad, useSearchParam, type ChoiceState, type Load, type PlaceState } from 'strata-react'
+import { api, isPlayChoice, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type LearnerRow, type Mode, type Next, type Option, type PlayChoice, type Round, type SessionInfo, type Settings } from '../api'
 import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRight, solution, type Placement, type Turn } from '../play'
 // Every prompt and answer is said aloud in UK English (the content's dialect): a learner who cannot read yet still
 // needs the prompt. Browser voices cannot say an isolated sound such as /m/; recorded clips replace this for phonics
@@ -69,7 +75,7 @@ export function PlayScreen() {
 /** The kind of round and who plays, both in the URL so a link or a reload keeps them; the saved kind is the default. */
 function Choices({ settings, learners, session }: { settings: Settings; learners: Load<LearnerRow[]>; session: (id: string) => string }) {
   // The selects write the URL themselves (`param`); these read the same params back for the game.
-  const [mode] = useSearchParam<Mode>('mode', { default: settings.mode, parse: isMode })
+  const [mode] = useSearchParam<PlayChoice>('mode', { default: settings.mode, parse: isPlayChoice })
   const [learner] = useSearchParam<string>('learner', { default: '' })
   const known = learners.status === 'ready' ? learners.data : []
   const playing = known.find(x => x.id === learner) ?? null
@@ -78,12 +84,19 @@ function Choices({ settings, learners, session }: { settings: Settings; learners
       <div className="flex flex-wrap gap-4">
         <Field label="Kind of round" className="w-full max-w-xs">
           <NativeSelect param="mode" paramDefault={settings.mode}>
+            <option value="next">Chosen for them</option>
             {MODES.map(m => <option key={m} value={m}>{modeLabels[m]}</option>)}
           </NativeSelect>
         </Field>
         <WhoPlays learners={known} recording={playing !== null} failed={learners.status === 'error'} />
       </div>
-      <Game key={`${mode}-${playing?.id ?? ''}`} mode={mode} learner={playing} session={playing ? session(playing.id) : ''} />
+      {mode !== 'next' ? (
+        <Game key={`${mode}-${playing?.id ?? ''}`} mode={mode} learner={playing} session={playing ? session(playing.id) : ''} />
+      ) : playing ? (
+        <Planned key={playing.id} learner={playing} />
+      ) : (
+        <EmptyState title="Choose who is playing">Rounds chosen for a learner come from what they have shown, so pick who is playing first, or pick a kind of round.</EmptyState>
+      )}
     </div>
   )
 }
@@ -131,6 +144,82 @@ function Game({ mode, learner, session }: { mode: Mode; learner: LearnerRow | nu
       </DataView>
       {unsaved && <p role="status" className="type-caption text-muted-foreground">The last round was not saved for {learner?.nickname}: the server did not take it.</p>}
     </>
+  )
+}
+
+/** A session the engine plans for `learner`: started once per visit, then one decision after another. */
+function Planned({ learner }: { learner: LearnerRow }) {
+  const [visit] = useState(newId)
+  const session = useLoad({ queryKey: keys.session(learner.id, visit), queryFn: () => api.startSession(learner.id), staleTime: Infinity })
+  return (
+    <DataView state={session} isEmpty={() => false} skeleton={<RoundSkeleton />} empty={<EmptyState title="No session">The server started none.</EmptyState>}>
+      {s => <Decisions session={s} learner={learner} />}
+    </DataView>
+  )
+}
+
+/** Decision `seq` of the session, asked for by number so a retry returns the same one; each Next asks for the one after. */
+function Decisions({ session, learner }: { session: SessionInfo; learner: LearnerRow }) {
+  const [seq, setSeq] = useState(0)
+  const [unsaved, setUnsaved] = useState(false)
+  const queryClient = useQueryClient()
+  const decision = useLoad({ queryKey: keys.next(session.id, seq), queryFn: () => api.next(session.id, seq), staleTime: Infinity })
+  // The answer being saved, if any: the next decision is asked for only once it has landed (or failed), so the
+  // engine chooses knowing it; asked too soon, a third miss would not yet show and no break would be offered.
+  const saving = useRef<Promise<unknown>>(Promise.resolve())
+  const onward = () => { void saving.current.then(() => setSeq(n => n + 1)) }
+  const record = (d: Next, r: Round, a: Answered) => {
+    saving.current = api.recordAttempt({ event_id: newId(), learner_id: learner.id, session_id: session.id, decision_id: d.id, mode: r.mode, version: r.version, choices: r.choices, seed: r.seed, asked: 'next', ...a }).then(
+      () => {
+        setUnsaved(false)
+        void queryClient.invalidateQueries({ queryKey: ['learners'] })
+      },
+      () => setUnsaved(true),
+    )
+  }
+  return (
+    <>
+      <DataView state={decision} isEmpty={() => false} skeleton={<RoundSkeleton />} empty={<EmptyState title="Nothing chosen">The server chose nothing.</EmptyState>}>
+        {d =>
+          d.action === 'round' && d.round ? (
+            <div className="grid gap-4">
+              <Board key={d.id} round={d.round} onNext={onward} onAnswered={a => record(d, d.round as Round, a)} />
+              <p className="type-caption text-muted-foreground">Why this round: {d.why}</p>
+            </div>
+          ) : d.action === 'break' ? (
+            <BreakOffer decision={d} onContinue={onward} />
+          ) : (
+            <SessionOver learner={learner} decision={d} />
+          )
+        }
+      </DataView>
+      {unsaved && <p role="status" className="type-caption text-muted-foreground">The last round was not saved for {learner.nickname}: the server did not take it.</p>}
+    </>
+  )
+}
+
+/** An offered break: keeping on is the filled button (a break is offered, never forced), stopping ends the session here. */
+function BreakOffer({ decision, onContinue }: { decision: Next; onContinue: () => void }) {
+  const [stopped, setStopped] = useState(false)
+  useEffect(() => { say('Time for a break?') }, [])
+  if (stopped) return <Done title={`Played ${format.count(decision.rounds_played, 'round')}`} next="Come back later: the next session picks up from these rounds." />
+  return (
+    <PageHeader
+      title="Time for a break?"
+      finding={{ text: decision.why, action: <Button variant="default" onClick={onContinue} autoFocus>Keep playing</Button> }}
+      actions={<Button onClick={() => setStopped(true)}>Stop for now</Button>}
+    />
+  )
+}
+
+/** The session's end, at its rounds or minutes: what was played and that the next one starts afresh. */
+function SessionOver({ learner, decision }: { learner: LearnerRow; decision: Next }) {
+  return (
+    <Done
+      title={`Played ${format.count(decision.rounds_played, 'round')}`}
+      next={`${decision.why} The next session picks up from these rounds.`}
+      actions={<ButtonLink to={`/learners/${learner.id}`}>See what {learner.nickname} has shown</ButtonLink>}
+    />
   )
 }
 

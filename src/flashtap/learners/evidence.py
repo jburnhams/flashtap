@@ -49,6 +49,12 @@ class Event(BaseModel):
     tries: int
     outcome: str
     struck: str | None = None  # the tombstone's reason, when a grown-up struck the attempt out
+    # For replaying the adaptive engine (src/flashtap/engine/replay.py): what the server knew when it chose a round is
+    # the attempts it had received by then, struck or not as they stood then. All three are absent from an export
+    # made before 0.6.0; a replay then takes the answer time as the receipt and the strike as made at the start.
+    received_at: AwareDatetime | None = None
+    struck_at: AwareDatetime | None = None
+    decision_id: str | None = None  # the engine's choice this round answered (POST /api/v1/sessions/{id}/next)
 
 
 @dataclass(frozen=True)
@@ -68,6 +74,7 @@ class Use:
     """One attempt as it bears on one skill, counted or not, with the reason when not: a row of provenance."""
 
     event: Event
+    skill: str
     role: str
     counted: bool
     why: str  # empty when counted
@@ -77,31 +84,41 @@ def ordered(events: Iterable[Event]) -> list[Event]:
     return sorted(events, key=lambda e: (e.presented_at, e.event_id))
 
 
+def judge(e: Event, shown: set[str], names: Mapping[str, str] | None = None) -> list[Use]:
+    """One attempt's uses, one per skill it names, given the skills `shown` so far; adds to `shown` when it was right.
+    The one place the rules above are applied: `uses` folds a whole log through it, and the adaptive engine folds one
+    attempt at a time (src/flashtap/engine/model.py), so the two can never count differently."""
+    titles = names or {}
+    if e.struck is not None:
+        return [Use(e, s.skill, s.role, False, f"struck out: {e.struck}") for s in e.skills]
+    unshown = [s.skill for s in e.skills if s.role == "confound" and s.skill not in shown]
+    out: list[Use] = []
+    for s in e.skills:
+        if e.first_correct:
+            out.append(Use(e, s.skill, s.role, True, ""))
+        elif s.role != "primary":
+            out.append(
+                Use(
+                    e, s.skill, s.role, False, "a wrong answer counts only for the skill the round is written to assess"
+                )
+            )
+        elif unshown:
+            why = "could be " + " or ".join(titles.get(c, c) for c in unshown) + ", not yet shown"
+            out.append(Use(e, s.skill, s.role, False, why))
+        else:
+            out.append(Use(e, s.skill, s.role, True, ""))
+    if e.first_correct:
+        shown.update(s.skill for s in e.skills)
+    return out
+
+
 def uses(events: Iterable[Event], titles: Mapping[str, str] | None = None) -> dict[str, list[Use]]:
     """Every skill's uses, oldest first. `titles` names skills in the reasons (a skill's id otherwise)."""
-    names = titles or {}
     shown: set[str] = set()
     out: dict[str, list[Use]] = {}
     for e in ordered(events):
-        if e.struck is not None:
-            for s in e.skills:
-                out.setdefault(s.skill, []).append(Use(e, s.role, False, f"struck out: {e.struck}"))
-            continue
-        unshown = [s.skill for s in e.skills if s.role == "confound" and s.skill not in shown]
-        for s in e.skills:
-            if e.first_correct:
-                use = Use(e, s.role, True, "")
-            elif s.role != "primary":
-                use = Use(e, s.role, False, "a wrong answer counts only for the skill the round is written to assess")
-            elif unshown:
-                use = Use(
-                    e, s.role, False, "could be " + " or ".join(names.get(c, c) for c in unshown) + ", not yet shown"
-                )
-            else:
-                use = Use(e, s.role, True, "")
-            out.setdefault(s.skill, []).append(use)
-        if e.first_correct:
-            shown.update(s.skill for s in e.skills)
+        for u in judge(e, shown, titles):
+            out.setdefault(u.skill, []).append(u)
     return out
 
 
