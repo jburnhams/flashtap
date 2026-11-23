@@ -111,7 +111,10 @@ function Game({ mode, learner, session }: { mode: Mode; learner: LearnerRow | nu
   const [n, setN] = useState(0)
   const [unsaved, setUnsaved] = useState(false)
   const queryClient = useQueryClient()
-  const round = useLoad({ queryKey: keys.round(mode, n), queryFn: ({ signal }) => api.round(mode, signal), staleTime: Infinity })
+  // A fresh round for every visit (a change of kind or of who is playing remounts this Game): a round left
+  // half done and shown again with its answers forgotten would let a retry be recorded as a new first answer.
+  const [visit] = useState(newId)
+  const round = useLoad({ queryKey: keys.round(mode, visit, n), queryFn: ({ signal }) => api.round(mode, signal), staleTime: Infinity })
   const record = useCallback(
     (who: LearnerRow, r: Round, a: Answered) => {
       api.recordAttempt({ event_id: newId(), learner_id: who.id, session_id: session, mode: r.mode, version: r.version, choices: r.choices, seed: r.seed, asked: mode, ...a }).then(

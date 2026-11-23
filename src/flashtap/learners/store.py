@@ -304,8 +304,8 @@ class Profile(BaseModel):
     skills: list[SkillReport]
 
 
-def profile(db: Session, learner_id: str, skills: list[SkillInfo]) -> Profile:
-    log = events(db, learner_id)
+def profile(db: Session, learner_id: str, skills: list[SkillInfo], log: list[Event] | None = None) -> Profile:
+    log = events(db, learner_id) if log is None else log
     return Profile(
         learner=learner_row(db, learner_id),
         sessions=db.scalar(select(func.count()).select_from(Sitting).where(Sitting.learner_id == learner_id)) or 0,
@@ -335,14 +335,17 @@ class Export(BaseModel):
 
 
 def export(db: Session, learner_id: str, skills: list[SkillInfo], at: datetime | None = None) -> Export:
-    p = profile(db, learner_id, skills)
+    # One read of the log for both the events and the estimates: a second read could see a round recorded or
+    # struck in between (READ COMMITTED), and the export would then not rebuild to its own estimates.
+    log = events(db, learner_id)
+    p = profile(db, learner_id, skills, log)
     sittings = db.scalars(select(Sitting).where(Sitting.learner_id == learner_id).order_by(Sitting.started_at))
     return Export(
         exported_at=at or now(),
         app_version=__version__,
         learner=p.learner,
         sessions=[SessionOut(id=s.id, started_at=utc(s.started_at), last_at=utc(s.last_at)) for s in sittings],
-        events=events(db, learner_id),
+        events=log,
         models=p.models,
         skills=p.skills,
     )

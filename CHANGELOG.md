@@ -4,6 +4,11 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-23
 
+**Learner baseline review fixes (PR #42)**
+Two findings from review of PR #42.
+- `src/flashtap/learners/store.py`: `export` reads the attempt log once and reports on that read (`profile` takes the log), so a round recorded or struck during an export can no longer leave events and estimates that disagree on rebuild. `tests/unit/test_learners.py`: an export rebuilds with no differences.
+- `web/src/screens/PlayScreen.tsx`, `web/src/api.ts`: each Game asks for a fresh round (`keys.round` takes a per-visit id), so a half-done round left by changing who plays or the kind of round is not shown again with its answers forgotten, which let a retry be recorded as a new first answer. `web/tests/integration/PlayScreen.test.tsx`: the case.
+
 **Flashtap 0.5.0: the learner baseline, records, estimators and the Learner screen (branch `claude/project-thread-3cx0rj`)**
 The owner asked for the next PR of the plan (PR 4, P2): learners, sessions, append-only attempt events and tombstones on `strata_python.db`; rule and BKT estimators behind one interface; derived reporting states with unobserved kept apart; an adult Learner screen with evidence provenance; export and delete. Exit: rebuilding from the event log reproduces identical estimates. Estimates are computed from the log on every read rather than stored, so every profile is a rebuild.
 

@@ -359,6 +359,9 @@ def test_profile_export_and_evidence_rows(db_session: Session, fox: str) -> None
     assert out.format == "flashtap-learner@1"
     assert len(out.events) == 2
     assert len(out.sessions) == 1
+    assert store.rebuild(out) == []
+    # A log already read is the one reported on, so an export's events and estimates come from one read.
+    assert all(s.state == "unobserved" for s in store.profile(db_session, fox, SKILLS, log=[]).skills)
     rows = evidence_rows(store.events(db_session, fox), "maths.counting.objects", {})
     assert len(rows) == 1
     assert rows[0].answer.isdigit()

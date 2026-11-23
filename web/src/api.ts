@@ -162,7 +162,7 @@ export const keys = {
   settings: ['settings'],
   modes: ['modes'],
   content: ['content'],
-  round: (mode: Mode, n: number) => ['round', mode, n],
+  round: (mode: Mode, visit: string, n: number) => ['round', mode, visit, n],
   learners: ['learners'],
   profile: (id: string) => ['learners', id, 'profile'],
   evidence: (id: string, skill: string) => ['learners', id, 'evidence', skill],

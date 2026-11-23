@@ -277,6 +277,19 @@ describe('Play records rounds for the learner playing', () => {
     expect(mock.attempts[1]).toMatchObject({ mode: 'matching', first_answer: { option: 'pig' }, tries: 1, outcome: 'left' })
   })
 
+  it('asks for a fresh round when who is playing changes, so a half-done round is not answered again', async () => {
+    const { user } = openApp(`/?learner=${FOX}`)
+    await user.click(await screen.findByRole('row', { name: tile('duck') })) // wrong first answer
+    const asked = mock.roundRequests
+    const who = screen.getByRole('combobox', { name: 'Who is playing' })
+    await user.selectOptions(who, '')
+    await vi.waitFor(() => expect(mock.attempts).toHaveLength(1))
+    expect(mock.attempts[0]).toMatchObject({ first_answer: { option: 'duck' }, outcome: 'left' })
+    await user.selectOptions(who, FOX)
+    await vi.waitFor(() => expect(mock.roundRequests).toBe(asked + 2))
+    await screen.findByRole('row', { name: tile('pig') })
+  })
+
   it('sends a placing round’s arrangement at its first check', async () => {
     mock.tries = 1
     const { user } = openApp(`/?learner=${FOX}&mode=order`)
