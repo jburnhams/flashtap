@@ -17,6 +17,10 @@ It is the P2 estimators' BKT (src/flashtap/learners/estimators.py) with three ch
   The scheduler uses it to bring a skill back for review (§13 "spaced reviews"); the prediction does not, until real
   delayed answers say how much forgetting there is (§13 "calibrate retention schedules on real delayed recall data").
 
+A grown-up's override (`evidence.Told`) sets a skill's estimate when it was made and marks it as having evidence of
+its own, so the graph no longer fills it in; "can do it" lifts its unseen prerequisites as a right answer would, and
+"not yet" caps its unseen dependents as a miss would (§13: "rapid acceleration, regression and manual overrides").
+
 Which answers count, and for which skill, is `evidence.judge`, shared with the Learner screen, so the engine and the
 grown-up's report never count differently. The fold is incremental and ordered (`evidence.ordered`), so the same log
 always gives the same knowledge, which a replay of the engine's decisions relies on (`replay.py`).
@@ -31,7 +35,7 @@ from flashtap import content, rounds
 from flashtap.content import Registry
 from flashtap.content.model import Relation
 from flashtap.learners.estimators import PLACE_GUESS
-from flashtap.learners.evidence import Event, judge, ordered
+from flashtap.learners.evidence import TOLD_P, Event, Told, judge, ordered
 from flashtap.mechanics import PLACE, Mechanic, Mode
 
 DAY = 86400.0
@@ -96,6 +100,12 @@ class SkillState:
     last_seen: datetime | None = None  # the latest counted answer
     last_right: datetime | None = None
     half_life: float = 0.0  # days; 0 until the first right answer
+    told: bool = False  # a grown-up's override set it: evidence of its own, so the graph leaves it alone
+
+    @property
+    def seen(self) -> bool:
+        """Whether anything but the graph speaks for it: an answer of its own, or a grown-up."""
+        return self.own > 0 or self.told
 
     def recall(self, now: datetime) -> float:
         """The chance it is still remembered `now`: 1 just after a right answer, halving every half-life."""
@@ -155,6 +165,12 @@ class Knowledge:
             if u.role == "primary":
                 self._spread(u.skill, e.first_correct)
 
+    def tell(self, t: Told) -> None:
+        s = self.state(t.skill)
+        s.p = TOLD_P[t.says]
+        s.told = True
+        self._spread(t.skill, t.says == "can")
+
     def _update(self, known: float, right: bool, options: int) -> float:
         slip, g, learn = self.params.slip, guess(options), self.params.learn
         if right:
@@ -167,18 +183,25 @@ class Knowledge:
         p = self.p(skill)
         if right:
             for q in self.graph.before.get(skill, frozenset()):
-                if self.state(q).own == 0:
+                if not self.state(q).seen:
                     self.state(q).p = max(self.p(q), self.params.imply * p)
         else:
             for d in self.graph.after.get(skill, frozenset()):
-                if self.state(d).own == 0:
+                if not self.state(d).seen:
                     self.state(d).p = min(self.p(d), p)
 
 
-def fold(events: Iterable[Event], g: Graph, params: Params | None = None) -> Knowledge:
+def fold(events: Iterable[Event], g: Graph, params: Params | None = None, told: Iterable[Told] = ()) -> Knowledge:
+    """The log folded oldest first; each override in `told` (those standing, `evidence.told_as_of`) is taken at its
+    time, before an answer shown at the same moment."""
     k = Knowledge(g, params or Params())
+    pending = sorted(told, key=lambda t: (t.at, t.id))
     for e in ordered(events):
+        while pending and pending[0].at <= e.presented_at:
+            k.tell(pending.pop(0))
         k.observe(e)
+    for t in pending:
+        k.tell(t)
     return k
 
 

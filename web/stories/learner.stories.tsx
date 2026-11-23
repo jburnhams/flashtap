@@ -18,6 +18,10 @@ export const AllSkills: Story = { render: () => <AppAt route={`/learners/${FOX}?
 /** A skill opened to the rounds behind it: counted or not, and why. */
 export const EvidenceOpen: Story = { render: () => <AppAt route={`/learners/${FOX}?open=maths.counting.objects`} /> }
 export const EvidenceLoading: Story = { render: () => <AppAt route={`/learners/${FOX}?open=maths.counting.objects`} />, beforeEach: ({ msw }) => msw.use(evidenceLoading) }
+/** How they play: each kind with its numbers, the faces and the picks, and the patterns worth a look as hypotheses. */
+export const Engagement: Story = { render: () => <AppAt route={`/learners/${FOX}?show=engagement`} /> }
+/** Nothing played yet, so nothing to say about how. */
+export const EngagementNothingYet: Story = { render: () => <AppAt route={`/learners/${OWL}?show=engagement`} /> }
 /** Added, never played. */
 export const NothingYet: Story = { render: () => <AppAt route={`/learners/${OWL}`} /> }
 export const Loading: Story = { beforeEach: ({ msw }) => msw.use(profileLoading) }

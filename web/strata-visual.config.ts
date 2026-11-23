@@ -11,7 +11,7 @@
 // `npm run test:visual` builds both and compares; `npm run test:visual:update` writes new
 // baselines. Look at a diff in tests/visual/output/ before accepting it.
 import { defineVisualConfig } from 'strata-react/visual'
-import { handlers } from './src/mocks/handlers'
+import { handlers, nextRated } from './src/mocks/handlers'
 import { FOX } from './src/mocks/learners'
 
 export default defineVisualConfig({
@@ -41,6 +41,20 @@ export default defineVisualConfig({
         },
       },
       { name: 'counting', path: '/?mode=counting' },
+      {
+        // The three faces under a finished round, asked every few rounds (Settings, Sessions).
+        name: 'rated',
+        path: `/?mode=next&learner=${FOX}`,
+        states: {
+          faces: {
+            handlers: [nextRated],
+            setup: async page => {
+              await page.getByRole('row', { name: 'cow', exact: true }).click()
+              await page.getByRole('heading', { name: 'How was that one?' }).waitFor()
+            },
+          },
+        },
+      },
       {
         name: 'order',
         path: '/?mode=order',
@@ -73,10 +87,16 @@ export default defineVisualConfig({
               await page.getByRole('alertdialog').waitFor()
             },
           },
+          tell: {
+            setup: async page => {
+              await page.getByRole('button', { name: 'Say what Fox can do: Count a set of things' }).click()
+              await page.getByRole('dialog').waitFor()
+            },
+          },
         },
       },
       { name: 'content', path: '/content', states: { skills: [], curriculum: { path: '/content?tab=curriculum' } } },
-      { name: 'settings', path: '/settings', states: { play: [], appearance: { path: '/settings?tab=appearance' } } },
+      { name: 'settings', path: '/settings', states: { play: [], sessions: { path: '/settings?tab=sessions' }, appearance: { path: '/settings?tab=appearance' } } },
     ],
   },
 })

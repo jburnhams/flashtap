@@ -31,3 +31,27 @@ def test_save_validates_each_setting():
     with pytest.raises(ValueError, match="from 0 to 7"):
         settings.SETTINGS.save({"tries": "8"})
     assert settings.choices() == 3  # a refused save changes nothing
+
+
+def test_session_settings_have_defaults_ranges_and_an_off_switch(monkeypatch):
+    got = (
+        settings.session_rounds(),
+        settings.session_minutes(),
+        settings.break_every(),
+        settings.choice_every(),
+        settings.rate_every(),
+    )
+    assert got == (20, 15, 10, 5, 4)
+    settings.SETTINGS.save({"break_every": "0", "choice_every": "0", "rate_every": "0", "session_rounds": "100"})
+    assert (settings.break_every(), settings.choice_every(), settings.rate_every(), settings.session_rounds()) == (
+        0,
+        0,
+        0,
+        100,
+    )
+    with pytest.raises(ValueError, match="from 1 to 100"):
+        settings.SETTINGS.save({"session_rounds": "0"})
+    with pytest.raises(ValueError, match="from 1 to 120"):
+        settings.SETTINGS.save({"session_minutes": "121"})
+    monkeypatch.setenv("FLASHTAP_SESSION_MINUTES", "30")
+    assert settings.session_minutes() == 30

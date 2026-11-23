@@ -20,6 +20,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/attempts/{event_id}/rating": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Rating */
+        post: operations["post_rating_api_attempts__event_id__rating_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/attempts/{event_id}/strike": {
         parameters: {
             query?: never;
@@ -227,6 +244,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learners/{learner_id}/overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Override */
+        post: operations["post_override_api_v1_learners__learner_id__overrides_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/learners/{learner_id}/overrides/{override_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Withdraw */
+        post: operations["post_withdraw_api_v1_learners__learner_id__overrides__override_id__withdraw_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions": {
         parameters: {
             query?: never;
@@ -238,6 +289,23 @@ export interface paths {
         put?: never;
         /** Post Session */
         post: operations["post_session_api_v1_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/decisions/{seq}/pick": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Pick */
+        post: operations["post_pick_api_v1_sessions__session_id__decisions__seq__pick_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -278,7 +346,7 @@ export interface components {
          * Action
          * @enum {string}
          */
-        Action: "round" | "break" | "end";
+        Action: "round" | "choice" | "break" | "end";
         /**
          * AttemptIn
          * @description `POST /api/attempts`: one round answered, sent once the round is over (or left).
@@ -339,6 +407,11 @@ export interface components {
             information: number;
             /** Learning */
             learning: number;
+            /**
+             * Liked
+             * @default 0
+             */
+            liked: number;
             mode: components["schemas"]["Mode"];
             /** P Right */
             p_right: number;
@@ -364,6 +437,11 @@ export interface components {
              * @default 10
              */
             break_every: number;
+            /**
+             * Choice Every
+             * @default 0
+             */
+            choice_every: number;
             /** Choices */
             choices: number;
             /**
@@ -376,6 +454,11 @@ export interface components {
              * @default 20
              */
             max_rounds: number;
+            /**
+             * Rate Every
+             * @default 0
+             */
+            rate_every: number;
             /** Tries */
             tries: number;
         };
@@ -403,12 +486,24 @@ export interface components {
             /** Source */
             source: string;
         };
+        /** Engagement */
+        Engagement: {
+            /** Hypotheses */
+            hypotheses: components["schemas"]["Hypothesis"][];
+            /** Kinds */
+            kinds: components["schemas"]["KindRow"][];
+        };
         /** Estimate */
         Estimate: {
             /** Model */
             model: string;
             /** P */
             p: number;
+            /**
+             * Told
+             * @default 0
+             */
+            told: number;
             /** Used */
             used: number;
         };
@@ -527,13 +622,17 @@ export interface components {
             exported_at: string;
             /**
              * Format
-             * @default flashtap-learner@3
+             * @default flashtap-learner@4
              * @enum {string}
              */
-            format: "flashtap-learner@1" | "flashtap-learner@2" | "flashtap-learner@3";
+            format: "flashtap-learner@1" | "flashtap-learner@2" | "flashtap-learner@3" | "flashtap-learner@4";
             learner: components["schemas"]["LearnerRow"];
             /** Models */
             models: components["schemas"]["ModelInfo"][];
+            /** Overrides */
+            overrides?: components["schemas"]["Told"][];
+            /** Ratings */
+            ratings?: components["schemas"]["Rated"][];
             /** Sessions */
             sessions: components["schemas"]["SessionOut"][];
             /** Skills */
@@ -553,6 +652,10 @@ export interface components {
         };
         /** FlashtapSettings */
         FlashtapSettings: {
+            /** Break Every */
+            break_every: number;
+            /** Choice Every */
+            choice_every: number;
             /** Choices */
             choices: number;
             /**
@@ -560,6 +663,12 @@ export interface components {
              * @enum {string}
              */
             mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "mixed";
+            /** Rate Every */
+            rate_every: number;
+            /** Session Minutes */
+            session_minutes: number;
+            /** Session Rounds */
+            session_rounds: number;
             /** Tries */
             tries: number;
         };
@@ -586,6 +695,57 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * Hypothesis
+         * @description A pattern seen, what could explain it, and what to try: never a label about the child.
+         */
+        Hypothesis: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "quick_and_right" | "stuck" | "late_decline" | "disliked" | "passed_over";
+            /** Could Be */
+            could_be: string;
+            /** Mode */
+            mode: string | null;
+            /** Seen */
+            seen: string;
+            /** Try */
+            try_: string;
+        };
+        /**
+         * KindRow
+         * @description One kind of round as this learner has played it: how it went, how it was rated, how often picked.
+         */
+        KindRow: {
+            /** Disliked */
+            disliked: number;
+            /** Left */
+            left: number;
+            /** Liked */
+            liked: number;
+            /** Mean Tries */
+            mean_tries: number | null;
+            /** Median Seconds */
+            median_seconds: number | null;
+            /** Mode */
+            mode: string;
+            /** Offered */
+            offered: number;
+            /** Okay */
+            okay: number;
+            /** Picked */
+            picked: number;
+            /** Preference */
+            preference: number;
+            /** Right First */
+            right_first: number;
+            /** Rounds */
+            rounds: number;
+            /** Title */
+            title: string;
+        };
         /** LearnerRow */
         LearnerRow: {
             /** Attempts */
@@ -604,7 +764,7 @@ export interface components {
         };
         /**
          * Logged
-         * @description A decision as stored and exported: the choice, where it was made and when.
+         * @description A decision as stored and exported: the choice, where it was made and when, and for a choice what was picked.
          */
         Logged: {
             action: components["schemas"]["Action"];
@@ -624,10 +784,21 @@ export interface components {
             /** Id */
             id: string;
             mode?: components["schemas"]["Mode"] | null;
+            /** Offers */
+            offers?: components["schemas"]["Offer"][] | null;
+            /** Picked */
+            picked?: number | null;
+            /** Picked At */
+            picked_at?: string | null;
             /** Policy */
             policy: string;
             /** Probability */
             probability: number;
+            /**
+             * Rate
+             * @default false
+             */
+            rate: boolean;
             /** Rationale */
             rationale: components["schemas"]["Why"][];
             /** Seed */
@@ -685,10 +856,19 @@ export interface components {
             candidates: components["schemas"]["Candidate"][];
             /** Id */
             id: string;
+            /** Offers */
+            offers?: components["schemas"]["OfferOut"][] | null;
+            /** Picked */
+            picked?: number | null;
             /** Policy */
             policy: string;
             /** Probability */
             probability: number;
+            /**
+             * Rate
+             * @default false
+             */
+            rate: boolean;
             /** Rationale */
             rationale: components["schemas"]["Why"][];
             round: components["schemas"]["Round"] | null;
@@ -736,6 +916,45 @@ export interface components {
             /** Text */
             text: string;
         };
+        /**
+         * Offer
+         * @description One of the two rounds a choice offers: enough to rebuild it, and why it was put forward.
+         */
+        Offer: {
+            /** Choices */
+            choices: number;
+            /** Content */
+            content: {
+                [key: string]: number;
+            };
+            mode: components["schemas"]["Mode"];
+            /** Rationale */
+            rationale: components["schemas"]["Why"][];
+            /** Seed */
+            seed: number;
+            /** Skill */
+            skill: string;
+            /** Version */
+            version: number;
+        };
+        /**
+         * OfferOut
+         * @description One of a choice's two rounds, ready to play once picked, with its picture and name for the learner.
+         */
+        OfferOut: {
+            mode: components["schemas"]["Mode"];
+            /** Picture */
+            picture: string;
+            round: components["schemas"]["Round"];
+            /** Skill */
+            skill: string;
+            /** Skill Title */
+            skill_title: string;
+            /** Title */
+            title: string;
+            /** Why */
+            why: string;
+        };
         /** Option */
         Option: {
             /** Correct */
@@ -753,6 +972,30 @@ export interface components {
             picture: string;
             /** Word */
             word: string;
+        };
+        /**
+         * OverrideIn
+         * @description `POST /api/v1/learners/{id}/overrides`: a grown-up's observation of one skill (spec §15 "scoped human
+         *     observation"): the skill is its scope, `observer` its source label.
+         */
+        OverrideIn: {
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /**
+             * Observer
+             * @enum {string}
+             */
+            observer: "parent" | "teacher";
+            /**
+             * Says
+             * @enum {string}
+             */
+            says: "can" | "not_yet";
+            /** Skill */
+            skill: string;
         };
         /** PackRow */
         PackRow: {
@@ -787,6 +1030,11 @@ export interface components {
             /** Words */
             words: string[];
         };
+        /** PickIn */
+        PickIn: {
+            /** Offer */
+            offer: number;
+        };
         /** Piece */
         Piece: {
             /** Id */
@@ -814,6 +1062,7 @@ export interface components {
          * @description `GET /api/learners/{id}/profile`: the learner, what was recorded and every skill's estimates and state.
          */
         Profile: {
+            engagement: components["schemas"]["Engagement"];
             learner: components["schemas"]["LearnerRow"];
             /** Models */
             models: components["schemas"]["ModelInfo"][];
@@ -830,6 +1079,62 @@ export interface components {
          */
         QRole: "primary" | "secondary" | "confound";
         /**
+         * Rated
+         * @description One rating, as the log keeps it and an export carries it.
+         */
+        Rated: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Event Id */
+            event_id: string;
+            /** Mode */
+            mode: string;
+            /**
+             * Scale
+             * @default enjoyment
+             * @constant
+             */
+            scale: "enjoyment";
+            /** Session Id */
+            session_id: string;
+            /** Value */
+            value: number;
+        };
+        /** RatingAck */
+        RatingAck: {
+            /** Duplicate */
+            duplicate: boolean;
+            /** Event Id */
+            event_id: string;
+            /**
+             * Scale
+             * @constant
+             */
+            scale: "enjoyment";
+            /** Value */
+            value: number;
+        };
+        /**
+         * RatingIn
+         * @description `POST /api/attempts/{event_id}/rating`: how the learner said the round was, on three faces.
+         */
+        RatingIn: {
+            /**
+             * Scale
+             * @default enjoyment
+             * @constant
+             */
+            scale: "enjoyment";
+            /**
+             * Value
+             * @enum {integer}
+             */
+            value: -1 | 0 | 1;
+        };
+        /**
          * ReplayIn
          * @description `POST /api/v1/evaluations/replay`: the policy to replay with (only the current one is kept) and the data, one of
          *     a learner's records or a simulation.
@@ -839,7 +1144,7 @@ export interface components {
             learner_id?: string | null;
             /**
              * Policy
-             * @default utility@1
+             * @default utility@2
              */
             policy: string;
             simulated?: components["schemas"]["SimulatedIn"] | null;
@@ -1029,6 +1334,7 @@ export interface components {
             strand: string;
             /** Title */
             title: string;
+            told?: components["schemas"]["Told"] | null;
         };
         /** SkillRole */
         SkillRole: {
@@ -1079,6 +1385,38 @@ export interface components {
              */
             reason: string;
         };
+        /**
+         * Told
+         * @description A grown-up's observation of one skill, as the log keeps it and an export carries it.
+         */
+        Told: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Id */
+            id: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /**
+             * Observer
+             * @enum {string}
+             */
+            observer: "parent" | "teacher";
+            /**
+             * Says
+             * @enum {string}
+             */
+            says: "can" | "not_yet";
+            /** Skill */
+            skill: string;
+            /** Withdrawn At */
+            withdrawn_at?: string | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -1097,7 +1435,7 @@ export interface components {
          * @description Rationale codes (§15 "validated item + rationale codes"): what a decision is for.
          * @enum {string}
          */
-        Why: "placement_probe" | "introduce" | "practise" | "spaced_review" | "consolidate" | "diagnostic_contrast" | "easier_after_misses" | "exploration" | "break_due" | "frustration_break" | "session_cap_rounds" | "session_cap_minutes";
+        Why: "placement_probe" | "introduce" | "practise" | "spaced_review" | "consolidate" | "diagnostic_contrast" | "easier_after_misses" | "exploration" | "break_due" | "frustration_break" | "session_cap_rounds" | "session_cap_minutes" | "offered_choice" | "liked";
     };
     responses: never;
     parameters: never;
@@ -1127,6 +1465,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Ack"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_rating_api_attempts__event_id__rating_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RatingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatingAck"];
                 };
             };
             /** @description Validation Error */
@@ -1568,6 +1941,71 @@ export interface operations {
             };
         };
     };
+    post_override_api_v1_learners__learner_id__overrides_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                learner_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverrideIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Told"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_withdraw_api_v1_learners__learner_id__overrides__override_id__withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                learner_id: string;
+                override_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     post_session_api_v1_sessions_post: {
         parameters: {
             query?: never;
@@ -1588,6 +2026,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_pick_api_v1_sessions__session_id__decisions__seq__pick_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Next"];
                 };
             };
             /** @description Validation Error */

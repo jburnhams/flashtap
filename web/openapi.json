@@ -27,6 +27,7 @@
    "Action": {
     "enum": [
      "round",
+     "choice",
      "break",
      "end"
     ],
@@ -185,6 +186,11 @@
       "title": "Learning",
       "type": "number"
      },
+     "liked": {
+      "default": 0.0,
+      "title": "Liked",
+      "type": "number"
+     },
      "mode": {
       "$ref": "#/components/schemas/Mode"
      },
@@ -248,8 +254,14 @@
     "properties": {
      "break_every": {
       "default": 10,
-      "minimum": 1.0,
+      "minimum": 0.0,
       "title": "Break Every",
+      "type": "integer"
+     },
+     "choice_every": {
+      "default": 0,
+      "minimum": 0.0,
+      "title": "Choice Every",
       "type": "integer"
      },
      "choices": {
@@ -268,6 +280,12 @@
       "default": 20,
       "minimum": 1.0,
       "title": "Max Rounds",
+      "type": "integer"
+     },
+     "rate_every": {
+      "default": 0,
+      "minimum": 0.0,
+      "title": "Rate Every",
       "type": "integer"
      },
      "tries": {
@@ -356,6 +374,30 @@
     "title": "EdgeRow",
     "type": "object"
    },
+   "Engagement": {
+    "properties": {
+     "hypotheses": {
+      "items": {
+       "$ref": "#/components/schemas/Hypothesis"
+      },
+      "title": "Hypotheses",
+      "type": "array"
+     },
+     "kinds": {
+      "items": {
+       "$ref": "#/components/schemas/KindRow"
+      },
+      "title": "Kinds",
+      "type": "array"
+     }
+    },
+    "required": [
+     "kinds",
+     "hypotheses"
+    ],
+    "title": "Engagement",
+    "type": "object"
+   },
    "Estimate": {
     "properties": {
      "model": {
@@ -365,6 +407,11 @@
      "p": {
       "title": "P",
       "type": "number"
+     },
+     "told": {
+      "default": 0,
+      "title": "Told",
+      "type": "integer"
      },
      "used": {
       "title": "Used",
@@ -637,11 +684,12 @@
       "type": "string"
      },
      "format": {
-      "default": "flashtap-learner@3",
+      "default": "flashtap-learner@4",
       "enum": [
        "flashtap-learner@1",
        "flashtap-learner@2",
-       "flashtap-learner@3"
+       "flashtap-learner@3",
+       "flashtap-learner@4"
       ],
       "title": "Format",
       "type": "string"
@@ -654,6 +702,20 @@
        "$ref": "#/components/schemas/ModelInfo"
       },
       "title": "Models",
+      "type": "array"
+     },
+     "overrides": {
+      "items": {
+       "$ref": "#/components/schemas/Told"
+      },
+      "title": "Overrides",
+      "type": "array"
+     },
+     "ratings": {
+      "items": {
+       "$ref": "#/components/schemas/Rated"
+      },
+      "title": "Ratings",
       "type": "array"
      },
      "sessions": {
@@ -717,6 +779,18 @@
    },
    "FlashtapSettings": {
     "properties": {
+     "break_every": {
+      "maximum": 100.0,
+      "minimum": 0.0,
+      "title": "Break Every",
+      "type": "integer"
+     },
+     "choice_every": {
+      "maximum": 20.0,
+      "minimum": 0.0,
+      "title": "Choice Every",
+      "type": "integer"
+     },
      "choices": {
       "maximum": 8.0,
       "minimum": 2.0,
@@ -742,6 +816,24 @@
       "title": "Mode",
       "type": "string"
      },
+     "rate_every": {
+      "maximum": 20.0,
+      "minimum": 0.0,
+      "title": "Rate Every",
+      "type": "integer"
+     },
+     "session_minutes": {
+      "maximum": 120.0,
+      "minimum": 1.0,
+      "title": "Session Minutes",
+      "type": "integer"
+     },
+     "session_rounds": {
+      "maximum": 100.0,
+      "minimum": 1.0,
+      "title": "Session Rounds",
+      "type": "integer"
+     },
      "tries": {
       "maximum": 7.0,
       "minimum": 0.0,
@@ -752,7 +844,12 @@
     "required": [
      "mode",
      "choices",
-     "tries"
+     "tries",
+     "session_rounds",
+     "session_minutes",
+     "break_every",
+     "choice_every",
+     "rate_every"
     ],
     "title": "FlashtapSettings",
     "type": "object"
@@ -816,6 +913,142 @@
     "title": "HTTPValidationError",
     "type": "object"
    },
+   "Hypothesis": {
+    "description": "A pattern seen, what could explain it, and what to try: never a label about the child.",
+    "properties": {
+     "code": {
+      "enum": [
+       "quick_and_right",
+       "stuck",
+       "late_decline",
+       "disliked",
+       "passed_over"
+      ],
+      "title": "Code",
+      "type": "string"
+     },
+     "could_be": {
+      "title": "Could Be",
+      "type": "string"
+     },
+     "mode": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mode"
+     },
+     "seen": {
+      "title": "Seen",
+      "type": "string"
+     },
+     "try_": {
+      "title": "Try",
+      "type": "string"
+     }
+    },
+    "required": [
+     "code",
+     "mode",
+     "seen",
+     "could_be",
+     "try_"
+    ],
+    "title": "Hypothesis",
+    "type": "object"
+   },
+   "KindRow": {
+    "description": "One kind of round as this learner has played it: how it went, how it was rated, how often picked.",
+    "properties": {
+     "disliked": {
+      "title": "Disliked",
+      "type": "integer"
+     },
+     "left": {
+      "title": "Left",
+      "type": "integer"
+     },
+     "liked": {
+      "title": "Liked",
+      "type": "integer"
+     },
+     "mean_tries": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mean Tries"
+     },
+     "median_seconds": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Median Seconds"
+     },
+     "mode": {
+      "title": "Mode",
+      "type": "string"
+     },
+     "offered": {
+      "title": "Offered",
+      "type": "integer"
+     },
+     "okay": {
+      "title": "Okay",
+      "type": "integer"
+     },
+     "picked": {
+      "title": "Picked",
+      "type": "integer"
+     },
+     "preference": {
+      "title": "Preference",
+      "type": "number"
+     },
+     "right_first": {
+      "title": "Right First",
+      "type": "integer"
+     },
+     "rounds": {
+      "title": "Rounds",
+      "type": "integer"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     }
+    },
+    "required": [
+     "mode",
+     "title",
+     "rounds",
+     "right_first",
+     "median_seconds",
+     "mean_tries",
+     "left",
+     "liked",
+     "okay",
+     "disliked",
+     "offered",
+     "picked",
+     "preference"
+    ],
+    "title": "KindRow",
+    "type": "object"
+   },
    "LearnerRow": {
     "properties": {
      "attempts": {
@@ -859,7 +1092,7 @@
     "type": "object"
    },
    "Logged": {
-    "description": "A decision as stored and exported: the choice, where it was made and when.",
+    "description": "A decision as stored and exported: the choice, where it was made and when, and for a choice what was picked.",
     "properties": {
      "action": {
       "$ref": "#/components/schemas/Action"
@@ -915,6 +1148,43 @@
        }
       ]
      },
+     "offers": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/Offer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Offers"
+     },
+     "picked": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Picked"
+     },
+     "picked_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Picked At"
+     },
      "policy": {
       "title": "Policy",
       "type": "string"
@@ -922,6 +1192,11 @@
      "probability": {
       "title": "Probability",
       "type": "number"
+     },
+     "rate": {
+      "default": false,
+      "title": "Rate",
+      "type": "boolean"
      },
      "rationale": {
       "items": {
@@ -1092,6 +1367,31 @@
       "title": "Id",
       "type": "string"
      },
+     "offers": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/OfferOut"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Offers"
+     },
+     "picked": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Picked"
+     },
      "policy": {
       "title": "Policy",
       "type": "string"
@@ -1099,6 +1399,11 @@
      "probability": {
       "title": "Probability",
       "type": "number"
+     },
+     "rate": {
+      "default": false,
+      "title": "Rate",
+      "type": "boolean"
      },
      "rationale": {
       "items": {
@@ -1259,6 +1564,97 @@
     "title": "ObjectiveRow",
     "type": "object"
    },
+   "Offer": {
+    "description": "One of the two rounds a choice offers: enough to rebuild it, and why it was put forward.",
+    "properties": {
+     "choices": {
+      "title": "Choices",
+      "type": "integer"
+     },
+     "content": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Content",
+      "type": "object"
+     },
+     "mode": {
+      "$ref": "#/components/schemas/Mode"
+     },
+     "rationale": {
+      "items": {
+       "$ref": "#/components/schemas/Why"
+      },
+      "title": "Rationale",
+      "type": "array"
+     },
+     "seed": {
+      "title": "Seed",
+      "type": "integer"
+     },
+     "skill": {
+      "title": "Skill",
+      "type": "string"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "mode",
+     "version",
+     "content",
+     "choices",
+     "seed",
+     "skill",
+     "rationale"
+    ],
+    "title": "Offer",
+    "type": "object"
+   },
+   "OfferOut": {
+    "description": "One of a choice's two rounds, ready to play once picked, with its picture and name for the learner.",
+    "properties": {
+     "mode": {
+      "$ref": "#/components/schemas/Mode"
+     },
+     "picture": {
+      "title": "Picture",
+      "type": "string"
+     },
+     "round": {
+      "$ref": "#/components/schemas/Round"
+     },
+     "skill": {
+      "title": "Skill",
+      "type": "string"
+     },
+     "skill_title": {
+      "title": "Skill Title",
+      "type": "string"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     },
+     "why": {
+      "title": "Why",
+      "type": "string"
+     }
+    },
+    "required": [
+     "mode",
+     "title",
+     "picture",
+     "skill",
+     "skill_title",
+     "round",
+     "why"
+    ],
+    "title": "OfferOut",
+    "type": "object"
+   },
    "Option": {
     "properties": {
      "correct": {
@@ -1295,6 +1691,46 @@
      "feedback"
     ],
     "title": "Option",
+    "type": "object"
+   },
+   "OverrideIn": {
+    "description": "`POST /api/v1/learners/{id}/overrides`: a grown-up's observation of one skill (spec §15 \"scoped human\nobservation\"): the skill is its scope, `observer` its source label.",
+    "properties": {
+     "note": {
+      "default": "",
+      "maxLength": 200,
+      "title": "Note",
+      "type": "string"
+     },
+     "observer": {
+      "enum": [
+       "parent",
+       "teacher"
+      ],
+      "title": "Observer",
+      "type": "string"
+     },
+     "says": {
+      "enum": [
+       "can",
+       "not_yet"
+      ],
+      "title": "Says",
+      "type": "string"
+     },
+     "skill": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Skill",
+      "type": "string"
+     }
+    },
+    "required": [
+     "skill",
+     "says",
+     "observer"
+    ],
+    "title": "OverrideIn",
     "type": "object"
    },
    "PackRow": {
@@ -1390,6 +1826,21 @@
     "title": "PhonicsSetRow",
     "type": "object"
    },
+   "PickIn": {
+    "properties": {
+     "offer": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Offer",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "offer"
+    ],
+    "title": "PickIn",
+    "type": "object"
+   },
    "Piece": {
     "properties": {
      "id": {
@@ -1453,6 +1904,9 @@
    "Profile": {
     "description": "`GET /api/learners/{id}/profile`: the learner, what was recorded and every skill's estimates and state.",
     "properties": {
+     "engagement": {
+      "$ref": "#/components/schemas/Engagement"
+     },
      "learner": {
       "$ref": "#/components/schemas/LearnerRow"
      },
@@ -1484,7 +1938,8 @@
      "sessions",
      "struck",
      "models",
-     "skills"
+     "skills",
+     "engagement"
     ],
     "title": "Profile",
     "type": "object"
@@ -1497,6 +1952,101 @@
     ],
     "title": "QRole",
     "type": "string"
+   },
+   "Rated": {
+    "description": "One rating, as the log keeps it and an export carries it.",
+    "properties": {
+     "at": {
+      "format": "date-time",
+      "title": "At",
+      "type": "string"
+     },
+     "event_id": {
+      "title": "Event Id",
+      "type": "string"
+     },
+     "mode": {
+      "title": "Mode",
+      "type": "string"
+     },
+     "scale": {
+      "const": "enjoyment",
+      "default": "enjoyment",
+      "title": "Scale",
+      "type": "string"
+     },
+     "session_id": {
+      "title": "Session Id",
+      "type": "string"
+     },
+     "value": {
+      "title": "Value",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "event_id",
+     "session_id",
+     "mode",
+     "value",
+     "at"
+    ],
+    "title": "Rated",
+    "type": "object"
+   },
+   "RatingAck": {
+    "properties": {
+     "duplicate": {
+      "title": "Duplicate",
+      "type": "boolean"
+     },
+     "event_id": {
+      "title": "Event Id",
+      "type": "string"
+     },
+     "scale": {
+      "const": "enjoyment",
+      "title": "Scale",
+      "type": "string"
+     },
+     "value": {
+      "title": "Value",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "event_id",
+     "scale",
+     "value",
+     "duplicate"
+    ],
+    "title": "RatingAck",
+    "type": "object"
+   },
+   "RatingIn": {
+    "description": "`POST /api/attempts/{event_id}/rating`: how the learner said the round was, on three faces.",
+    "properties": {
+     "scale": {
+      "const": "enjoyment",
+      "default": "enjoyment",
+      "title": "Scale",
+      "type": "string"
+     },
+     "value": {
+      "enum": [
+       -1,
+       0,
+       1
+      ],
+      "title": "Value",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "value"
+    ],
+    "title": "RatingIn",
+    "type": "object"
    },
    "ReplayIn": {
     "description": "`POST /api/v1/evaluations/replay`: the policy to replay with (only the current one is kept) and the data, one of\na learner's records or a simulation.",
@@ -1513,7 +2063,7 @@
       "title": "Learner Id"
      },
      "policy": {
-      "default": "utility@1",
+      "default": "utility@2",
       "title": "Policy",
       "type": "string"
      },
@@ -1996,6 +2546,16 @@
      "title": {
       "title": "Title",
       "type": "string"
+     },
+     "told": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Told"
+       },
+       {
+        "type": "null"
+       }
+      ]
      }
     },
     "required": [
@@ -2145,6 +2705,66 @@
     "title": "StrikeIn",
     "type": "object"
    },
+   "Told": {
+    "description": "A grown-up's observation of one skill, as the log keeps it and an export carries it.",
+    "properties": {
+     "at": {
+      "format": "date-time",
+      "title": "At",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "note": {
+      "default": "",
+      "title": "Note",
+      "type": "string"
+     },
+     "observer": {
+      "enum": [
+       "parent",
+       "teacher"
+      ],
+      "title": "Observer",
+      "type": "string"
+     },
+     "says": {
+      "enum": [
+       "can",
+       "not_yet"
+      ],
+      "title": "Says",
+      "type": "string"
+     },
+     "skill": {
+      "title": "Skill",
+      "type": "string"
+     },
+     "withdrawn_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Withdrawn At"
+     }
+    },
+    "required": [
+     "id",
+     "skill",
+     "says",
+     "observer",
+     "at"
+    ],
+    "title": "Told",
+    "type": "object"
+   },
    "ValidationError": {
     "properties": {
      "ctx": {
@@ -2199,7 +2819,9 @@
      "break_due",
      "frustration_break",
      "session_cap_rounds",
-     "session_cap_minutes"
+     "session_cap_minutes",
+     "offered_choice",
+     "liked"
     ],
     "title": "Why",
     "type": "string"
@@ -2248,6 +2870,55 @@
      }
     },
     "summary": "Post Attempt"
+   }
+  },
+  "/api/attempts/{event_id}/rating": {
+   "post": {
+    "operationId": "post_rating_api_attempts__event_id__rating_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "event_id",
+      "required": true,
+      "schema": {
+       "title": "Event Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RatingIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RatingAck"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Post Rating"
    }
   },
   "/api/attempts/{event_id}/strike": {
@@ -2833,6 +3504,96 @@
     "summary": "Post Replay"
    }
   },
+  "/api/v1/learners/{learner_id}/overrides": {
+   "post": {
+    "operationId": "post_override_api_v1_learners__learner_id__overrides_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "learner_id",
+      "required": true,
+      "schema": {
+       "title": "Learner Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/OverrideIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Told"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Post Override"
+   }
+  },
+  "/api/v1/learners/{learner_id}/overrides/{override_id}/withdraw": {
+   "post": {
+    "operationId": "post_withdraw_api_v1_learners__learner_id__overrides__override_id__withdraw_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "learner_id",
+      "required": true,
+      "schema": {
+       "title": "Learner Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "override_id",
+      "required": true,
+      "schema": {
+       "title": "Override Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Post Withdraw"
+   }
+  },
   "/api/v1/sessions": {
    "post": {
     "operationId": "post_session_api_v1_sessions_post",
@@ -2869,6 +3630,64 @@
      }
     },
     "summary": "Post Session"
+   }
+  },
+  "/api/v1/sessions/{session_id}/decisions/{seq}/pick": {
+   "post": {
+    "operationId": "post_pick_api_v1_sessions__session_id__decisions__seq__pick_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "session_id",
+      "required": true,
+      "schema": {
+       "title": "Session Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "seq",
+      "required": true,
+      "schema": {
+       "title": "Seq",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PickIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Next"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Post Pick"
    }
   },
   "/api/v1/sessions/{session_id}/next": {

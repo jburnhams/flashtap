@@ -12,6 +12,11 @@ reasons beside each attempt (the spec's "evidence provenance", §15). The rules,
 - A skill is *shown* once it has one counted right answer, in any role.
 - A struck-out attempt (a tombstone) counts for nothing and touches nothing.
 
+A grown-up's override (`Told`, §13 "manual teacher/parent overrides with source-labelled evidence") is evidence of
+another source, not an attempt: it sets a skill's estimate at the time it was made ("can do it" to `TOLD_P["can"]`,
+"not yet" to `TOLD_P["not_yet"]`), and the learner's own answers after it move the estimate on from there, so a
+wrong override is corrected by play. It never counts as an answer, so it cannot make a reporting state on its own.
+
 Attempts are taken oldest first by (presented_at, event_id), so the same log in any storage order gives the same
 evidence: the replay test shuffles it to prove so.
 """
@@ -19,6 +24,7 @@ evidence: the replay test shuffles it to prove so.
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, Field
 
@@ -58,6 +64,36 @@ class Event(BaseModel):
     received_at: AwareDatetime | None = None
     struck_at: AwareDatetime | None = None
     decision_id: str | None = None  # the engine's choice this round answered (POST /api/v1/sessions/{id}/next)
+
+
+Says = Literal["can", "not_yet"]
+Observer = Literal["parent", "teacher"]
+# What an override sets a skill's chance of being known to. Not 1 and 0: a grown-up can be wrong, and an answer after
+# it must still be able to move the estimate (from 0.95, one miss brings BKT to about 0.75).
+TOLD_P: dict[str, float] = {"can": 0.95, "not_yet": 0.05}
+
+
+class Told(BaseModel):
+    """A grown-up's observation of one skill, as the log keeps it and an export carries it."""
+
+    id: str
+    skill: str
+    says: Says
+    observer: Observer
+    note: str = ""
+    at: AwareDatetime
+    withdrawn_at: AwareDatetime | None = None
+
+
+def told_as_of(told: Iterable[Told], at: datetime) -> list[Told]:
+    """The overrides standing at `at`, oldest first: made by then and not withdrawn by then."""
+    out = [t for t in told if t.at <= at and (t.withdrawn_at is None or t.withdrawn_at > at)]
+    return sorted(out, key=lambda t: (t.at, t.id))
+
+
+def standing(told: Iterable[Told]) -> list[Told]:
+    """The overrides not withdrawn, oldest first."""
+    return sorted((t for t in told if t.withdrawn_at is None), key=lambda t: (t.at, t.id))
 
 
 @dataclass(frozen=True)

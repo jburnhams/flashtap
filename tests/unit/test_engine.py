@@ -16,8 +16,8 @@ from flashtap.engine.model import Graph, Knowledge, Params, fold
 from flashtap.engine.policy import POLICY, Action, Config, Past, SetAside, Why, decide, explain
 from flashtap.learners import db as learner_db
 from flashtap.learners import store
-from flashtap.learners.evidence import Event, SkillUse
-from flashtap.learners.models import Attempt, Decision, Sitting
+from flashtap.learners.evidence import TOLD_P, Event, SkillUse, Told
+from flashtap.learners.models import Attempt, Decision, Override, Rating, Sitting
 from flashtap.mechanics import Mode
 
 T0 = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
@@ -493,7 +493,7 @@ def test_replay_remakes_every_logged_decision_even_after_a_strike(db_session: Se
     assert out.scores[0].attempts == len(store.events(db_session, fox)) - 1
 
     saved = store.export(db_session, fox, [])
-    assert saved.format == "flashtap-learner@3"
+    assert saved.format == "flashtap-learner@4"
     assert saved.sessions[0].config is not None
     starts = {x.id: (x.started_at, x.config) for x in saved.sessions}
     assert replay.replay(saved.events, saved.decisions, starts, G) == (out.decisions, [])
@@ -517,7 +517,7 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
     retired = [d.model_copy(update={"policy": "utility@0"}) for d in old[:1]]
     assert replay.replay(log, retired, {}, G) == (
         0,
-        [f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now {POLICY.id})"],
+        [f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2)"],
     )
     assert replay.replay(log, old[:1], {}, G)[1] == [
         f"decision 0 of session {old[0].session_id}: its session's start and settings are not in the log"
@@ -549,7 +549,7 @@ def test_the_log_as_it_stood_counts_only_what_was_received_and_struck_by_then() 
 
 
 def test_evaluate_refuses_another_policy_and_runs_a_simulation(db_session: Session, fox: str) -> None:
-    with pytest.raises(ValueError, match="Only the current policy"):
+    with pytest.raises(ValueError, match="utility@0 is not kept"):
         sessions.evaluate(db_session, sessions.ReplayIn(policy="utility@0", learner_id=fox), G)
     with pytest.raises(ValueError, match="learner_id or a simulated"):
         sessions.ReplayIn()
@@ -613,3 +613,180 @@ def test_answers_and_decisions_sent_at_once_still_replay_exactly() -> None:
     bind.dispose()
     assert out.decisions == 13
     assert (out.reproduced, out.differences) == (out.decisions, [])
+
+
+# P4: choices of two, ratings, overrides
+
+
+def play_choosing(
+    db: Session, learner: str, config: Config, start: datetime, pick: int = 0, rate: int | None = None
+) -> list[sessions.Next]:
+    """Like `play_session`, picking offer `pick` from every choice and, when `rate` is given, rating every round the
+    decision asks about with it."""
+    info = sessions.start(db, learner, config, at=start)
+    out: list[sessions.Next] = []
+    at = start
+    for seq in range(100):
+        n = sessions.next_decision(db, info.id, seq, G, TITLES, at=at)
+        if n.action is Action.CHOICE:
+            n = sessions.pick(db, info.id, seq, pick, TITLES, at=at + timedelta(seconds=1))
+        out.append(n)
+        if n.action is Action.END:
+            break
+        if n.round is not None:
+            ack = answer(db, n, learner, right=seq % 3 != 2, at=at + timedelta(seconds=2))
+            if rate is not None and n.rate:
+                store.rate(db, ack.event_id, store.RatingIn(value=rate), at=at + timedelta(seconds=10))
+        at += timedelta(seconds=30)
+    return out
+
+
+def test_every_nth_round_is_a_choice_of_two_kinds_of_different_mechanics(db_session: Session, fox: str) -> None:
+    config = Config(choices=4, tries=0, max_rounds=9, break_every=0, choice_every=3, rate_every=2)
+    made = play_choosing(db_session, fox, config, T0)
+    assert [n.action for n in made] == [Action.ROUND, Action.ROUND, Action.CHOICE] * 3 + [Action.END]
+    assert Action.BREAK not in [n.action for n in made]  # break_every 0: no regular breaks
+    assert [n.rate for n in made[:-1]] == [False, True] * 4 + [False]  # every second round asks for the faces
+    c = made[2]
+    assert c.offers is not None
+    assert len(c.offers) == 2
+    a, b = c.offers
+    assert model.SHAPE[a.mode].mechanic is not model.SHAPE[b.mode].mechanic
+    assert (c.picked, c.round) == (0, a.round)  # the picked offer is the round played
+    assert c.skill == a.skill
+    assert c.rationale == [Why.OFFER]
+    assert c.why.startswith("Two to pick from, so they choose what comes next.")
+    assert a.picture == rounds.PICTURES[a.mode]
+    assert a.title == rounds.MODE_NAMES[a.mode][0]
+    assert Why.EXPLORE.value not in b.why  # the second is the best of the rest, never put forward by chance
+    assert made[-1].rounds_played == 9  # a picked choice is a round played
+    out = sessions.evaluate(db_session, sessions.ReplayIn(learner_id=fox), G)
+    assert (out.reproduced, out.differences) == (out.decisions, [])
+
+
+def test_a_pick_is_kept_once_and_only_while_the_choice_is_the_latest(db_session: Session, fox: str) -> None:
+    info = sessions.start(db_session, fox, Config(choices=4, tries=0, choice_every=1), at=T0)
+    n = sessions.next_decision(db_session, info.id, 0, G, TITLES, at=T0)
+    assert n.action is Action.CHOICE
+    assert n.round is None
+    assert n.offers is not None
+    unpicked = n.model_copy(update={"round": n.offers[1].round})
+    with pytest.raises(ValueError, match="nobody has picked from yet"):
+        answer(db_session, unpicked, fox, right=True, at=T0)
+    p = sessions.pick(db_session, info.id, 0, 1, TITLES, at=T0)
+    assert p.picked == 1
+    assert p.round == n.offers[1].round
+    assert sessions.pick(db_session, info.id, 0, 1, TITLES) == p  # the same pick again is acknowledged
+    with pytest.raises(store.Conflict, match="already answered with offer 1"):
+        sessions.pick(db_session, info.id, 0, 0, TITLES)
+    with pytest.raises(ValueError, match="chose a different round"):
+        answer(db_session, p.model_copy(update={"round": n.offers[0].round}), fox, right=True, at=T0)
+    answer(db_session, p, fox, right=True, at=T0)
+    nxt = sessions.next_decision(db_session, info.id, 1, G, TITLES, at=T0 + timedelta(minutes=1))
+    assert nxt.action is Action.CHOICE
+    with pytest.raises(KeyError, match="No choice 5"):
+        sessions.pick(db_session, info.id, 5, 0, TITLES)
+    sessions.next_decision(db_session, info.id, 2, G, TITLES, at=T0 + timedelta(minutes=2))  # 1 left unpicked
+    with pytest.raises(store.Conflict, match="moved on past choice 1"):
+        sessions.pick(db_session, info.id, 1, 0, TITLES)
+    round_info = sessions.start(db_session, fox, CONFIG, at=T0)
+    sessions.next_decision(db_session, round_info.id, 0, G, TITLES, at=T0)
+    with pytest.raises(KeyError, match="No choice 0"):
+        sessions.pick(db_session, round_info.id, 0, 0, TITLES)
+
+
+def test_what_a_learner_likes_nudges_the_kinds_offered(db_session: Session, fox: str) -> None:
+    k = Knowledge(G)
+    plain = {x.mode: x for x in decide(k, past(), CONFIG, "s:0", T0).candidates}
+    liked = {x.mode: x for x in decide(k, past(), CONFIG, "s:0", T0, likes={"counting": 1.0}).candidates}
+    assert liked[Mode.COUNTING].liked == 1.0
+    assert liked[Mode.COUNTING].enjoyment == pytest.approx(plain[Mode.COUNTING].enjoyment + POLICY.weights.liked)
+    assert liked[Mode.COUNTING].probability > plain[Mode.COUNTING].probability
+    assert liked[Mode.LISTEN].liked == 0.0
+    picks = [decide(k, past(), CONFIG, f"s:{i}", T0, likes={"counting": 1.0}) for i in range(80)]
+    assert any(Why.LIKED in c.rationale for c in picks if c.mode is Mode.COUNTING)
+    assert all(Why.LIKED not in c.rationale for c in picks if c.mode is not Mode.COUNTING)
+    assert explain(next(c for c in picks if Why.LIKED in c.rationale), {}, CONFIG, 0).count("They have liked") == 1
+
+
+def test_ratings_and_picks_replay_as_the_decisions_saw_them(db_session: Session, fox: str) -> None:
+    config = Config(choices=4, tries=0, max_rounds=8, choice_every=2, rate_every=1)
+    play_choosing(db_session, fox, config, T0, pick=1, rate=1)
+    play_choosing(db_session, fox, config, T0 + timedelta(days=1), pick=0, rate=-1)
+    rated = store.ratings(db_session, fox)
+    assert len(rated) == 16
+    assert {r.value for r in rated} == {1, -1}
+    made = store.decisions(db_session, fox)
+    assert any(c.liked != 0 for d in made for c in d.candidates)  # the second session saw the first's faces
+    out = sessions.evaluate(db_session, sessions.ReplayIn(learner_id=fox), G)
+    assert (out.reproduced, out.differences) == (out.decisions, [])
+    saved = store.export(db_session, fox, [])
+    assert saved.ratings == rated
+    starts = {x.id: (x.started_at, x.config) for x in saved.sessions}
+    assert replay.replay(saved.events, saved.decisions, starts, G, saved.ratings, saved.overrides) == (
+        out.decisions,
+        [],
+    )
+    # Without the ratings the second session's decisions come out different: they did depend on them.
+    assert replay.replay(saved.events, saved.decisions, starts, G)[1]
+
+
+def test_a_grown_ups_override_places_a_skill_and_its_neighbours(db_session: Session, fox: str) -> None:
+    can = Told(id="a" * 32, skill=COUNT, says="can", observer="parent", at=T0)
+    k = fold([], G, told=[can])
+    assert k.p(COUNT) == TOLD_P["can"]
+    assert k.state(COUNT).told
+    assert k.state(COUNT).own == 0
+    assert k.p(ONE_TO_ONE) == pytest.approx(
+        Params().imply * TOLD_P["can"]
+    )  # a prerequisite lifted, as by a right answer
+    shown = event(Mode.MISSING, at=T0 - timedelta(hours=1))  # numerals shown, so a miss in Counting counts
+    after = fold([shown, event(Mode.COUNTING, right=False, at=T0 + timedelta(minutes=1))], G, told=[can])
+    assert after.p(COUNT) < TOLD_P["can"]  # an answer after it moves it on
+    before = fold([shown, event(Mode.COUNTING, right=False, at=T0 - timedelta(minutes=1))], G, told=[can])
+    assert before.p(COUNT) == TOLD_P["can"]  # an answer before it does not
+    cands = {x.mode: x for x in decide(k, past(), CONFIG, "s:0", T0).candidates}
+    assert cands[Mode.COUNTING].action is Why.CONSOLIDATE  # said to be known, no answer yet: checked, not reviewed
+    no = Told(id="b" * 32, skill=COUNT, says="not_yet", observer="teacher", at=T0)
+    k = fold([], G, told=[no])
+    assert k.p(GIVE) <= TOLD_P["not_yet"]  # a dependent capped
+    cands = {x.mode: x for x in decide(k, past(), CONFIG, "s:0", T0).candidates}
+    assert cands[Mode.GIVE].set_aside is SetAside.PREREQUISITE  # a grown-up's "not yet" is a known gap
+
+
+def test_overrides_replay_as_they_stood(db_session: Session, fox: str) -> None:
+    t = store.tell(db_session, fox, store.OverrideIn(skill=COUNT, says="can", observer="parent"), {COUNT}, at=T0)
+    play_session(db_session, fox, Config(choices=4, tries=0, max_rounds=4), T0 + timedelta(minutes=1))
+    store.withdraw(db_session, fox, t.id, at=T0 + timedelta(hours=1))
+    play_session(db_session, fox, Config(choices=4, tries=0, max_rounds=4), T0 + timedelta(hours=2), seed=3)
+    made = store.decisions(db_session, fox)
+    first = next(c for c in made[0].candidates if c.mode is Mode.COUNTING)
+    assert first.action is not Why.PLACEMENT  # the first session saw the override
+    out = sessions.evaluate(db_session, sessions.ReplayIn(learner_id=fox), G)
+    assert (out.reproduced, out.differences) == (out.decisions, [])
+
+
+def test_decisions_logged_by_utility_1_are_remade_by_the_current_policy(db_session: Session, fox: str) -> None:
+    """A 0.6.0 or 0.7.0 database: decisions by utility@1, candidates without `liked`, a session config without the
+    choice and rating cadence. The current policy remakes each exactly."""
+    play_session(db_session, fox, Config(choices=4, tries=0, max_rounds=6, break_every=3), T0)
+    for d in db_session.scalars(select(Decision)):
+        d.policy = "utility@1"
+        d.candidates = [{k: v for k, v in c.items() if k != "liked"} for c in d.candidates]
+    for x in db_session.scalars(select(Sitting)):
+        x.config = {k: v for k, v in (x.config or {}).items() if k not in {"choice_every", "rate_every"}}
+    db_session.commit()
+    out = sessions.evaluate(db_session, sessions.ReplayIn(policy="utility@1", learner_id=fox), G)
+    assert out.policy == POLICY.id
+    assert (out.reproduced, out.differences) == (out.decisions, [])
+    assert out.decisions == 8
+
+
+def test_deleting_a_learner_deletes_their_ratings_and_overrides(db_session: Session, fox: str) -> None:
+    play_choosing(db_session, fox, Config(choices=4, tries=0, max_rounds=2, rate_every=1), T0, rate=0)
+    store.tell(db_session, fox, store.OverrideIn(skill=COUNT, says="can", observer="parent"), {COUNT})
+    assert db_session.scalars(select(Rating)).all()
+    assert db_session.scalars(select(Override)).all()
+    store.delete_learner(db_session, fox)
+    assert db_session.scalars(select(Rating)).all() == []
+    assert db_session.scalars(select(Override)).all() == []

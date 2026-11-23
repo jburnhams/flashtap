@@ -16,6 +16,10 @@ Reporting states (spec §13) are derived labels, not the model's state: the mode
 - `retained`: generalised, right again at least `RETAINED_AFTER` after its first counted right answer, and the latest
   counted answer right.
 
+A grown-up's override (`evidence.Told`) is shown beside the state (`told`) and folded into BKT's estimate at its time,
+but it is not an answer: it adds no counted answers, so it cannot make a state on its own. A skill with an override and
+no rounds stays `unobserved` by Flashtap, with the grown-up's word beside it.
+
 The thresholds are experimental defaults (§13 asks for "no global accuracy threshold" in the end: P3 replaces them with
 uncertainty and transfer probes once there is data).
 """
@@ -29,7 +33,7 @@ from pydantic import BaseModel
 
 from flashtap import rounds
 from flashtap.learners.estimators import BAYES, ESTIMATORS, RULE, Estimate, model_id
-from flashtap.learners.evidence import Event, Use, observations, uses
+from flashtap.learners.evidence import TOLD_P, Event, Told, Use, observations, standing, uses
 from flashtap.mechanics import Mode, QRole
 
 ENOUGH = 3
@@ -62,12 +66,14 @@ class SkillReport(BaseModel):
     domain: str
     strand: str
     state: State
-    estimates: list[Estimate]  # one per estimator, BKT first; empty when unobserved (a prior is not evidence)
+    estimates: list[Estimate]  # BKT first, then the rule; empty with no evidence (a prior is not evidence), BKT alone
+    # with only a grown-up's word
     counted: int  # first answers counted for this skill
     right: int  # of which right
     held: int  # attempts that touched it but did not count (a wrong answer on a secondary skill, or held back)
     mechanics: list[str]  # the mechanics of its counted right answers
     last_seen: datetime | None  # the latest attempt that touched it
+    told: Told | None = None  # the latest grown-up's override standing, if any (absent from exports before 0.8.0)
 
 
 class ModelInfo(BaseModel):
@@ -96,18 +102,26 @@ def state_of(counted: Sequence[Use], estimates: Mapping[str, Estimate], touched:
     return State.GENERALISED
 
 
-def skill_reports(events: Iterable[Event], skills: Sequence[SkillInfo]) -> list[SkillReport]:
-    """One report per skill in `skills`, then any skill the log names that the packs no longer do (by its id)."""
+def skill_reports(events: Iterable[Event], skills: Sequence[SkillInfo], told: Iterable[Told] = ()) -> list[SkillReport]:
+    """One report per skill in `skills`, then any skill the log names that the packs no longer do (by its id).
+    `told`: the learner's overrides, withdrawn ones included (they are left out here)."""
     info = {s.id: s for s in skills}
     by_skill = uses(events, {s.id: s.title for s in skills})
     known = [*skills, *(SkillInfo(id=k, title=k, domain="", strand="") for k in sorted(by_skill) if k not in info)]
+    said: dict[str, list[Told]] = {}
+    for t in standing(told):
+        said.setdefault(t.skill, []).append(t)
     out: list[SkillReport] = []
     for s in known:
         all_uses = by_skill.get(s.id, [])
         live = [u for u in all_uses if u.event.struck is None]
         counted = [u for u in live if u.counted]
         obs = observations(counted)
-        estimates = [e.estimate(obs) for e in ESTIMATORS] if counted else []
+        points = [(t.at, TOLD_P[t.says]) for t in said.get(s.id, [])]
+        if counted:
+            estimates = [e.estimate(obs, points) for e in ESTIMATORS]
+        else:
+            estimates = [BAYES.estimate(obs, points)] if points else []
         out.append(
             SkillReport(
                 skill=s.id,
@@ -121,6 +135,7 @@ def skill_reports(events: Iterable[Event], skills: Sequence[SkillInfo]) -> list[
                 held=len(live) - len(counted),
                 mechanics=sorted({u.event.mechanic for u in counted if u.event.first_correct}),
                 last_seen=max((u.event.presented_at for u in live), default=None),
+                told=said[s.id][-1] if s.id in said else None,
             )
         )
     return out

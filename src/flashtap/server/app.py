@@ -9,10 +9,15 @@ GET /api/content (the content packs as rows: skills, curriculum objectives, phon
 Learner records (src/flashtap/learners/): GET and POST /api/learners {nickname}; PATCH and DELETE /api/learners/{id};
 GET /api/learners/{id}/profile (every skill's estimates and state); GET /api/learners/{id}/skills/{skill}/evidence
 (the attempts behind it, newest first); GET /api/learners/{id}/export (everything held, as a JSON download);
-POST /api/attempts (one round answered; idempotent by event_id); POST /api/attempts/{event_id}/strike {reason}.
+POST /api/attempts (one round answered; idempotent by event_id); POST /api/attempts/{event_id}/strike {reason};
+POST /api/attempts/{event_id}/rating {value} (the three faces: 1, 0 or -1; once per round).
+A grown-up's overrides (spec §15): POST /api/v1/learners/{id}/overrides {skill, says, observer, note}; POST
+/api/v1/learners/{id}/overrides/{override_id}/withdraw. The profile carries them, and engagement (ratings, picks,
+patterns as hypotheses).
 The adaptive engine (src/flashtap/engine/): POST /api/v1/sessions {learner_id} (a session it plans, with its settings);
 POST /api/v1/sessions/{id}/next {seq} (decision number seq: a round, a break or the end, with rationale codes; asked
-again, the same one); POST /api/v1/evaluations/replay {learner_id | simulated} (remake the logged decisions and score
+again, the same one); POST /api/v1/sessions/{id}/decisions/{seq}/pick {offer} (the learner's pick from a choice of
+two, once); POST /api/v1/evaluations/replay {learner_id | simulated} (remake the logged decisions and score
 the models' predictions).
 Every other path serves the web app (`src/flashtap/server/static/index.html` when built with `cd web && npm run build`,
 else the plain stand-in `landing.html`), so a reload or a shared link opens that screen: the app routes in the browser."""
@@ -32,6 +37,7 @@ from flashtap.engine import model, sessions
 from flashtap.engine.policy import Config
 from flashtap.learners import db as learner_db
 from flashtap.learners import store
+from flashtap.learners.evidence import Told
 from flashtap.learners.report import EvidenceRow, SkillInfo, evidence_rows
 from flashtap.rounds import MAX_CHOICES, MIN_CHOICES, SEED_LIMIT, Mechanic, Mode, Round
 
@@ -146,18 +152,45 @@ def add_learner_routes(app: FastAPI, skills: list[SkillInfo]) -> None:
         store.strike(s, event_id, body.reason)
         return Response(status_code=204)
 
+    @app.post("/api/attempts/{event_id}/rating", response_model=store.RatingAck)
+    def post_rating(event_id: str, body: store.RatingIn, s: Db) -> store.RatingAck:  # pyright: ignore[reportUnusedFunction]
+        return store.rate(s, event_id, body)
+
+    known = set(titles)
+
+    @app.post("/api/v1/learners/{learner_id}/overrides", response_model=Told, status_code=201)
+    def post_override(learner_id: str, body: store.OverrideIn, s: Db) -> Told:  # pyright: ignore[reportUnusedFunction]
+        return store.tell(s, learner_id, body, known)
+
+    @app.post("/api/v1/learners/{learner_id}/overrides/{override_id}/withdraw", status_code=204)
+    def post_withdraw(learner_id: str, override_id: str, s: Db) -> Response:  # pyright: ignore[reportUnusedFunction]
+        store.withdraw(s, learner_id, override_id)
+        return Response(status_code=204)
+
 
 def add_engine_routes(app: FastAPI, g: model.Graph, titles: dict[str, str]) -> None:
     """The adaptive engine's routes (src/flashtap/engine/; spec §15's /v1 contracts under /api)."""
 
     @app.post("/api/v1/sessions", response_model=sessions.SessionInfo, status_code=201)
     def post_session(body: sessions.SessionIn, s: Db) -> sessions.SessionInfo:  # pyright: ignore[reportUnusedFunction]
-        config = Config(choices=settings.choices(), tries=settings.tries())
+        config = Config(
+            choices=settings.choices(),
+            tries=settings.tries(),
+            max_rounds=settings.session_rounds(),
+            max_minutes=settings.session_minutes(),
+            break_every=settings.break_every(),
+            choice_every=settings.choice_every(),
+            rate_every=settings.rate_every(),
+        )
         return sessions.start(s, body.learner_id, config)
 
     @app.post("/api/v1/sessions/{session_id}/next", response_model=sessions.Next)
     def post_next(session_id: str, body: sessions.NextIn, s: Db) -> sessions.Next:  # pyright: ignore[reportUnusedFunction]
         return sessions.next_decision(s, session_id, body.seq, g, titles)
+
+    @app.post("/api/v1/sessions/{session_id}/decisions/{seq}/pick", response_model=sessions.Next)
+    def post_pick(session_id: str, seq: int, body: sessions.PickIn, s: Db) -> sessions.Next:  # pyright: ignore[reportUnusedFunction]
+        return sessions.pick(s, session_id, seq, body.offer, titles)
 
     @app.post("/api/v1/evaluations/replay", response_model=sessions.ReplayOut)
     def post_replay(body: sessions.ReplayIn, s: Db) -> sessions.ReplayOut:  # pyright: ignore[reportUnusedFunction]

@@ -1,11 +1,13 @@
 """The scheduler (spec §12): what a learner plays next, and why.
 
-Each call looks at the learner's knowledge (`model.Knowledge`, folded from their whole log) and at this session so far,
-and returns one decision: a round, an offered break, or the end of the session.
+Each call looks at the learner's knowledge (`model.Knowledge`, folded from their whole log and any grown-up's
+overrides), what they have said they like (`likes`, engagement.preferences) and at this session so far, and returns
+one decision: a round, a choice between two rounds for the learner to pick, an offered break, or the end of the session.
 
 1. **Limits first, never traded** (§12: "constrain frustration and session duration rather than trading them"): the
    session ends at `Config.max_rounds` rounds or `max_minutes` minutes; a break is offered every `break_every` rounds
-   and after `FRUSTRATED` first answers missed in a row.
+   (0: never) and after `FRUSTRATED` first answers missed in a row, whatever the settings say. The grown-up sets the
+   first three (Settings, Sessions); the frustration break is not theirs to turn off.
 2. **Candidates**: one per kind of round, aimed at the skill it is written to assess (its primary). Each is labelled
    with what it would do for that skill: a `placement_probe` while the learner has little evidence, `introduce` for a
    skill with none, `practise` until BKT's estimate reaches `MASTERED`, `spaced_review` once a mastered skill's recall
@@ -16,11 +18,20 @@ and returns one decision: a round, an offered break, or the end of the session.
 4. **Utility**, the spec's sum: expected learning (how far from known, times how ready its prerequisites are),
    information (the entropy of the predicted answer, weighted up during placement and by how many unseen skills the
    graph would place from it), retention need, enjoyment (a success chance near three in four, and a change of
-   mechanic), minus frustration risk and recent repetition, plus a diagnostic bonus for a contrast after a miss (below).
+   mechanic, and what they have said they like: `liked`, a kind's preference from -1 to 1), minus frustration risk and
+   recent repetition, plus a diagnostic bonus for a contrast after a miss (below). A preference only nudges: it is
+   weighed with enjoyment, under the same limits, and never outweighs a prerequisite gap or the frustration guard.
 5. **Seeded exploration**: a softmax over the utilities at temperature `tau`, mixed with `epsilon` of a uniform pick so
    every eligible candidate has a known, non-zero chance. The draw comes from a generator seeded by the session and the
    decision's number, so a replay makes the same pick, and every candidate is logged with its components and its
    probability, which is what an unbiased offline evaluation of another policy needs (§14).
+6. **A choice of two** (§12 "offer choice", P4): every `choice_every` rounds (0: never) the decision is a choice
+   instead of a round: the drawn candidate and the open candidate with the best utility among the other mechanics (or,
+   with only one mechanic open, the other kinds), shown to the learner side by side. Which one they pick is theirs,
+   recorded on the decision (`sessions.pick`) and read back as a preference. The logged probability is the draw's: the
+   second offer follows from the first.
+7. **Asking how it was**: a decision whose round is the `rate_every`th of the session (0: never) says `rate`, and
+   Play shows the three faces after it. Optional: Next works without a face.
 
 **Diagnostic contrasts** (§12): after a missed round, a candidate that shares a skill with it but leaves out another
 (Missing number after Counting: the numerals without the counting) isolates a cause; it gets a bonus for how uncertain
@@ -53,6 +64,7 @@ GUARDED = 2  # misses in a row after which only rounds likely to go right are of
 
 class Action(StrEnum):
     ROUND = "round"
+    CHOICE = "choice"
     BREAK = "break"
     END = "end"
 
@@ -72,6 +84,8 @@ class Why(StrEnum):
     FRUSTRATION = "frustration_break"
     CAP_ROUNDS = "session_cap_rounds"
     CAP_MINUTES = "session_cap_minutes"
+    OFFER = "offered_choice"
+    LIKED = "liked"  # what they said they like moved it up
 
 
 class SetAside(StrEnum):
@@ -87,7 +101,10 @@ class Config(BaseModel):
     tries: int = Field(ge=0)
     max_rounds: int = Field(default=20, ge=1)
     max_minutes: int = Field(default=15, ge=1)
-    break_every: int = Field(default=10, ge=1)
+    break_every: int = Field(default=10, ge=0)  # 0: no regular breaks (the frustration break stays)
+    # 0, not the settings' defaults, so a session snapshotted before 0.8.0 (which has neither) replays as it ran.
+    choice_every: int = Field(default=0, ge=0)
+    rate_every: int = Field(default=0, ge=0)
 
 
 class Candidate(BaseModel):
@@ -103,9 +120,22 @@ class Candidate(BaseModel):
     frustration: float
     repetition: float
     diagnostic: float
+    liked: float = 0.0  # the kind's preference, -1 to 1 (absent from decisions before 0.8.0, which had none)
     utility: float
     probability: float  # of being picked; 0 when set aside
     set_aside: SetAside | None
+
+
+class Offer(BaseModel):
+    """One of the two rounds a choice offers: enough to rebuild it, and why it was put forward."""
+
+    mode: Mode
+    version: int
+    content: dict[str, int]
+    choices: int
+    seed: int
+    skill: str
+    rationale: list[Why]
 
 
 class Choice(BaseModel):
@@ -122,35 +152,59 @@ class Choice(BaseModel):
     rationale: list[Why]
     probability: float  # of this pick: 1 for a break or an end, which are rules, not draws
     candidates: list[Candidate] = Field(default_factory=list[Candidate])
+    offers: list[Offer] | None = None  # a choice's two rounds, the drawn one first
+    rate: bool = False  # ask how its round was once it is over
+
+    def offered(self, i: int | None) -> Offer | None:
+        return self.offers[i] if self.offers is not None and i is not None and 0 <= i < len(self.offers) else None
 
 
 class Logged(Choice):
-    """A decision as stored and exported: the choice, where it was made and when."""
+    """A decision as stored and exported: the choice, where it was made and when, and for a choice what was picked."""
 
     id: str
     session_id: str
     seq: int
     at: datetime
+    picked: int | None = None
+    picked_at: datetime | None = None
+
+    def played(self) -> Mode | None:
+        """The kind of round this decision put in front of the learner: a round's, a picked offer's, else None."""
+        if self.action is Action.ROUND:
+            return self.mode
+        o = self.offered(self.picked)
+        return o.mode if self.action is Action.CHOICE and o is not None else None
 
 
 @dataclass(frozen=True)
 class Past:
-    """The session so far, oldest first: its start, each decision's action and kind, each attempt's first answer and
-    kind. Attempts, not decisions, say what was missed: a round can be left unanswered."""
+    """The session so far, oldest first: its start, each decision's action and the kind it put in play (a choice's
+    picked offer; None for a choice not picked, a break or an end), each attempt's first answer and kind. Attempts,
+    not decisions, say what was missed: a round can be left unanswered."""
 
     started: datetime
     decisions: Sequence[tuple[Action, Mode | None]] = ()
     answers: Sequence[tuple[Mode, bool]] = ()
 
     def rounds(self) -> list[Mode]:
-        return [m for a, m in self.decisions if a is Action.ROUND and m is not None]
+        return [m for a, m in self.decisions if a in (Action.ROUND, Action.CHOICE) and m is not None]
 
     def since_break(self) -> int:
         n = 0
-        for a, _ in reversed(self.decisions):
+        for a, m in reversed(self.decisions):
             if a is Action.BREAK:
                 break
-            n += a is Action.ROUND
+            n += a is Action.ROUND or (a is Action.CHOICE and m is not None)
+        return n
+
+    def since_choice(self) -> int:
+        """Rounds since the last choice was offered, or since the start."""
+        n = 0
+        for a, m in reversed(self.decisions):
+            if a is Action.CHOICE:
+                break
+            n += a is Action.ROUND and m is not None
         return n
 
     def misses(self) -> int:
@@ -175,12 +229,15 @@ class Weights:
     frustration: float = 0.6
     repetition: float = 0.8
     diagnostic: float = 0.6
+    liked: float = 0.3  # inside enjoyment's scale: a kind liked as much as can be is worth a change of mechanic
 
 
 @dataclass(frozen=True)
 class Policy:
     name: str = "utility"
-    version: int = 1
+    # 2 (0.8.0): choices, ratings and overrides. With none of them (a session snapshotted before, with no choice or
+    # rating cadence, and a log with no ratings, picks or overrides) it decides exactly as 1 did, so `REPLAYS` keeps 1.
+    version: int = 2
     weights: Weights = field(default_factory=Weights)
     tau: float = 0.15  # softmax temperature: lower picks the best more often
     epsilon: float = 0.1  # share of every pick that is uniform over the eligible candidates
@@ -191,6 +248,7 @@ class Policy:
 
 
 POLICY = Policy()
+REPLAYS = frozenset({POLICY.id, "utility@1"})  # logged policies the current code remakes exactly
 
 
 def entropy(p: float) -> float:
@@ -200,9 +258,17 @@ def entropy(p: float) -> float:
     return -(p * math.log2(p) + (1 - p) * math.log2(1 - p))
 
 
-def decide(k: Knowledge, past: Past, config: Config, key: str, now: datetime, policy: Policy = POLICY) -> Choice:
+def decide(
+    k: Knowledge,
+    past: Past,
+    config: Config,
+    key: str,
+    now: datetime,
+    policy: Policy = POLICY,
+    likes: Mapping[str, float] | None = None,
+) -> Choice:
     """The next decision for a session. `key` seeds the draw (the session id and the decision's number), so the same
-    knowledge, session, config, key and time always give the same decision."""
+    knowledge, session, config, key, time and `likes` (each kind's preference) always give the same decision."""
     played = past.rounds()
     if len(played) >= config.max_rounds:
         return Choice(policy=policy.id, action=Action.END, rationale=[Why.CAP_ROUNDS], probability=1.0)
@@ -212,11 +278,12 @@ def decide(k: Knowledge, past: Past, config: Config, key: str, now: datetime, po
     just_broke = bool(past.decisions) and past.decisions[-1][0] is Action.BREAK
     if not just_broke and misses >= FRUSTRATED and past.since_break() >= FRUSTRATED:
         return Choice(policy=policy.id, action=Action.BREAK, rationale=[Why.FRUSTRATION], probability=1.0)
-    if not just_broke and past.since_break() >= config.break_every:
+    if not just_broke and config.break_every and past.since_break() >= config.break_every:
         return Choice(policy=policy.id, action=Action.BREAK, rationale=[Why.BREAK_DUE], probability=1.0)
 
     failed = past.answers[-1][0] if past.answers and not past.answers[-1][1] else None
-    cands = [_candidate(k, s, past, config, now, policy, misses, failed) for s in SHAPES]
+    liked = likes or {}
+    cands = [_candidate(k, s, past, config, now, policy, misses, failed, liked.get(s.mode.value, 0.0)) for s in SHAPES]
     open_ = [c for c in cands if c.set_aside is None]
     if not open_:  # never stuck: drop the softer filters first, the prerequisite gap last
         open_ = [c for c in cands if c.set_aside is not SetAside.PREREQUISITE] or cands
@@ -234,27 +301,74 @@ def decide(k: Knowledge, past: Past, config: Config, key: str, now: datetime, po
     draw, seed = rng.random(), rng.randrange(SEED_LIMIT)
     # The first candidate whose running total passes the draw; the last when rounding leaves the total a hair under 1.
     pick = pool[min(bisect.bisect_right(list(itertools.accumulate(c.probability for c in pool)), draw), len(pool) - 1)]
-    why = [pick.action]
-    if pick.contrast:
-        why.append(Why.CONTRAST)
-    if misses >= GUARDED:
-        why.append(Why.EASIER)
-    if pick.utility < max(c.utility for c in pool):
-        why.append(Why.EXPLORE)
-    shape = next(s for s in SHAPES if s.mode is pick.mode)
+    top = max(c.utility for c in pool)
+    rate = bool(config.rate_every) and (len(played) + 1) % config.rate_every == 0
+    second = _second(pick, pool) if config.choice_every and past.since_choice() >= config.choice_every - 1 else None
+    if second is not None:
+        # The second is put forward as the best of the rest, not by chance, so it never says "exploration".
+        offers = [
+            _offer(pick, config, seed, misses, top),
+            _offer(second, config, rng.randrange(SEED_LIMIT), misses, second.utility),
+        ]
+        return Choice(
+            policy=policy.id,
+            action=Action.CHOICE,
+            rationale=[Why.OFFER],
+            probability=pick.probability,
+            candidates=logged,
+            offers=offers,
+            rate=rate,
+        )
+    o = _offer(pick, config, seed, misses, top)
     return Choice(
         policy=policy.id,
         action=Action.ROUND,
-        mode=pick.mode,
-        version=shape.version,
-        content=rounds.content_of(pick.mode),
-        choices=config.choices,
-        seed=seed,
-        skill=pick.skill,
-        rationale=why,
+        mode=o.mode,
+        version=o.version,
+        content=o.content,
+        choices=o.choices,
+        seed=o.seed,
+        skill=o.skill,
+        rationale=o.rationale,
         probability=pick.probability,
         candidates=logged,
+        rate=rate,
     )
+
+
+def _why(c: Candidate, misses: int, top: float) -> list[Why]:
+    why = [c.action]
+    if c.contrast:
+        why.append(Why.CONTRAST)
+    if misses >= GUARDED:
+        why.append(Why.EASIER)
+    if c.liked > 0:
+        why.append(Why.LIKED)
+    if c.utility < top:
+        why.append(Why.EXPLORE)
+    return why
+
+
+def _offer(c: Candidate, config: Config, seed: int, misses: int, top: float) -> Offer:
+    shape = next(s for s in SHAPES if s.mode is c.mode)
+    return Offer(
+        mode=c.mode,
+        version=shape.version,
+        content=rounds.content_of(c.mode),
+        choices=config.choices,
+        seed=seed,
+        skill=c.skill,
+        rationale=_why(c, misses, top),
+    )
+
+
+def _second(first: Candidate, pool: Sequence[Candidate]) -> Candidate | None:
+    """The best other candidate to offer beside `first`: of another mechanic if any is open, else another kind."""
+    mech = {s.mode: s.mechanic for s in SHAPES}
+    others = [c for c in pool if c.mode is not first.mode]
+    unlike = [c for c in others if mech[c.mode] is not mech[first.mode]]
+    best = unlike or others
+    return max(best, key=lambda c: (c.utility, c.mode.value)) if best else None
 
 
 def _candidate(
@@ -266,16 +380,17 @@ def _candidate(
     policy: Policy,
     misses: int,
     failed: Mode | None,
+    liked: float = 0.0,
 ) -> Candidate:
     w = policy.weights
     g = k.graph
     me = k.state(shape.primary)
     placing = k.counted < PLACING
-    if me.own == 0:
+    if not me.seen:
         action = Why.PLACEMENT if placing else Why.INTRODUCE
     elif me.p < MASTERED:
         action = Why.PRACTISE
-    elif me.recall(now) < DUE:
+    elif me.own and me.recall(now) < DUE:  # a skill a grown-up said they can do, with no answer yet, is consolidated
         action = Why.REVIEW
     else:
         action = Why.CONSOLIDATE
@@ -284,12 +399,12 @@ def _candidate(
     before = g.before.get(shape.primary, frozenset())
     ready = min((k.p(q) for q in before), default=1.0)
     learning = (1 - me.p) * ready
-    reach = sum(1 for s in before | g.after.get(shape.primary, frozenset()) if k.state(s).own == 0)
+    reach = sum(1 for s in before | g.after.get(shape.primary, frozenset()) if not k.state(s).seen)
     information = entropy(p_right) * (1 + w.reach * reach) * (w.placing if placing else 1.0)
     retention = 1 - me.recall(now) if me.own and me.p >= MASTERED else 0.0
     rounds = past.rounds()
     switch = 1.0 if rounds and next(s for s in SHAPES if s.mode is rounds[-1]).mechanic is not shape.mechanic else 0.0
-    enjoyment = 0.7 * max(0.0, 1 - abs(p_right - 0.75) / 0.75) + 0.3 * switch
+    enjoyment = 0.7 * max(0.0, 1 - abs(p_right - 0.75) / 0.75) + 0.3 * switch + w.liked * liked
     frustration = (1 - p_right) * (1 + misses)
     recent = rounds[-4:]
     repetition = sum(m is shape.mode for m in recent) / 4
@@ -303,7 +418,7 @@ def _candidate(
             diagnostic = sum(entropy(k.p(s)) for s in shared) / len(shared)
 
     set_aside: SetAside | None = None
-    if any(k.state(q).own >= 2 and k.p(q) < 0.3 for q in before):
+    if any((k.state(q).own >= 2 or k.state(q).told) and k.p(q) < 0.3 for q in before):
         set_aside = SetAside.PREREQUISITE
     elif misses >= GUARDED and p_right < 0.6:
         set_aside = SetAside.FRUSTRATION
@@ -332,6 +447,7 @@ def _candidate(
         frustration=round(frustration, 6),
         repetition=round(repetition, 6),
         diagnostic=round(diagnostic, 6),
+        liked=round(liked, 6),
         utility=round(utility, 6),
         probability=0.0,
         set_aside=set_aside,
@@ -351,11 +467,17 @@ _SAY: dict[Why, str] = {
     Why.FRUSTRATION: "A break, after a few misses in a row.",
     Why.CAP_ROUNDS: "A session is {rounds} at most.",
     Why.CAP_MINUTES: "A session is {minutes} minutes at most.",
+    Why.OFFER: "Two to pick from, so they choose what comes next.",
+    Why.LIKED: "They have liked this kind of round.",
 }
 
 
-def explain(c: Choice, titles: Mapping[str, str], config: Config, rounds_played: int) -> str:
-    """The rationale in words, for the grown-up (the codes stay in the log)."""
-    skill = titles.get(c.skill or "", c.skill or "")
+def explain(c: Choice, titles: Mapping[str, str], config: Config, rounds_played: int, picked: int | None = None) -> str:
+    """The rationale in words, for the grown-up (the codes stay in the log). A choice picked is explained by the
+    offer picked, after the choice itself."""
+    o = c.offered(picked)
+    skill_id = o.skill if o is not None else c.skill or ""
+    skill = titles.get(skill_id, skill_id)
     played = f"{rounds_played} round" + ("" if rounds_played == 1 else "s")
-    return " ".join(_SAY[w].format(skill=skill, rounds=played, minutes=config.max_minutes) for w in c.rationale)
+    codes = [*c.rationale, *(o.rationale if o is not None else [])]
+    return " ".join(_SAY[w].format(skill=skill, rounds=played, minutes=config.max_minutes) for w in codes)

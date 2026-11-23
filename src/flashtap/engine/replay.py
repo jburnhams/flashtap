@@ -9,6 +9,12 @@ version of each round template and content pack is: a decision made by another p
 since changed (its `content`, the versions its attempt records too), is reported, not remade: the round it served
 can no longer be rebuilt, and a difference would come from the packs, not the log. A change to a skill pack the round
 does not draw from still shows as a difference in the candidates.
+
+What else the decision could see is rebuilt the same way: the grown-ups' overrides standing then
+(`evidence.told_as_of`), and the learner's preferences from the ratings received and the choices picked by then
+(`likes_as_of`). A pick is refused once a later decision in its session exists (sessions.pick), so the pick a replay
+sees is the one the next decision saw. Policy `utility@1` decisions are remade by the current code, which decides as
+it did when there are no choices, ratings or overrides (policy.REPLAYS).
 """
 
 from collections.abc import Sequence
@@ -16,8 +22,9 @@ from datetime import datetime
 
 from flashtap import rounds
 from flashtap.engine.model import Graph, Params, fold
-from flashtap.engine.policy import POLICY, Choice, Config, Logged, Past, decide
-from flashtap.learners.evidence import Event, ordered
+from flashtap.engine.policy import REPLAYS, Action, Choice, Config, Logged, Past, decide
+from flashtap.learners.engagement import Pick, Rated, as_of_ratings, preferences
+from flashtap.learners.evidence import Event, Told, ordered, told_as_of
 from flashtap.mechanics import Mode
 
 
@@ -44,7 +51,7 @@ def past_of(
     return Past(
         started=started,
         decisions=[
-            (d.action, d.mode)
+            (d.action, d.played())
             for d in sorted(decisions, key=lambda d: d.seq)
             if d.session_id == session and d.seq < seq
         ],
@@ -56,12 +63,35 @@ def past_of(
     )
 
 
+def picks(decisions: Sequence[Logged]) -> list[Pick]:
+    """Every choice answered, from the logged decisions."""
+    out: list[Pick] = []
+    for d in decisions:
+        o = d.offered(d.picked)
+        if d.action is Action.CHOICE and o is not None and d.offers is not None and d.picked_at is not None:
+            other = d.offers[1 - (d.picked or 0)] if len(d.offers) == 2 else o
+            out.append(Pick(picked=o.mode.value, passed=other.mode.value, at=d.picked_at))
+    return out
+
+
+def likes_as_of(ratings: Sequence[Rated], decisions: Sequence[Logged], at: datetime) -> dict[str, float]:
+    """The preferences a decision made at `at` could see: ratings received and choices picked by then."""
+    return preferences(as_of_ratings(ratings, at), [p for p in picks(decisions) if p.at <= at])
+
+
 def remake(
-    d: Logged, events: Sequence[Event], decisions: Sequence[Logged], started: datetime, config: Config, g: Graph
+    d: Logged,
+    events: Sequence[Event],
+    decisions: Sequence[Logged],
+    started: datetime,
+    config: Config,
+    g: Graph,
+    ratings: Sequence[Rated] = (),
+    told: Sequence[Told] = (),
 ) -> Choice:
-    k = fold(as_of(events, d.at), g, Params())
+    k = fold(as_of(events, d.at), g, Params(), told_as_of(told, d.at))
     past = past_of(started, decisions, events, d.session_id, d.at, d.seq)
-    return decide(k, past, config, f"{d.session_id}:{d.seq}", d.at)
+    return decide(k, past, config, f"{d.session_id}:{d.seq}", d.at, likes=likes_as_of(ratings, decisions, d.at))
 
 
 def _fields(c: Choice) -> dict[str, object]:
@@ -73,23 +103,28 @@ def replay(
     decisions: Sequence[Logged],
     sessions: dict[str, tuple[datetime, Config | None]],
     g: Graph,
+    ratings: Sequence[Rated] = (),
+    told: Sequence[Told] = (),
 ) -> tuple[int, list[str]]:
     """Remake every decision; return how many came out identical and a sentence for each that did not."""
     same, out = 0, list[str]()
     for d in sorted(decisions, key=lambda d: (d.at, d.session_id, d.seq)):
         where = f"decision {d.seq} of session {d.session_id}"
-        if d.policy != POLICY.id:
-            out.append(f"{where}: made by {d.policy}, which is not kept (now {POLICY.id})")
+        if d.policy not in REPLAYS:
+            out.append(f"{where}: made by {d.policy}, which is not kept (now {', '.join(sorted(REPLAYS))})")
             continue
-        if d.mode is not None and d.content and d.content != (now := rounds.content_of(d.mode)):
-            made, kept = (", ".join(f"{k}@{v}" for k, v in sorted(c.items())) for c in (d.content, now))
+        drawn = [(d.mode, d.content), *((o.mode, o.content) for o in d.offers or [])]
+        moved = [(c, now) for m, c in drawn if m is not None and c and c != (now := rounds.content_of(m))]
+        if moved:
+            made, kept = (", ".join(f"{k}@{v}" for k, v in sorted(c.items())) for c in moved[0])
             out.append(f"{where}: made from {made}, which are not kept (now {kept})")
             continue
         started, config = sessions.get(d.session_id, (None, None))
         if started is None or config is None:
             out.append(f"{where}: its session's start and settings are not in the log")
             continue
-        a, b = _fields(d), _fields(remake(d, events, decisions, started, config, g))
+        a, b = _fields(d), _fields(remake(d, events, decisions, started, config, g, ratings, told))
+        b["policy"] = a["policy"]  # a kept older policy is remade by the current one
         if d.content is None:
             b["content"] = None  # an export from before 0.7.0 recorded no packs (all were at 1): nothing to compare
         diff = [k for k in a if a[k] != b[k]]

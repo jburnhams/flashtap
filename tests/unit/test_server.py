@@ -86,6 +86,11 @@ def test_settings_refuse_a_bad_value(client):
         "mode": "mixed",
         "choices": 4,
         "tries": 0,
+        "session_rounds": 20,
+        "session_minutes": 15,
+        "break_every": 10,
+        "choice_every": 5,
+        "rate_every": 4,
     }  # numbers: Settings(numbers=True)
 
 
@@ -184,8 +189,16 @@ def test_engine_sessions_next_and_replay(client):
     r = client.post("/api/v1/sessions", json={"learner_id": fox})
     assert r.status_code == 201
     s = r.json()
-    assert s["policy"] == "utility@1"
-    assert s["config"] == {"choices": 3, "tries": 1, "max_rounds": 20, "max_minutes": 15, "break_every": 10}
+    assert s["policy"] == "utility@2"
+    assert s["config"] == {
+        "choices": 3,
+        "tries": 1,
+        "max_rounds": 20,
+        "max_minutes": 15,
+        "break_every": 10,
+        "choice_every": 5,
+        "rate_every": 4,
+    }
     n = client.post(f"/api/v1/sessions/{s['id']}/next", json={"seq": 0}).json()
     assert n["action"] == "round"
     assert n["round"]["choices"] == 3
@@ -200,3 +213,77 @@ def test_engine_sessions_next_and_replay(client):
     assert (out["decisions"], out["reproduced"], out["differences"]) == (1, 1, [])
     assert client.post("/api/v1/evaluations/replay", json={}).status_code in (400, 422)
     assert client.post("/api/v1/evaluations/replay", json={"policy": "utility@0", "learner_id": fox}).status_code == 400
+
+
+def test_choices_picks_ratings_and_overrides_over_http(client):
+    fox = client.post("/api/learners", json={"nickname": "Fox"}).json()["id"]
+    client.put("/api/settings", json={"choice_every": 1, "rate_every": 1, "session_rounds": 3})
+    s = client.post("/api/v1/sessions", json={"learner_id": fox}).json()
+    n = client.post(f"/api/v1/sessions/{s['id']}/next", json={"seq": 0}).json()
+    assert (n["action"], n["round"], n["picked"], n["rate"]) == ("choice", None, None, True)
+    assert [o["round"]["mode"] for o in n["offers"]] == [o["mode"] for o in n["offers"]]
+    picked = client.post(f"/api/v1/sessions/{s['id']}/decisions/0/pick", json={"offer": 1})
+    assert picked.status_code == 200
+    p = picked.json()
+    assert (p["picked"], p["round"]) == (1, n["offers"][1]["round"])
+    assert client.post(f"/api/v1/sessions/{s['id']}/decisions/0/pick", json={"offer": 0}).status_code == 409
+    assert client.post(f"/api/v1/sessions/{s['id']}/decisions/0/pick", json={"offer": 2}).status_code == 422
+    assert client.post(f"/api/v1/sessions/{s['id']}/decisions/9/pick", json={"offer": 0}).status_code == 404
+    r = p["round"]
+    first = (
+        {"option": r["answer"]}
+        if r["options"]
+        else {"placement": {k: pl["id"] for pl in r["places"] for k in pl["takes"][: pl["holds"]]}}
+    )
+    attempt = {
+        "event_id": "e" * 32,
+        "learner_id": fox,
+        "session_id": s["id"],
+        "decision_id": p["id"],
+        "mode": r["mode"],
+        "version": r["version"],
+        "content": r["content"],
+        "choices": r["choices"],
+        "seed": r["seed"],
+        "asked": "next",
+        "presented_at": "2026-11-02T09:00:00Z",
+        "answered_at": "2026-11-02T09:00:04Z",
+        "first_answer": first,
+        "tries": 1,
+        "outcome": "right",
+    }
+    assert client.post("/api/attempts", json=attempt).json()["first_correct"] is True
+    rating = client.post(f"/api/attempts/{'e' * 32}/rating", json={"value": 1})
+    assert rating.json() == {"event_id": "e" * 32, "scale": "enjoyment", "value": 1, "duplicate": False}
+    assert client.post(f"/api/attempts/{'e' * 32}/rating", json={"value": -1}).status_code == 409
+    assert client.post(f"/api/attempts/{'e' * 32}/rating", json={"value": 2}).status_code == 422
+    assert client.post(f"/api/attempts/{'f' * 32}/rating", json={"value": 0}).status_code == 404
+
+    skill = "maths.counting.objects"
+    made = client.post(f"/api/v1/learners/{fox}/overrides", json={"skill": skill, "says": "can", "observer": "parent"})
+    assert made.status_code == 201
+    told = made.json()
+    assert (told["says"], told["observer"], told["note"], told["withdrawn_at"]) == ("can", "parent", "", None)
+    bad = {"skill": "maths.flying", "says": "can", "observer": "parent"}
+    assert client.post(f"/api/v1/learners/{fox}/overrides", json=bad).status_code == 400
+    assert (
+        client.post(f"/api/v1/learners/{fox}/overrides", json={**bad, "skill": skill, "says": "maybe"}).status_code
+        == 422
+    )
+    profile = client.get(f"/api/learners/{fox}/profile").json()
+    counting = next(x for x in profile["skills"] if x["skill"] == skill)
+    assert counting["told"]["id"] == told["id"]
+    kinds = {k["mode"]: k for k in profile["engagement"]["kinds"]}
+    assert kinds[r["mode"]]["liked"] == 1
+    assert kinds[r["mode"]]["picked"] == 1
+    w = client.post(f"/api/v1/learners/{fox}/overrides/{told['id']}/withdraw")
+    assert w.status_code == 204
+    assert client.post(f"/api/v1/learners/{fox}/overrides/{'f' * 32}/withdraw").status_code == 404
+    profile = client.get(f"/api/learners/{fox}/profile").json()
+    assert next(x for x in profile["skills"] if x["skill"] == skill)["told"] is None
+    out = client.post("/api/v1/evaluations/replay", json={"learner_id": fox}).json()
+    assert (out["reproduced"], out["differences"]) == (out["decisions"], [])
+    export = client.get(f"/api/learners/{fox}/export").json()
+    assert export["format"] == "flashtap-learner@4"
+    assert len(export["ratings"]) == 1
+    assert len(export["overrides"]) == 1

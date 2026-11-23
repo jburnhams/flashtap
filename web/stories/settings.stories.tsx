@@ -11,6 +11,8 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const General: Story = {}
+/** The limits of a session chosen for them, and how often they choose or are asked how it was. */
+export const Sessions: Story = { render: () => <AppAt route="/settings?tab=sessions" /> }
 export const Appearance: Story = { render: () => <AppAt route="/settings?tab=appearance" /> }
 export const Loading: Story = { beforeEach: ({ msw }) => msw.use(settingsLoading) }
 export const ServerError: Story = { beforeEach: ({ msw }) => msw.use(settingsError) }

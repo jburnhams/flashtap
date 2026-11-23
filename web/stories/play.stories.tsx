@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { nextBreak, nextEnd, nextError, quickLookGoes, quickLookStays, roundError, roundLoading } from '../src/mocks/handlers'
+import { nextBreak, nextChoice, nextEnd, nextError, quickLookGoes, quickLookStays, roundError, roundLoading } from '../src/mocks/handlers'
 import { FOX } from '../src/mocks/learners'
 import { AppAt } from './app-at'
 
@@ -31,6 +31,9 @@ export const PlayingAsFox: Story = { render: () => <AppAt route={`/?learner=${FO
 export const ChosenForFox: Story = { render: () => <AppAt route={`/?mode=next&learner=${FOX}`} /> }
 /** Chosen for them needs to know who is playing. */
 export const ChosenForNobody: Story = { render: () => <AppAt route="/?mode=next" /> }
+/** Every few rounds the learner picks the next activity: two picture tiles, their names said aloud. */
+export const ChoiceOfTwo: Story = { render: () => <AppAt route={`/?mode=next&learner=${FOX}`} />, beforeEach: ({ msw }) => msw.use(nextChoice) }
+export const ChoiceOfTwoPhone: Story = { render: () => <AppAt route={`/?mode=next&learner=${FOX}`} />, beforeEach: ({ msw }) => msw.use(nextChoice), tags: ['visual-phone'] }
 export const BreakOffered: Story = { render: () => <AppAt route={`/?mode=next&learner=${FOX}`} />, beforeEach: ({ msw }) => msw.use(nextBreak) }
 export const SessionOver: Story = { render: () => <AppAt route={`/?mode=next&learner=${FOX}`} />, beforeEach: ({ msw }) => msw.use(nextEnd) }
 export const ChosenServerError: Story = { render: () => <AppAt route={`/?mode=next&learner=${FOX}`} />, beforeEach: ({ msw }) => msw.use(nextError) }

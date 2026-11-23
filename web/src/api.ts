@@ -62,8 +62,20 @@ export type PlayChoice = Mode | 'next'
 export const isPlayChoice = (v: string | null): v is PlayChoice => v === 'next' || isMode(v)
 /** `POST /api/v1/sessions`: a session the engine plans, with the settings it runs with. */
 export type SessionInfo = Schema<'SessionInfo'>
-/** `POST /api/v1/sessions/{id}/next`: a round, an offered break or the end, with why (src/flashtap/engine/policy.py). */
-export type Next = Omit<Schema<'Next'>, 'round'> & { round: Round | null }
+/** One of the two rounds a choice offers, with its picture and name for the learner. */
+export type OfferOut = Omit<Schema<'OfferOut'>, 'round'> & { round: Round }
+/** `POST /api/v1/sessions/{id}/next`: a round, a choice of two, an offered break or the end, with why
+ * (src/flashtap/engine/policy.py). A choice's `round` is the picked offer's once it is picked. */
+export type Next = Omit<Schema<'Next'>, 'round' | 'offers'> & { round: Round | null; offers: OfferOut[] | null }
+/** The three faces after a round: liked it, all right, did not. */
+export type Face = 1 | 0 | -1
+/** A grown-up's observation of one skill, labelled with who said it (src/flashtap/learners/evidence.py `Told`). */
+export type Told = Schema<'Told'>
+export type OverrideIn = Schema<'OverrideIn'>
+/** How a learner engages, as hypotheses (src/flashtap/learners/engagement.py). */
+export type Engagement = Schema<'Engagement'>
+export type KindRow = Schema<'KindRow'>
+export type Hypothesis = Schema<'Hypothesis'>
 
 /** A random 32-hex-digit id for an event or a session. Not `crypto.randomUUID`: that needs a secure context, and the
  * app is often served over plain http on a home network; `getRandomValues` works anywhere. */
@@ -81,6 +93,7 @@ export const paths = {
   learners: '/api/learners',
   attempts: '/api/attempts',
   sessions: '/api/v1/sessions',
+  overrides: '/api/v1/learners',
 } as const
 
 /** The query keys the screens share, so a write can invalidate every read it changes. */
@@ -118,6 +131,12 @@ export const api = {
   startSession: (learnerId: string) => http.post('/api/v1/sessions', { json: { learner_id: learnerId } }),
   // The server answers a round's played kind (never Mixed), as for `round` above.
   next: (sessionId: string, seq: number) => http.post('/api/v1/sessions/{session_id}/next', { path: { session_id: sessionId }, json: { seq } }) as Promise<Next>,
+  pick: (sessionId: string, seq: number, offer: number) => http.post('/api/v1/sessions/{session_id}/decisions/{seq}/pick', { path: { session_id: sessionId, seq }, json: { offer } }) as Promise<Next>,
+  rate: (eventId: string, value: Face) => http.post('/api/attempts/{event_id}/rating', { path: { event_id: eventId }, json: { value, scale: 'enjoyment' } }),
+  tell: (learnerId: string, body: OverrideIn) => http.post('/api/v1/learners/{learner_id}/overrides', { path: { learner_id: learnerId }, json: body }),
+  // No body: the typed client still asks for `json` on a POST without one, so it is given as undefined (fetchJson
+  // then sends none). strata-react#305.
+  withdraw: (learnerId: string, overrideId: string) => http.post('/api/v1/learners/{learner_id}/overrides/{override_id}/withdraw', { path: { learner_id: learnerId, override_id: overrideId }, json: undefined }),
   strike: (eventId: string, reason: string) => http.post('/api/attempts/{event_id}/strike', { path: { event_id: eventId }, json: { reason } }),
 }
 
