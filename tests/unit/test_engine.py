@@ -3,10 +3,10 @@ draw, scoring, simulated learners, and sessions and replays on a real migrated d
 
 import random
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import event as sa_event
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from flashtap import rounds
 from flashtap.engine import evaluate, model, policy, replay, sessions, simulate
 from flashtap.engine.model import Graph, Knowledge, Params, fold
 from flashtap.engine.policy import POLICY, Action, Config, Past, SetAside, Why, decide, explain
+from flashtap.learners import db as learner_db
 from flashtap.learners import store
 from flashtap.learners.evidence import Event, SkillUse
 from flashtap.learners.models import Attempt, Decision, Sitting
@@ -367,7 +368,9 @@ def fox(db_session: Session) -> str:
 TITLES = {COUNT: "Count a set of things"}
 
 
-def answer(db: Session, n: sessions.Next, learner: str, *, right: bool, at: datetime) -> store.Ack:
+def answer(db: Session, n: sessions.Next, learner: str, *, right: bool, at: datetime | None) -> store.Ack:
+    """Answer the decision's round; `at` None stamps it with the clock, as the server does."""
+    shown = at or datetime.now(UTC)
     r = n.round
     assert r is not None
     if r.places:
@@ -385,14 +388,14 @@ def answer(db: Session, n: sessions.Next, learner: str, *, right: bool, at: date
             choices=r.choices,
             seed=r.seed,
             asked="next",
-            presented_at=at,
-            answered_at=at + timedelta(seconds=4),
+            presented_at=shown,
+            answered_at=shown + timedelta(seconds=4),
             first_answer=first,
             tries=1 if right else 2,
             outcome="right",
             decision_id=n.id,
         ),
-        at=at + timedelta(seconds=5),
+        at=at + timedelta(seconds=5) if at else None,
     )
 
 
@@ -562,42 +565,38 @@ def test_a_graph_with_no_edges_is_each_skill_alone() -> None:
     assert k.p(LAST) == Params().prior
 
 
-def test_two_requests_for_the_same_number_at_once_both_get_the_first_one_made(db_session: Session, fox: str) -> None:
-    """The race: another request logs decision 0 between this one's read and its commit. The unique (session, seq)
-    refuses the second insert, and the answer is the decision the other request made."""
-    info = sessions.start(db_session, fox, CONFIG, at=T0)
-    other = Decision(
-        id="c" * 32,
-        learner_id=fox,
-        session_id=info.id,
-        seq=0,
-        at=T0,
-        policy=POLICY.id,
-        action="end",
-        mode=None,
-        version=None,
-        choices=None,
-        seed=None,
-        skill=None,
-        rationale=["session_cap_rounds"],
-        probability=1.0,
-        candidates=[],
-    )
+def test_answers_and_decisions_sent_at_once_still_replay_exactly() -> None:
+    """Each answer is sent at the same moment as the request for the next decision, on its own connection, as a
+    browser that does not wait would. The learner's lock orders them, so every decision replays from the log as it
+    stood, whichever came first; and two requests for one number get one decision."""
+    bind = learner_db.open_engine()  # the test's own database file (db_env): a connection per thread, as a server has
+    with Session(bind) as s:
+        fox = store.add_learner(s, "Fox").id
+        info = sessions.start(
+            s, fox, Config(choices=4, tries=0, max_rounds=12, break_every=50)
+        )  # now: decisions use the clock
+    with Session(bind) as s:
+        n = sessions.next_decision(s, info.id, 0, G, TITLES)
+    for seq in range(1, 13):
+        if n.action is not Action.ROUND:
+            break
 
-    raced: list[bool] = []
+        def send(n: sessions.Next = n, seq: int = seq) -> None:
+            with Session(bind) as s:
+                answer(s, n, fox, right=seq % 3 != 0, at=None)
 
-    def first_elsewhere(_: Session) -> None:
-        if raced:
-            return
-        raced.append(True)
-        with Session(db_session.get_bind()) as elsewhere:
-            elsewhere.add(other)
-            elsewhere.commit()
+        def ask(seq: int = seq) -> sessions.Next:
+            with Session(bind) as s:
+                return sessions.next_decision(s, info.id, seq, G, TITLES)
 
-    sa_event.listen(db_session, "before_commit", first_elsewhere)
-    try:
-        n = sessions.next_decision(db_session, info.id, 0, G, TITLES, at=T0)
-    finally:
-        sa_event.remove(db_session, "before_commit", first_elsewhere)
-    assert raced == [True]
-    assert (n.id, n.action) == ("c" * 32, Action.END)
+        with ThreadPoolExecutor(3) as pool:
+            sent, a, b = pool.submit(send), pool.submit(ask), pool.submit(ask)
+            sent.result()
+            n = a.result()
+            assert b.result() == n
+    assert n.action is Action.END
+    with Session(bind) as s:
+        out = sessions.evaluate(s, sessions.ReplayIn(learner_id=fox), G)
+    bind.dispose()
+    assert out.decisions == 13
+    assert (out.reproduced, out.differences) == (out.decisions, [])

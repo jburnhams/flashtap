@@ -15,7 +15,6 @@ from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from flashtap import rounds
@@ -126,10 +125,16 @@ def next_decision(
     db: Session, session_id: str, seq: int, g: Graph, titles: dict[str, str], at: datetime | None = None
 ) -> Next:
     sitting, config = _sitting(db, session_id)
+    # The learner's lock before the read and the clock: attempts and strikes take it before stamping their time, so
+    # the log read here is exactly the log `as_of(when)` rebuilds in a replay, and two requests for one number queue
+    # (the second then finds the first's decision).
+    store.hold(db, sitting.learner_id)
     made = _logged(db, session_id)
     if seq < len(made):
+        db.rollback()
         return _out(made[seq], made, config, titles)
     if made and made[-1].action is Action.END:
+        db.rollback()
         raise Conflict("This session has ended: start a new one.")
     if seq != len(made):
         raise ValueError(f"The next decision in this session is number {len(made)}, not {seq}.")
@@ -163,12 +168,7 @@ def next_decision(
             candidates=[x.model_dump(mode="json") for x in c.candidates],
         )
     )
-    try:
-        db.commit()
-    except IntegrityError:  # the same number asked twice at once: the other request made it first, so answer with that
-        db.rollback()
-        made = _logged(db, session_id)
-        return _out(made[seq], made, config, titles)
+    db.commit()  # the unique (session, seq) backs up the lock
     return _out(d, [*made, d], config, titles)
 
 

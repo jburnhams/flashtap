@@ -1,4 +1,6 @@
+import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AttemptIn } from '../../src/api'
 import { attemptFails, learnersError, nextError, quickLookGoes, roundError, SESSION, sessionError } from '../../src/mocks/handlers'
 import { openApp, screen, within } from '../utils/render'
 import { mock, server } from '../utils/server'
@@ -366,6 +368,24 @@ describe('Play, chosen for them', () => {
     expect(screen.getByText(/A session is 1 round at most\. The next session picks up/)).toBeInTheDocument()
     await user.click(screen.getByRole('link', { name: 'See what Fox has shown' }))
     expect(router.state.location.pathname).toBe(`/learners/${FOX}`)
+  })
+
+  it('asks for the next decision only once the answer is saved, so the engine knows it', async () => {
+    let land = () => {}
+    const landed = new Promise<void>(resolve => { land = resolve })
+    server.use(http.post('*/api/attempts', async ({ request }) => {
+      mock.attempts.push((await request.json()) as AttemptIn)
+      await landed
+      return HttpResponse.json({ event_id: 'x', first_correct: true, duplicate: false })
+    }))
+    const { user } = openApp(`/?mode=next&learner=${FOX}`)
+    await user.click(await screen.findByRole('row', { name: tile('3') }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await vi.waitFor(() => expect(mock.attempts).toHaveLength(1))
+    expect(mock.nextRequests).toEqual([0])
+    land()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Put 3 ducks in the basket.' })).toBeInTheDocument()
+    expect(mock.nextRequests).toEqual([0, 1])
   })
 
   it('says quietly when the server did not take a chosen round', async () => {

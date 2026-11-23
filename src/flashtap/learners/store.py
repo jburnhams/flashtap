@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Literal, Self, cast
 
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 from strata_python.tasks.flight import Conflict as FlightConflict
 
@@ -240,9 +240,20 @@ def _same(old: Attempt, new: Attempt) -> bool:
     )
 
 
+def hold(db: Session, learner_id: str) -> None:
+    """Take the learner's row lock until this transaction ends, before reading the clock for a receipt, a strike or an
+    engine decision. Those three are then serialised per learner, so a time stamped under the lock orders them as the
+    database saw them: an attempt stamped before a decision was committed before the decision read the log, and one
+    stamped after waited for it. Without it, an attempt stamped first but committed after a decision's read would be
+    missing from the decision and present in its replay (engine/replay.py `as_of`). A no-op UPDATE locks the row on
+    Postgres and takes SQLite's write lock."""
+    db.execute(update(Learner).where(Learner.id == learner_id).values(nickname=Learner.nickname))
+
+
 def record(db: Session, a: AttemptIn, at: datetime | None = None) -> Ack:
     get_learner(db, a.learner_id)
     r, right = _judge(a)
+    hold(db, a.learner_id)
     row = _row(a, r, right, at or now())
     old = db.get(Attempt, a.event_id)
     if old is not None:
@@ -250,6 +261,7 @@ def record(db: Session, a: AttemptIn, at: datetime | None = None) -> Ack:
             raise Conflict(
                 f"Event {a.event_id} is already logged with different contents; an event is never rewritten."
             )
+        db.rollback()  # nothing to write: let the lock go
         return Ack(event_id=a.event_id, first_correct=old.first_correct, duplicate=True)
     if a.decision_id is not None:
         _check_decision(db, a)
@@ -283,12 +295,14 @@ def _check_decision(db: Session, a: AttemptIn) -> None:
 def strike(db: Session, event_id: str, reason: str, at: datetime | None = None) -> None:
     """Strike an attempt out of every estimate (a tombstone; the attempt itself stays in the log). Striking twice keeps
     the first reason."""
-    if db.get(Attempt, event_id) is None:
+    x = db.get(Attempt, event_id)
+    if x is None:
         raise KeyError(f"No attempt {event_id}.")
     reason = " ".join(reason.split())[:200] or "struck out by a grown-up"
+    hold(db, x.learner_id)
     if db.get(Tombstone, event_id) is None:
         db.add(Tombstone(event_id=event_id, reason=reason, at=at or now()))
-        db.commit()
+    db.commit()
 
 
 def events(db: Session, learner_id: str) -> list[Event]:

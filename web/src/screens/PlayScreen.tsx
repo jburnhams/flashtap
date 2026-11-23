@@ -164,9 +164,12 @@ function Decisions({ session, learner }: { session: SessionInfo; learner: Learne
   const [unsaved, setUnsaved] = useState(false)
   const queryClient = useQueryClient()
   const decision = useLoad({ queryKey: keys.next(session.id, seq), queryFn: () => api.next(session.id, seq), staleTime: Infinity })
-  const onward = () => setSeq(n => n + 1)
+  // The answer being saved, if any: the next decision is asked for only once it has landed (or failed), so the
+  // engine chooses knowing it; asked too soon, a third miss would not yet show and no break would be offered.
+  const saving = useRef<Promise<unknown>>(Promise.resolve())
+  const onward = () => { void saving.current.then(() => setSeq(n => n + 1)) }
   const record = (d: Next, r: Round, a: Answered) => {
-    api.recordAttempt({ event_id: newId(), learner_id: learner.id, session_id: session.id, decision_id: d.id, mode: r.mode, version: r.version, choices: r.choices, seed: r.seed, asked: 'next', ...a }).then(
+    saving.current = api.recordAttempt({ event_id: newId(), learner_id: learner.id, session_id: session.id, decision_id: d.id, mode: r.mode, version: r.version, choices: r.choices, seed: r.seed, asked: 'next', ...a }).then(
       () => {
         setUnsaved(false)
         void queryClient.invalidateQueries({ queryKey: ['learners'] })
