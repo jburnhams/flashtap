@@ -1,5 +1,14 @@
 # Progress log
 
+## 2026-11-23: audit against strata-python and strata-react
+
+- Asked for: make full use of the common code in strata-python (0.2.5) and strata-react (1.3.1), and raise issues there for what would help. Standing rule from now on.
+- The backend already used the library throughout (settings, `base_app`/`add_web`/`serve`, `add_error_handlers`, the shared CLI commands, `strata_python.db` with its fixtures, the pytest plugin, `strata-check`). Nothing there was a copy to delete.
+- The web app hand-wrote every API shape in `api.ts`. They are now generated from the server's schema by strata-react's `strata-api-types` (`web/src/api.generated.ts`), and the move found three drifts the hand copy hid: the server typed an evidence row's kind, role and outcome as any string (now `Mode`, `QRole` and a literal), and a round's defaulted fields were optional in the schema (`Round` now marks them required, so the types need no `?`). Narrowed by hand where the schema cannot say it: a played round is never Mixed, the `mode` setting is a `Mode` (strata-python#41), and a first answer is either a tap or a placement.
+- strata-api-types needs openapi-typescript, which needs TypeScript's JS API; TypeScript 7 has none, and the README's `$typescript` override does not fix that on a TS 7 app. The web app now installs TypeScript as strata-react does: `typescript` is the TypeScript 6 package (for openapi-typescript and Storybook's docgen), `typescript7` runs the type check (strata-react#293).
+- CI now runs strata-python's `strata-public-check` on the tree. It does not read `.ts`/`.tsx` (strata-python#37) and has no place for patterns kept in the repo (#38), so `tests/unit/test_privacy.py` stays for now.
+- Raised, each with where Flashtap repeats the code: strata-python #36 (an `openapi` command), #37, #38, #39 (a SQLite fallback, a lazy engine and a session dependency for the server), #40 (`Project` for an installed wheel), #41 (a setting with fixed values as an enum); strata-react #293, #294 (a router link drawn as a button or text link), #295 (the base path behind a proxy), #296 (a JSON body for `fetchJson`), #297 (a choice held in the URL), #298 (Node 26 hides jsdom's localStorage), #299 (text to speech).
+
 ## 2026-11-23: the learner baseline (plan PR 4)
 
 - Asked for: the next PR of the plan, P2: learner records on `strata_python.db`, rule and BKT estimators behind one interface, derived reporting states, an adult Learner screen with evidence provenance, export and delete. Exit: rebuilding from the event log reproduces identical estimates.

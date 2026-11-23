@@ -33,6 +33,11 @@ jobs:
       - name: Lockfile, lint, format and types (once, on the newest Python)
         if: matrix.python-version == '3.13' && matrix.os == 'ubuntu-latest'
         run: uv run --locked strata-check --fast
+      - name: Nothing personal or machine-specific in the tree (strata-python's strata-public-check; owner's patterns from a secret)
+        if: matrix.python-version == '3.13' && matrix.os == 'ubuntu-latest'
+        env:
+          STRATA_PUBLIC_DENY: ${{ secrets.STRATA_PUBLIC_DENY }}
+        run: uv run --locked strata-public-check .
       - name: Unit tests with coverage (unit suite only)
         run: uv run pytest tests/unit --cov --cov-report=term --cov-report=xml
       - name: Upload coverage
@@ -56,6 +61,8 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - name: API types match the server's schema (strata-react's strata-api-types; web/openapi.json is checked by the Python unit tests)
+        run: npm run api-types -- --check
       - name: Unit tests with coverage (unit project only)
         run: npm run test:coverage
       - name: Coverage gate (unit + jsdom component tests together, floors in web/coverage-floor.json)

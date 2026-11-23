@@ -23,13 +23,14 @@ uncertainty and transfer probes once there is data).
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timedelta
 from enum import StrEnum
+from typing import Literal, cast
 
 from pydantic import BaseModel
 
 from flashtap import rounds
 from flashtap.learners.estimators import BAYES, ESTIMATORS, RULE, Estimate, model_id
 from flashtap.learners.evidence import Event, Use, observations, uses
-from flashtap.mechanics import Mode
+from flashtap.mechanics import Mode, QRole
 
 ENOUGH = 3
 INDEPENDENT = 0.85
@@ -130,18 +131,18 @@ class EvidenceRow(BaseModel):
 
     event_id: str
     at: datetime
-    mode: str
+    mode: Mode  # typed, not str, so the web app's generated types name the kinds (web/src/api.generated.ts)
     version: int
     choices: int
     seed: int
-    role: str
+    role: QRole
     answer: str  # the first answer in words: "9", "the duck", "an arrangement"
     correct: bool
     counted: bool
     why: str  # why it did not count; empty when it did
     struck: bool
     tries: int
-    outcome: str
+    outcome: Literal["right", "missed", "left"]
 
 
 def describe(e: Event) -> str:
@@ -162,18 +163,18 @@ def evidence_rows(events: Iterable[Event], skill: str, titles: Mapping[str, str]
         EvidenceRow(
             event_id=u.event.event_id,
             at=u.event.presented_at,
-            mode=u.event.mode,
+            mode=Mode(u.event.mode),
             version=u.event.version,
             choices=u.event.choices,
             seed=u.event.seed,
-            role=u.role,
+            role=QRole(u.role),
             answer=describe(u.event),
             correct=u.event.first_correct,
             counted=u.counted,
             why=u.why,
             struck=u.event.struck is not None,
             tries=u.event.tries,
-            outcome=u.event.outcome,
+            outcome=cast("Literal['right', 'missed', 'left']", u.event.outcome),  # as AttemptIn took it
         )
         for u in uses(events, titles).get(skill, [])
     ]

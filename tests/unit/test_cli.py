@@ -124,3 +124,18 @@ def test_learners_list_and_rebuild(capsys, tmp_path):
     assert "state was 'retained', rebuilt 'unobserved'" in out
     assert "1 difference(s) rebuilding 0 event(s)" in out
     app.state.learner_engine.dispose()
+
+
+def test_openapi_writes_the_schema_and_the_committed_file_is_current(capsys, tmp_path):
+    # web/openapi.json is what the web app's types are generated from (web CI checks that step with --check), so a
+    # change to a response model that is not written back fails here, naming the command that fixes it.
+    assert cli.OPENAPI.read_text(encoding="utf-8") == cli.openapi_text(), "run: uv run flashtap openapi"
+    out = tmp_path / "openapi.json"
+    assert cli.main(["openapi", "-o", str(out)]) == 0
+    assert f"wrote {out}" in capsys.readouterr().out
+    schema = json.loads(out.read_text(encoding="utf-8"))
+    assert schema["paths"]["/api/round"]["get"]["responses"]["200"]
+    # A round always carries every field, so the generated type has no optional ones to check for.
+    assert "options" in schema["components"]["schemas"]["Round"]["required"]
+    assert cli.main(["openapi", "-o", "-"]) == 0
+    assert json.loads(capsys.readouterr().out) == schema

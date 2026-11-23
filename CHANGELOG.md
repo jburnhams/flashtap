@@ -4,6 +4,16 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-23
 
+**Use strata-python and strata-react's common code: generated API types, strata-public-check (branch `claude/project-thread-y42azs`)**
+The owner asked that Flashtap make full use of strata-python and strata-react, with issues raised there for what is missing (a standing rule). The backend already did; the web app's hand-written API shapes are now generated from the server's schema with strata-react's `strata-api-types`, which found three places where the hand copy and the server disagreed.
+- `src/flashtap/cli.py`: `flashtap openapi [-o PATH|-]` writes the server's OpenAPI schema with sorted keys (default `web/openapi.json`), a stand-in until strata-python has the shared command (jburnhams/strata-python#36). `tests/unit/test_cli.py`: the command, and that the committed file is current.
+- `src/flashtap/mechanics.py`: `Round` marks its defaulted fields required in the schema (`json_schema_serialization_defaults_required`), as the server always sends them. `src/flashtap/learners/report.py`: `EvidenceRow.mode` is a `Mode`, `role` a `QRole` and `outcome` a literal, not any string (correction: the web types claimed these all along).
+- `web/openapi.json`, `web/src/api.generated.ts`: **new**, generated; never edited by hand. `web/src/api.ts`: every API shape is a `Schema<...>` from the generated file; hand-narrowed only where the schema cannot say it (a played round's kind is never Mixed, the `mode` setting, a first answer's two forms).
+- `web/package.json`, `web/package-lock.json`: `openapi-typescript` (dev); TypeScript installed as strata-react does it, `typescript` = the TypeScript 6 package and `typescript7` for `typecheck` and `build`, because openapi-typescript needs a JS API TypeScript 7 lacks (strata-react#293); script `api-types`.
+- `.github/workflows/unit.yml`: `strata-public-check .` on the tree (owner's patterns from the `STRATA_PUBLIC_DENY` secret when set); `npm run api-types -- --check` in the web job.
+- Issues raised: strata-python #36-#41, strata-react #293-#299 (listed in `docs/progress.md`). `tests/unit/test_privacy.py` stays until strata-public-check reads web source and repo patterns (strata-python#37, #38).
+- `AGENTS.md`, `README.md`, `docs/implementation-plan.md` (decisions: common code), `docs/progress.md`.
+
 **Learner baseline review fixes (PR #42)**
 Two findings from review of PR #42.
 - `src/flashtap/learners/store.py`: `export` reads the attempt log once and reports on that read (`profile` takes the log), so a round recorded or struck during an export can no longer leave events and estimates that disagree on rebuild. `tests/unit/test_learners.py`: an export rebuilds with no differences.

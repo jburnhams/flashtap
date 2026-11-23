@@ -1,9 +1,10 @@
 """Command line: `doctor` checks the environment, `round` prints a round, `content check` and `content list` read the
-content packs, `learners list` and `learners rebuild` read the learner records, `set` shows or changes a setting, `serve`
-starts the web server."""
+content packs, `learners list` and `learners rebuild` read the learner records, `openapi` writes the API's schema (the
+source of the web app's types), `set` shows or changes a setting, `serve` starts the web server."""
 
 import argparse
 import io
+import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -132,6 +133,30 @@ def cmd_learners_rebuild(args: argparse.Namespace) -> int:
     return 0
 
 
+OPENAPI = Path(__file__).resolve().parents[2] / "web" / "openapi.json"
+
+
+def openapi_text() -> str:
+    """The server's OpenAPI schema as the committed file holds it: stable key order and a final newline, so a change
+    to it is a readable diff and `strata-api-types --check` (web CI) compares like with like."""
+    from flashtap.server.app import create_app
+
+    return json.dumps(create_app().openapi(), indent=1, sort_keys=True, ensure_ascii=False) + "\n"
+
+
+def cmd_openapi(args: argparse.Namespace) -> int:
+    """Write the schema the web app's types are generated from (`cd web && npm run api-types`). A stand-in until
+    strata-python's CLI has a shared command for it."""
+    text = openapi_text()
+    if args.output == "-":
+        _utf8()
+        sys.stdout.write(text)
+        return 0
+    Path(args.output).write_text(text, encoding="utf-8")
+    print(f"wrote {args.output}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="flashtap")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -159,6 +184,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     rb.add_argument("export", help="a file from the Learner screen's Export (GET /api/learners/{id}/export)")
     rb.add_argument("--current-packs", action="store_true", help="report on today's skills, not the export's")
     rb.set_defaults(fn=cmd_learners_rebuild)
+    oa = sub.add_parser("openapi", help="write the API's OpenAPI schema, which the web app's types are generated from")
+    oa.add_argument(
+        "-o", "--output", default=str(OPENAPI), help="where to write it ('-' for stdout; default web/openapi.json)"
+    )
+    oa.set_defaults(fn=cmd_openapi)
     shared.add_set(sub, settings.SETTINGS)
     shared.add_serve(sub, run_server, default_port=PORT)
     a = p.parse_args(argv)
