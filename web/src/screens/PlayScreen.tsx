@@ -23,13 +23,15 @@
 // chosen nothing is sent. A round the server did not take says so in one quiet line, never to the
 // child in words.
 import { useQueryClient } from '@tanstack/react-query'
-import { Volume2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router'
-import { Button, ChoiceGrid, ChoiceGridSkeleton, DataView, EmptyState, Field, IconButton, NativeSelect, PageHeader, PlaceBoard, Skeleton, useLoad, type ChoiceState, type PlaceState } from 'strata-react'
-import { api, isMode, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type LearnerRow, type Mode, type Option, type Round } from '../api'
+import { Button, ChoiceGrid, ChoiceGridSkeleton, DataView, EmptyState, Field, NativeSelect, PageHeader, PlaceBoard, SayAgain, Skeleton, speak, useLoad, useSearchParam, type ChoiceState, type Load, type PlaceState } from 'strata-react'
+import { api, isMode, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type LearnerRow, type Mode, type Option, type Round, type Settings } from '../api'
 import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRight, solution, type Placement, type Turn } from '../play'
-import { say } from '../speech'
+// Every prompt and answer is said aloud in UK English (the content's dialect): a learner who cannot read yet still
+// needs the prompt. Browser voices cannot say an isolated sound such as /m/; recorded clips replace this for phonics
+// (docs/implementation-plan.md, decision 4).
+const LANG = 'en-GB'
+const say = (text: string) => speak(text, { lang: LANG })
 
 export const modeLabels: Record<Mode, string> = {
   matching: 'Matching',
@@ -50,52 +52,47 @@ export const modeLabels: Record<Mode, string> = {
 export function PlayScreen() {
   const settings = useLoad({ queryKey: keys.settings, queryFn: api.settings })
   const learners = useLoad({ queryKey: keys.learners, queryFn: api.learners })
-  const [params, setParams] = useSearchParams()
-  const asked = params.get('mode')
-  const learner = params.get('learner') ?? ''
   // One session per learner while this page is open: the server groups the rounds by it.
   const sessions = useRef(new Map<string, string>())
-  const session = (id: string) => {
+  const session = useCallback((id: string) => {
     let made = sessions.current.get(id)
     if (!made) sessions.current.set(id, (made = newId()))
     return made
-  }
-  const setParam = (key: string, value: string | null) =>
-    setParams(p => {
-      const next = new URLSearchParams(p)
-      if (value) next.set(key, value)
-      else next.delete(key)
-      return next
-    })
+  }, [])
   return (
     <DataView state={settings} isEmpty={() => false} skeleton={<RoundSkeleton />} empty={<EmptyState title="No settings">The server sent none.</EmptyState>}>
-      {s => {
-        const mode = isMode(asked) ? asked : s.mode
-        const known = learners.status === 'ready' ? learners.data : []
-        const playing = known.find(x => x.id === learner) ?? null
-        return (
-          <div className="grid gap-6">
-            <div className="flex flex-wrap gap-4">
-              <Field label="Kind of round" className="w-full max-w-xs">
-                <NativeSelect value={mode} onChange={e => setParam('mode', e.target.value === s.mode ? null : e.target.value)}>
-                  {MODES.map(m => <option key={m} value={m}>{modeLabels[m]}</option>)}
-                </NativeSelect>
-              </Field>
-              <WhoPlays learners={known} value={playing?.id ?? ''} failed={learners.status === 'error'} onChange={id => setParam('learner', id || null)} />
-            </div>
-            <Game key={`${mode}-${playing?.id ?? ''}`} mode={mode} learner={playing} session={playing ? session(playing.id) : ''} />
-          </div>
-        )
-      }}
+      {s => <Choices settings={s} learners={learners} session={session} />}
     </DataView>
   )
 }
 
-/** Who the rounds are recorded for; Nobody records nothing. A failed list still lets the child play, unrecorded. */
-function WhoPlays({ learners, value, failed, onChange }: { learners: LearnerRow[]; value: string; failed: boolean; onChange: (id: string) => void }) {
+/** The kind of round and who plays, both in the URL so a link or a reload keeps them; the saved kind is the default. */
+function Choices({ settings, learners, session }: { settings: Settings; learners: Load<LearnerRow[]>; session: (id: string) => string }) {
+  // The selects write the URL themselves (`param`); these read the same params back for the game.
+  const [mode] = useSearchParam<Mode>('mode', { default: settings.mode, parse: isMode })
+  const [learner] = useSearchParam<string>('learner', { default: '' })
+  const known = learners.status === 'ready' ? learners.data : []
+  const playing = known.find(x => x.id === learner) ?? null
   return (
-    <Field label="Who is playing" className="w-full max-w-xs" hint={failed ? 'The learners could not be loaded, so these rounds are not recorded.' : value ? undefined : 'Nobody: rounds are not recorded.'}>
-      <NativeSelect value={value} onChange={e => onChange(e.target.value)}>
+    <div className="grid gap-6">
+      <div className="flex flex-wrap gap-4">
+        <Field label="Kind of round" className="w-full max-w-xs">
+          <NativeSelect param="mode" paramDefault={settings.mode}>
+            {MODES.map(m => <option key={m} value={m}>{modeLabels[m]}</option>)}
+          </NativeSelect>
+        </Field>
+        <WhoPlays learners={known} recording={playing !== null} failed={learners.status === 'error'} />
+      </div>
+      <Game key={`${mode}-${playing?.id ?? ''}`} mode={mode} learner={playing} session={playing ? session(playing.id) : ''} />
+    </div>
+  )
+}
+
+/** Who the rounds are recorded for; Nobody records nothing. A failed list still lets the child play, unrecorded. */
+function WhoPlays({ learners, recording, failed }: { learners: LearnerRow[]; recording: boolean; failed: boolean }) {
+  return (
+    <Field label="Who is playing" className="w-full max-w-xs" hint={failed ? 'The learners could not be loaded, so these rounds are not recorded.' : recording ? undefined : 'Nobody: rounds are not recorded.'}>
+      <NativeSelect param="learner" paramDefault="">
         <option value="">Nobody</option>
         {learners.map(x => <option key={x.id} value={x.id}>{x.nickname}</option>)}
       </NativeSelect>
@@ -182,7 +179,7 @@ function RoundHeader({ round, over, onNext }: { round: Round; over: 'right' | 'm
     <>
       <PageHeader
         title={round.prompt}
-        actions={<IconButton icon={Volume2} label="Say it again" onClick={() => say(round.say)} />}
+        actions={<SayAgain text={round.say} lang={LANG} verb="Say again" />}
         finding={over ? { text: over === 'right' ? 'That’s right.' : 'The answer is shown below.', action: <Button variant="default" onClick={onNext} autoFocus>Next</Button> } : undefined}
       />
       <p id="prompt" className="sr-only">{round.prompt}</p>

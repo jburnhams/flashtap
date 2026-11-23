@@ -9,8 +9,7 @@
 // learner's own screen behind a confirm, not as a quick row action here.
 import { useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
-import { AsyncButton, DataTable, DataView, EmptyState, Field, format, Input, PageHeader, Skeleton, TableSkeleton, useAsyncAction, useLoad, type Column } from 'strata-react'
+import { AsyncButton, DataTable, DataView, EmptyState, Field, format, Input, PageHeader, Skeleton, TableSkeleton, TextLink, useAsyncAction, useLoad, type Column } from 'strata-react'
 import { api, keys, type LearnerRow } from '../api'
 
 export function LearnersScreen() {
@@ -54,10 +53,10 @@ function finding(rows: LearnerRow[]) {
 }
 
 const columns: Column<LearnerRow>[] = [
-  { key: 'nickname', header: 'Learner', value: x => x.nickname, cell: x => <Link to={`/learners/${x.id}`} className="text-primary underline underline-offset-4">{x.nickname}</Link> },
+  { key: 'nickname', header: 'Learner', value: x => x.nickname, cell: x => <TextLink to={`/learners/${encodeURIComponent(x.id)}`}>{x.nickname}</TextLink> },
   { key: 'attempts', header: 'Rounds recorded', numeric: true, value: x => x.attempts, cell: x => format.integer(x.attempts) },
   { key: 'last_played', header: 'Last played', value: x => (x.last_played ? new Date(x.last_played) : null), cell: x => format.dateTime(x.last_played), missing: 'Never' },
-  { key: 'play', header: 'Play', hideHeader: true, sort: false, cell: x => <Link to={`/?learner=${x.id}`} className="type-label text-primary underline underline-offset-4">Play as {x.nickname}</Link> },
+  { key: 'play', header: 'Play', hideHeader: true, sort: false, cell: x => <TextLink to={`/?learner=${encodeURIComponent(x.id)}`} className="type-label">Play as {x.nickname}</TextLink> },
 ]
 
 function AddLearner() {

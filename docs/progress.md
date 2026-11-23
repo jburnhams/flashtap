@@ -1,5 +1,13 @@
 # Progress log
 
+## 2026-11-23: strata-react 1.3.3 adopted
+
+- Asked for: check for a newer strata-react. 1.3.3 closes all seven Flashtap issues (#293-#299), so every web stand-in from the audit went.
+- `api.ts` calls the server through `createTypedApi<paths>()` over the generated `paths`: each path, `{learner_id}` parameter, JSON body and answer is now checked against the schema, where before each call named its answer type by hand. The hand-written `BASE`/`withBase`, the `send` body helper and `roundUrl` are gone; `main.tsx` takes `appBase()` as the router's basename.
+- Play's two selects hold their choice in the URL with `NativeSelect param=`, read back with `useSearchParam` (validated, so an unknown `?mode=` reads as the saved kind); the hand-written `URLSearchParams` update is gone.
+- Links are `ButtonLink` (Play as, Export) and `TextLink`. The text links now use the theme's readable ink step, which moves seven dark baselines slightly (only the link colour).
+- Speech is `speak` and `SayAgain` (the button is now named "Say again: <the prompt>" and is hidden where the browser has no speech); `speech.ts`, the test's speech stand-in and the localStorage shim are gone.
+
 ## 2026-11-23: strata-python 0.2.6 adopted
 
 - Asked for: use the new versions. strata-python 0.2.6 closes #36-#41; strata-react 1.3.2 fixes none of Flashtap's seven issues (still open), so it is only a lockfile bump.

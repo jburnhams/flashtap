@@ -1,17 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { colorSchemeScript } from 'strata-react'
-import { isMode, PLACE_MECHANICS, roundUrl, withBase } from '../../src/api'
+import { exportUrl, isMode, PLACE_MECHANICS } from '../../src/api'
 import { rounds } from '../../src/mocks/fixtures'
 import { roundFor } from '../../src/mocks/handlers'
 import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRight, solution } from '../../src/play'
-import { pickVoice, say } from '../../src/speech'
 
 describe('api helpers', () => {
-  it('builds URLs under the base and knows the modes', () => {
-    expect(withBase('/api/health')).toBe('/api/health')
-    expect(withBase('relative')).toBe('relative')
-    expect(roundUrl('counting')).toBe('/api/round?mode=counting')
+  it('builds the export link under the base and knows the modes', () => {
+    expect(exportUrl('ab12')).toBe('/api/learners/ab12/export')
     expect(isMode('letters')).toBe(true)
     expect(isMode('spelling')).toBe(false)
     expect(isMode(null)).toBe(false)
@@ -78,21 +75,6 @@ describe('an arrangement in play', () => {
     expect(placeFeedback(once, {}, 1)).toBe('Not yet. Here is the answer.')
     expect(placeFeedback(sort, {}, 1)).toBe('Not yet. Try again.')
     expect(solution(sort)).toEqual({ bus: 'sound_b', bell: 'sound_b', dog: 'sound_d', duck: 'sound_d' })
-  })
-})
-
-describe('speech', () => {
-  it('says nothing where the browser has no speech', () => {
-    expect(say('Hello')).toBe(false)
-  })
-
-  it('prefers a UK English voice, then any English one', () => {
-    const us = { lang: 'en-US', name: 'US' }
-    const gb = { lang: 'en-GB', name: 'GB' }
-    const fr = { lang: 'fr-FR', name: 'FR' }
-    expect(pickVoice([fr, us, gb])).toBe(gb)
-    expect(pickVoice([fr, us])).toBe(us)
-    expect(pickVoice([fr])).toBeUndefined()
   })
 })
 
