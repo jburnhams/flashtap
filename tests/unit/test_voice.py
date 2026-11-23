@@ -39,6 +39,9 @@ def test_the_browser_describes_a_sound_by_where_it_is_heard_never_by_its_letters
     assert voice.describe("ŋ") == "the last sound in ring"
     assert voice.describe("eɪ") == "the sound in rain"
     assert voice.describe("nope") == "a sound"
+    assert voice.describe("ks") == "the last two sounds in fox"  # not "the last sound", which is /s/ alone
+    assert voice.describe("kw") == "the first two sounds in quiz"
+    assert voice.describe("tʃ") == "the first sound in chip"
 
 
 def test_lines_hold_every_sound_once_after_the_sentences():
@@ -156,6 +159,22 @@ def test_build_keeps_what_it_has_remakes_another_voice_and_never_a_recording(sto
     assert speak.calls[0]["model"] == "kokoro-v1"
     assert voice.build(store, ["Listen."], voice="bm_lewis", force=True, speak=speak).made == ["Listen."]
     assert store.read().clips["/ʃ/"].source == "recorded"
+
+
+def test_a_recording_kept_while_build_runs_is_not_undone(store: voice.Store, tmp_path: Path):
+    """The build read the clips before the recording was kept; the store checks again under its lock."""
+    speaker = Speaker(tmp_path)
+
+    def speak_while_someone_records(text: str, **params: Any) -> tuple[dict[str, Any], Any]:
+        store.put(text, sine_wav(0.6, rate=24000), source="recorded", voice="recording")
+        return speaker(text, **params)
+
+    said: list[str] = []
+    r = voice.build(store, ["/iː/"], speak=speak_while_someone_records, say=said.append)
+    assert r.kept == ["/iː/"]
+    assert r.made == []
+    assert store.read().clips["/iː/"].source == "recorded"
+    assert said == ["kept  /iː/ (recorded meanwhile)"]
 
 
 def test_one_failed_line_does_not_stop_the_rest(store: voice.Store, tmp_path: Path):

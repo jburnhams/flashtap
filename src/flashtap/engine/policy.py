@@ -237,7 +237,8 @@ class Policy:
     name: str = "utility"
     # 2 (0.8.0): choices, ratings and overrides. With none of them (a session snapshotted before, with no choice or
     # rating cadence, and a log with no ratings, picks or overrides) it decides exactly as 1 did, so `REPLAYS` keeps 1.
-    version: int = 2
+    # 3 (0.9.0): the Sounds round. Otherwise 2: each version weighs the kinds it had (`OFFERS`), so 1 and 2 are kept.
+    version: int = 3
     weights: Weights = field(default_factory=Weights)
     tau: float = 0.15  # softmax temperature: lower picks the best more often
     epsilon: float = 0.1  # share of every pick that is uniform over the eligible candidates
@@ -246,9 +247,25 @@ class Policy:
     def id(self) -> str:
         return f"{self.name}@{self.version}"
 
+    @property
+    def shapes(self) -> tuple[RoundShape, ...]:
+        """The kinds of round this version weighs, in template order."""
+        return tuple(s for s in SHAPES if s.mode in OFFERS[self.id])
+
+
+# The kinds each version weighs. A new kind changes every decision's candidates and chances, so it comes with a new
+# version, and a logged decision is remade against the kinds its own version had.
+_ALL = frozenset(s.mode for s in SHAPES)
+_BEFORE_SOUNDS = _ALL - {Mode.SOUNDS}
+OFFERS: dict[str, frozenset[Mode]] = {"utility@1": _BEFORE_SOUNDS, "utility@2": _BEFORE_SOUNDS, "utility@3": _ALL}
 
 POLICY = Policy()
-REPLAYS = frozenset({POLICY.id, "utility@1"})  # logged policies the current code remakes exactly
+REPLAYS = frozenset(OFFERS)  # logged policies the current code remakes exactly
+
+
+def kept(policy_id: str) -> Policy:
+    """The policy a logged decision was made by, remade by the current code (`policy_id` is one of `REPLAYS`)."""
+    return Policy(version=int(policy_id.rsplit("@", 1)[1]))
 
 
 def entropy(p: float) -> float:
@@ -283,7 +300,9 @@ def decide(
 
     failed = past.answers[-1][0] if past.answers and not past.answers[-1][1] else None
     liked = likes or {}
-    cands = [_candidate(k, s, past, config, now, policy, misses, failed, liked.get(s.mode.value, 0.0)) for s in SHAPES]
+    cands = [
+        _candidate(k, s, past, config, now, policy, misses, failed, liked.get(s.mode.value, 0.0)) for s in policy.shapes
+    ]
     open_ = [c for c in cands if c.set_aside is None]
     if not open_:  # never stuck: drop the softer filters first, the prerequisite gap last
         open_ = [c for c in cands if c.set_aside is not SetAside.PREREQUISITE] or cands

@@ -13,8 +13,9 @@ does not draw from still shows as a difference in the candidates.
 What else the decision could see is rebuilt the same way: the grown-ups' overrides standing then
 (`evidence.told_as_of`), and the learner's preferences from the ratings received and the choices picked by then
 (`likes_as_of`). A pick is refused once a later decision in its session exists (sessions.pick), so the pick a replay
-sees is the one the next decision saw. Policy `utility@1` decisions are remade by the current code, which decides as
-it did when there are no choices, ratings or overrides (policy.REPLAYS).
+sees is the one the next decision saw. Older policies' decisions (`utility@1`, `@2`) are remade by the current code
+over the kinds of round their version weighed (policy.OFFERS); it decides as 1 did when there are no choices, ratings
+or overrides (policy.REPLAYS).
 """
 
 from collections.abc import Sequence
@@ -22,7 +23,7 @@ from datetime import datetime
 
 from flashtap import rounds
 from flashtap.engine.model import Graph, Params, fold
-from flashtap.engine.policy import REPLAYS, Action, Choice, Config, Logged, Past, decide
+from flashtap.engine.policy import REPLAYS, Action, Choice, Config, Logged, Past, decide, kept
 from flashtap.learners.engagement import Pick, Rated, as_of_ratings, preferences
 from flashtap.learners.evidence import Event, Told, ordered, told_as_of
 from flashtap.mechanics import Mode
@@ -91,7 +92,8 @@ def remake(
 ) -> Choice:
     k = fold(as_of(events, d.at), g, Params(), told_as_of(told, d.at))
     past = past_of(started, decisions, events, d.session_id, d.at, d.seq)
-    return decide(k, past, config, f"{d.session_id}:{d.seq}", d.at, likes=likes_as_of(ratings, decisions, d.at))
+    likes = likes_as_of(ratings, decisions, d.at)
+    return decide(k, past, config, f"{d.session_id}:{d.seq}", d.at, policy=kept(d.policy), likes=likes)
 
 
 def _fields(c: Choice) -> dict[str, object]:
@@ -124,7 +126,6 @@ def replay(
             out.append(f"{where}: its session's start and settings are not in the log")
             continue
         a, b = _fields(d), _fields(remake(d, events, decisions, started, config, g, ratings, told))
-        b["policy"] = a["policy"]  # a kept older policy is remade by the current one
         if d.content is None:
             b["content"] = None  # an export from before 0.7.0 recorded no packs (all were at 1): nothing to compare
         diff = [k for k in a if a[k] != b[k]]

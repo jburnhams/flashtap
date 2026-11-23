@@ -87,16 +87,21 @@ def is_vowel(phoneme: str) -> bool:
     return any(c in _VOWEL_LETTERS for c in phoneme)
 
 
+_CLUSTERS = frozenset({"ks", "kw"})  # one grapheme, two consonant sounds (tʃ and dʒ are one sound each)
+
+
 def describe(phoneme: str) -> str:
     """What the browser says for a sound with no clip: where it is heard in an example word ("the first sound in
     ship"). Never the letters, which are the answer, and never the sound itself, which a browser voice cannot say."""
     gpcs = [g for g in lexicon.words().gpcs if g.phoneme == phoneme and g.example]
+    # x is /ks/ and qu /kw/: two sounds, so "the last sound in fox" would name /s/ alone, which an s tile also makes
+    what = "two sounds" if phoneme in _CLUSTERS else "sound"
     for g in gpcs:
         if g.example.startswith(g.grapheme):
-            return f"the first sound in {g.example}"
+            return f"the first {what} in {g.example}"
     for g in gpcs:
         if g.example.endswith(g.grapheme):
-            return f"the last sound in {g.example}"
+            return f"the last {what} in {g.example}"
     return f"the sound in {gpcs[0].example}" if gpcs else "a sound"
 
 
@@ -216,7 +221,9 @@ class Store:
     def put(
         self, line: str, wav: bytes, *, source: Source, voice: str, model: str = "", settings_hash: str = ""
     ) -> Clip:
-        """Keep `wav` as the clip of `line` (any earlier clip of it is replaced; its file stays if another line uses it)."""
+        """Keep `wav` as the clip of `line` (any earlier clip of it is replaced; its file stays if another line uses it)
+        and return the clip the line now has. A made clip never replaces a recording: that is checked under the lock,
+        so a recording kept while `build` runs is not undone by it, and the recording is returned."""
         info = read_wav(wav, max_seconds=MAX_RECORDING_S if source == "recorded" else None)
         name = f"clips/{hashlib.sha256(wav).hexdigest()[:16]}.wav"
         target = self.root / name
@@ -236,11 +243,18 @@ class Store:
             made=datetime.now(UTC).isoformat(timespec="seconds"),
         )
 
+        kept = clip
+
         def change(m: Manifest) -> None:
+            nonlocal kept
+            now = m.clips.get(line)
+            if source == "generated" and now is not None and now.source == "recorded":
+                kept = now
+                return
             m.clips[line] = clip
 
         self._edit(change)
-        return clip
+        return kept
 
     def remove(self, line: str) -> bool:
         removed = False
@@ -306,7 +320,7 @@ def build(
         try:
             result, prov = speak(line, **params)
             wav = Path(str(result["path"])).read_bytes()
-            store.put(
+            got = store.put(
                 line,
                 wav,
                 source="generated",
@@ -314,6 +328,10 @@ def build(
                 model=str(getattr(prov, "model", "") or ""),
                 settings_hash=str(getattr(prov, "settings_hash", "") or ""),
             )
+            if got.source == "recorded":  # recorded while this line was being made: the recording stands
+                out.kept.append(line)
+                say(f"kept  {line} (recorded meanwhile)")
+                continue
             out.made.append(line)
             say(f"made  {line}")
         except Exception as e:  # one line failing (a refused param, a missing file) must not lose the rest

@@ -1196,7 +1196,7 @@ export interface components {
             learner_id?: string | null;
             /**
              * Policy
-             * @default utility@2
+             * @default utility@3
              */
             policy: string;
             simulated?: components["schemas"]["SimulatedIn"] | null;

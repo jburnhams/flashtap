@@ -1,6 +1,7 @@
 """The adaptive engine (src/flashtap/engine/): the learner model, the policy's limits, filters, utilities and seeded
 draw, scoring, simulated learners, and sessions and replays on a real migrated database. Learners are invented."""
 
+import functools
 import random
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -517,7 +518,9 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
     retired = [d.model_copy(update={"policy": "utility@0"}) for d in old[:1]]
     assert replay.replay(log, retired, {}, G) == (
         0,
-        [f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2)"],
+        [
+            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3)"
+        ],
     )
     assert replay.replay(log, old[:1], {}, G)[1] == [
         f"decision 0 of session {old[0].session_id}: its session's start and settings are not in the log"
@@ -766,12 +769,17 @@ def test_overrides_replay_as_they_stood(db_session: Session, fox: str) -> None:
     assert (out.reproduced, out.differences) == (out.decisions, [])
 
 
-def test_decisions_logged_by_utility_1_are_remade_by_the_current_policy(db_session: Session, fox: str) -> None:
-    """A 0.6.0 or 0.7.0 database: decisions by utility@1, candidates without `liked`, a session config without the
-    choice and rating cadence. The current policy remakes each exactly."""
+def test_decisions_logged_by_utility_1_are_remade_by_the_current_policy(
+    db_session: Session, fox: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 0.6.0 or 0.7.0 database: decisions by utility@1 (which had no Sounds round), candidates without `liked`, a
+    session config without the choice and rating cadence. The current code remakes each exactly."""
+    monkeypatch.setattr(sessions, "decide", functools.partial(policy.decide, policy=policy.kept("utility@1")))
     play_session(db_session, fox, Config(choices=4, tries=0, max_rounds=6, break_every=3), T0)
+    monkeypatch.undo()
     for d in db_session.scalars(select(Decision)):
-        d.policy = "utility@1"
+        assert d.policy == "utility@1"
+        assert Mode.SOUNDS.value not in {c["mode"] for c in d.candidates}
         d.candidates = [{k: v for k, v in c.items() if k != "liked"} for c in d.candidates]
     for x in db_session.scalars(select(Sitting)):
         x.config = {k: v for k, v in (x.config or {}).items() if k not in {"choice_every", "rate_every"}}
@@ -780,6 +788,14 @@ def test_decisions_logged_by_utility_1_are_remade_by_the_current_policy(db_sessi
     assert out.policy == POLICY.id
     assert (out.reproduced, out.differences) == (out.decisions, [])
     assert out.decisions == 8
+
+
+def test_each_policy_version_weighs_the_kinds_it_had() -> None:
+    """A new kind changes every decision's candidates, so it comes with a new version and older ones keep their set."""
+    assert Mode.SOUNDS not in {s.mode for s in policy.kept("utility@2").shapes}
+    assert policy.kept("utility@1").shapes == policy.kept("utility@2").shapes
+    assert {s.mode for s in POLICY.shapes} == set(rounds.TEMPLATES)
+    assert set(policy.REPLAYS) == {"utility@1", "utility@2", POLICY.id}
 
 
 def test_deleting_a_learner_deletes_their_ratings_and_overrides(db_session: Session, fox: str) -> None:
