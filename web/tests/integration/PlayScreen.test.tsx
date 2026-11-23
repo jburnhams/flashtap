@@ -160,14 +160,15 @@ describe('Play, the new kinds of round', () => {
       }
       await user.click(screen.getByRole('button', { name: 'Check' }))
       expect(speech.said.at(-1)?.text).toBe('You put 4 in the basket. That’s too many. Try again.')
-      expect(place('the basket')).toHaveTextContent('Not yet')
+      // The mark is in the place's name too, not only drawn inside it.
+      expect(place('the basket, not yet')).toHaveTextContent('Not yet')
       // Taking one out clears the mark; three is right.
       await user.click(within(screen.getByRole('group', { name: 'In the basket' })).getAllByRole('button')[0])
       await user.click(screen.getByRole('button', { name: 'Put duck back' }))
       expect(place('the basket')).not.toHaveTextContent('Not yet')
       await user.click(screen.getByRole('button', { name: 'Check' }))
       expect(speech.said.at(-1)?.text).toBe('Yes! There are 3 ducks in the basket.')
-      expect(place('the basket')).toHaveTextContent('Right')
+      expect(place('the basket, right')).toHaveTextContent('Right')
       expect(screen.queryByRole('button', { name: 'Check' })).not.toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument()
     })
@@ -189,13 +190,13 @@ describe('Play, the new kinds of round', () => {
     await put('1', 'first')
     await put('7', 'second')
     await user.click(screen.getByRole('button', { name: 'Check' }))
-    expect(place('first')).toHaveTextContent('Right')
-    expect(place('second')).toHaveTextContent('Not yet')
-    expect(place('third')).toHaveTextContent('Not yet') // empty, so not right either
+    expect(place('first, right')).toHaveTextContent('Right')
+    expect(place('second, not yet')).toHaveTextContent('Not yet')
+    expect(place('third, not yet')).toHaveTextContent('Not yet') // empty, so not right either
     await user.click(piece('7'))
-    await user.click(place('Put 7 in third'))
+    await user.click(place('Put 7 in third, not yet'))
     await put('4', 'second')
-    await put('9', 'fourth')
+    await put('9', 'fourth, not yet') // checked while empty: its mark stays until something goes in
     await user.click(screen.getByRole('button', { name: 'Check' }))
     expect(screen.getByText('That’s right.')).toBeInTheDocument()
     expect(screen.getAllByRole('button').filter(b => b.getAttribute('data-variant') === 'default')).toHaveLength(1)
