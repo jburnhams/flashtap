@@ -4,6 +4,17 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-23
 
+**Play screen on strata-react's `ChoiceGrid` (branch `claude/project-thread-fmqqff`)**
+The tap tiles were the one part of the Play screen drawn in Flashtap's own CSS until strata-react had a component for them; strata-react 1.1.5 ships `ChoiceGrid` (strata-react PR #281), so the stand-in goes.
+
+- `web/package.json`, `web/package-lock.json`: strata-react ^1.1.5.
+- `web/src/screens/PlayScreen.tsx`: the tiles are a `ChoiceGrid` (React Aria grid: arrow keys move across and down, Enter answers; closed tiles cannot be pressed again) and the skeleton a `ChoiceGridSkeleton`; the big picture uses `type-picture`. The answer key and the spoken feedback stay here. The tap handler's own "already tapped or finished" guard is gone, as `ChoiceGrid` no longer delivers those taps.
+- `web/src/styles/theme.css`: `--type-picture-size` raised (3rem to 5rem): strata-react's default drew a 35px emoji in a 138px phone tile.
+- `web/src/styles/play.css`: **removed**; `web/src/styles/app.css` no longer imports it.
+- `web/tests/integration/PlayScreen.test.tsx`: tiles are found as rows of the "Choices" grid, named by their picture and then their mark ("duck, not this one").
+- `web/tests/visual/baselines/`: Play and Counting shots rewritten (the tiles' border, gap and mark now come from `ChoiceGrid`).
+- `docs/overview.md`, `docs/implementation-plan.md`, `web/stories/introduction.mdx`: no longer mention `play.css`.
+
 **Scope and privacy: every school year, progression by ability, nothing identifying (branch `claude/project-thread-fmqqff`)**
 The owner answered the plan's open questions: Flashtap is a personal app for private use in a public repository, so it must hold nothing identifying, above all about children; and it covers every school year and ability, starting with the youngest but not limited to them, progressing by ability rather than age.
 

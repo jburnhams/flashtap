@@ -20,7 +20,7 @@ The first rule from that spec, already in force: the server owns the truth (what
   - Play (`/`, `?mode=`): the prompt as the page heading (spoken on arrival, Say it again), the big picture, the tiles. A wrong tap greys that tile and says what it was; the right one is marked and offers Next; with a limit on tries, running out shows the answer. No score and no streak.
   - Settings (`/settings`, `?tab=appearance`): the server's settings as a form, and the colour scheme.
   - `speech.ts`: the browser's speech synthesis, UK English voice first. `play.ts`: a round's outcome and what to say after a tap, as plain functions.
-  - Tiles and picture sizes come from `styles/play.css` (Strata's steps are sized for product screens); everything else is Strata components and theme roles. Faces: Andika (letter shapes children are taught) and Twemoji (the same pictures on every device), both bundled.
+  - The tap tiles are strata-react's `ChoiceGrid` and the pictures its `type-picture` step; the screen is Strata components and theme roles only, with no CSS of its own. Faces: Andika (letter shapes children are taught) and Twemoji (the same pictures on every device), both bundled.
   - MSW handlers for every endpoint (`web/src/mocks/`) serve the jsdom tests, Storybook and the visual suite.
 
 ## 3. Principles

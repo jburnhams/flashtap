@@ -27,13 +27,13 @@ export default defineVisualConfig({
           ready: [],
           wrong: {
             setup: async page => {
-              await page.getByRole('button', { name: 'duck' }).click()
+              await page.getByRole('row', { name: 'duck', exact: true }).click()
               await page.getByText('Not this one').waitFor()
             },
           },
           right: {
             setup: async page => {
-              await page.getByRole('button', { name: 'cow' }).click()
+              await page.getByRole('row', { name: 'cow', exact: true }).click()
               await page.getByRole('button', { name: 'Next' }).waitFor()
             },
           },

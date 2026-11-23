@@ -34,6 +34,6 @@ P5 (field validation) is a study, not code.
 | Which learners? | Every school year and ability, starting with the earliest skills; progression by ability, not age (Scope, above) |
 | Device and offline use? | Tablet or laptop browser; attempts queued in the browser later (recommended answer, not yet discussed) |
 | Voice? | Pre-generated UK English clips (strata-models `speak`), browser speech as fallback (recommended answer, not yet discussed) |
-| Look of the Play screen? | strata-react components; what it lacks is added there ("add components to strata react as needed"). `styles/play.css` is the stand-in until `ChoiceGrid` is released, then deleted |
+| Look of the Play screen? | strata-react components; what it lacks is added there ("add components to strata react as needed"). the tap tiles are strata-react's `ChoiceGrid` (1.1.5); the stand-in `styles/play.css` is gone |
 | First content pack? | The earliest skills (numbers to 10, Phase 2-3 phonics) in a schema built for every year, grown per pack version |
 | Where does data live? | `strata_python.db`: SQLite in tests, the app's schema on the shared Postgres when deployed; never in git |

@@ -6,6 +6,10 @@
    (single-storey a and g, distinct I, l and 1), so a letter on screen has the shape a child is taught. */
 
 :root {
+  /* Pictures on ChoiceGrid tiles and above them: larger than strata-react's default step, which
+     drew a 35px emoji in a 138px phone tile. A picture fills about a third of its tile at any width. */
+  --type-picture-size: clamp(3rem, 2rem + 6vw, 5rem);
+
   /* Status: pale tint + dark ink of one hue. These are the kiln-room values from strata-react's
      fixture theme; on this palette's grounds each ink measures at least 6.0:1 on its tint and 6.6:1
      on the page (light), 6.0:1 and 7.3:1 (dark), checked with ux-research's color.mjs contrast(). */

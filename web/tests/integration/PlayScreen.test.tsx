@@ -4,7 +4,9 @@ import { openApp, screen, within } from '../utils/render'
 import { mock, server } from '../utils/server'
 import { installSpeech } from '../utils/speech'
 
-const tiles = () => within(screen.getByRole('list', { name: 'Choices' })).getAllByRole('button')
+const tiles = () => within(screen.getByRole('grid', { name: 'Choices' })).getAllByRole('row')
+// A tile is named by what it shows, then its mark once it has one ("duck, not this one").
+const tile = (word: string) => new RegExp(`^${word}(,|$)`)
 
 describe('Play', () => {
   it('shows the round in the saved mode, with no names printed on the tiles', async () => {
@@ -17,14 +19,14 @@ describe('Play', () => {
 
   it('greys out a wrong tile and keeps playing, then marks the right one and offers Next', async () => {
     const { user } = openApp('/')
-    await user.click(await screen.findByRole('button', { name: 'duck' }))
-    const duck = screen.getByRole('button', { name: 'duck' })
+    await user.click(await screen.findByRole('row', { name: tile('duck') }))
+    const duck = screen.getByRole('row', { name: tile('duck') })
     expect(duck).toHaveAttribute('aria-disabled', 'true')
     expect(within(duck).getByText('Not this one')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'cow' }))
-    expect(within(screen.getByRole('button', { name: 'cow' })).getByText('Right')).toBeInTheDocument()
+    await user.click(screen.getByRole('row', { name: tile('cow') }))
+    expect(within(screen.getByRole('row', { name: tile('cow') })).getByText('Right')).toBeInTheDocument()
     expect(screen.getByText('That’s right.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Next' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Find the cow.' })).toBeInTheDocument()
@@ -33,9 +35,9 @@ describe('Play', () => {
 
   it('asks for a new round, not the one just played, after Next and a change of kind and back', async () => {
     const { user } = openApp('/')
-    await user.click(await screen.findByRole('button', { name: 'cow' }))
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
     await user.click(screen.getByRole('button', { name: 'Next' }))
-    await screen.findByRole('button', { name: 'pig' })
+    await screen.findByRole('row', { name: tile('pig') })
     const asked = mock.roundRequests
     const kind = screen.getByRole('combobox', { name: 'Kind of round' })
     await user.selectOptions(kind, 'colours')
@@ -48,12 +50,12 @@ describe('Play', () => {
   it('shows where the answer was once the tries run out', async () => {
     mock.tries = 1
     const { user } = openApp('/')
-    await user.click(await screen.findByRole('button', { name: 'lion' }))
-    expect(within(screen.getByRole('button', { name: 'cow' })).getByText('This one')).toBeInTheDocument()
+    await user.click(await screen.findByRole('row', { name: tile('lion') }))
+    expect(within(screen.getByRole('row', { name: tile('cow') })).getByText('This one')).toBeInTheDocument()
     expect(screen.getByText('The answer is shown below.')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'pig' })) // the round is over: nothing changes
+    await user.click(screen.getByRole('row', { name: tile('pig') })) // the round is over: nothing changes
     expect(screen.queryByText('Not this one', { selector: '*' })).toBeInTheDocument()
-    expect(within(screen.getByRole('button', { name: 'pig' })).queryByText('Not this one')).not.toBeInTheDocument()
+    expect(within(screen.getByRole('row', { name: tile('pig') })).queryByText('Not this one')).not.toBeInTheDocument()
   })
 
   it('keeps the kind of round in the URL', async () => {
@@ -79,7 +81,7 @@ describe('Play', () => {
 
   it('has one filled button at most', async () => {
     const { user } = openApp('/')
-    await user.click(await screen.findByRole('button', { name: 'cow' }))
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
     expect(screen.getAllByRole('button').filter(b => b.getAttribute('data-variant') === 'default')).toHaveLength(1)
   })
 
@@ -90,9 +92,9 @@ describe('Play', () => {
     it('says the prompt, each tap and the prompt again on request, in a UK English voice', async () => {
       speech = installSpeech([{ lang: 'en-US', name: 'Samantha' }, { lang: 'en-GB', name: 'Daniel' }])
       const { user } = openApp('/')
-      await user.click(await screen.findByRole('button', { name: 'pig' }))
+      await user.click(await screen.findByRole('row', { name: tile('pig') }))
       await user.click(screen.getByRole('button', { name: 'Say it again' }))
-      await user.click(screen.getByRole('button', { name: 'cow' }))
+      await user.click(screen.getByRole('row', { name: tile('cow') }))
       expect(speech.said.map(s => s.text)).toEqual(['Find the cow.', 'No, that\u2019s a pig. Try again.', 'Find the cow.', 'Yes! You found the cow.'])
       expect(speech.said[0]).toMatchObject({ lang: 'en-GB', voice: 'Daniel' })
     })
