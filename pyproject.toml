@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "flashtap"
 version = "0.2.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
-description = "Flashtap: early years learning games, a FastAPI + strata-react web app"
+description = "Flashtap: learning games that progress by ability, a FastAPI + strata-react web app"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

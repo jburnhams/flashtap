@@ -2,10 +2,34 @@
 
 Newest first, grouped by day. One entry per change, in the same commit or PR as the change.
 
+## 2026-11-23
+
+**Play screen on strata-react's `ChoiceGrid` (branch `claude/project-thread-fmqqff`)**
+The tap tiles were the one part of the Play screen drawn in Flashtap's own CSS until strata-react had a component for them; strata-react 1.1.5 ships `ChoiceGrid` (strata-react PR #281), so the stand-in goes.
+
+- `web/package.json`, `web/package-lock.json`: strata-react ^1.1.5.
+- `web/src/screens/PlayScreen.tsx`: the tiles are a `ChoiceGrid` (React Aria grid: arrow keys move across and down, Enter answers; closed tiles cannot be pressed again) and the skeleton a `ChoiceGridSkeleton`; the big picture uses `type-picture`. The answer key and the spoken feedback stay here. The tap handler's own "already tapped or finished" guard is gone, as `ChoiceGrid` no longer delivers those taps.
+- `web/src/styles/theme.css`: `--type-picture-size` raised (3rem to 5rem): strata-react's default drew a 35px emoji in a 138px phone tile.
+- `web/src/styles/play.css`: **removed**; `web/src/styles/app.css` no longer imports it.
+- `web/tests/integration/PlayScreen.test.tsx`: tiles are found as rows of the "Choices" grid, named by their picture and then their mark ("duck, not this one").
+- `web/tests/visual/baselines/`: Play and Counting shots rewritten (the tiles' border, gap and mark now come from `ChoiceGrid`).
+- `docs/overview.md`, `docs/implementation-plan.md`, `web/stories/introduction.mdx`: no longer mention `play.css`.
+
+**Scope and privacy: every school year, progression by ability, nothing identifying (branch `claude/project-thread-fmqqff`)**
+The owner answered the plan's open questions: Flashtap is a personal app for private use in a public repository, so it must hold nothing identifying, above all about children; and it covers every school year and ability, starting with the youngest but not limited to them, progressing by ability rather than age.
+
+- `AGENTS.md`: **new** rule 8, nothing that identifies a person (no names, ages, birth dates, year groups, schools, places, photos, voices or learner data anywhere in the repository; invented learners in tests; the learner model stores no age). "What this is" no longer says early years.
+- `tests/unit/test_privacy.py`: **new**. Scans the repository's text files for an age, a birth date or a birthday; it caught `play.css` calling the player "a three-year-old".
+- `docs/implementation-plan.md`: decisions recorded with their answers; a Scope paragraph (curriculum stages are labels on skills, never gates; placement by probes; no age stored); PR 2's schema covers every year, PR 4's learner holds only a nickname, PR 5 places by evidence.
+- `README.md`, `docs/overview.md`, `pyproject.toml`, `src/flashtap/__init__.py`, `web/stories/introduction.mdx`: describe Flashtap by ability, not by age, and say the repository is public.
+- `web/src/speech.ts`, `web/src/styles/play.css`, `web/src/styles/theme.css`, `web/src/styles/theme.generated.css` (header comment only): comments no longer assume a young child.
+- `tests/unit/README.md`: ledger row for the privacy test.
+- `CHANGELOG.md`, `docs/implementation-plan.md`: the owner is no longer named (Codex review on PR #39); `AGENTS.md` rule 8 says people are never named, `LICENSE`'s copyright line excepted.
+
 ## 2026-11-22
 
 **Flashtap 0.2.0: a Python web app on strata-python and strata-react (branch `claude/project-thread-fmqqff`)**
-Jonathan asked to change Flashtap from a React/TypeScript npm library into a Python web app on strata-python and strata-react, then to plan growing it toward his early-years adaptive learning spec. This is PR 1 of that plan (`docs/implementation-plan.md`): the same five kinds of round, now owned by the server, with the old generators' bugs fixed. The entries below this one are python-app-template's history, which Flashtap was built from.
+The owner asked to change Flashtap from a React/TypeScript npm library into a Python web app on strata-python and strata-react, then to plan growing it toward his early-years adaptive learning spec. This is PR 1 of that plan (`docs/implementation-plan.md`): the same five kinds of round, now owned by the server, with the old generators' bugs fixed. The entries below this one are python-app-template's history, which Flashtap was built from.
 
 - `src/`, `tests/`, `docs/` (demo site), `package.json`, `package-lock.json`, `tsconfig*.json`, `vite.config.ts`, `vitest*.config.ts`, `playwright.config.ts`, `.github/workflows/{browser-tests,deploy-docs,integration-tests,node.js,npm-publish,release}.yml`: **removed** (the npm library and its CI).
 - python-app-template's files copied in, with `src/app` renamed `src/flashtap`, `app`/`app.cmd` renamed `flashtap`/`flashtap.cmd`, port 8361, and the sample greetings, log and status page removed (`greet.py`, `system.py`, their screens, stories and tests). `upgrade-strata-python.yml` removed: strata-python now comes from PyPI (`strata-python>=0.2,<0.3`).
@@ -17,18 +41,18 @@ Jonathan asked to change Flashtap from a React/TypeScript npm library into a Pyt
 - `web/tests/`, `web/stories/`, `web/strata-visual.config.ts`: tests and stories for both screens; coverage floors 100. 52 visual baselines, written here in Chromium 157 because the pinned 158 could not be downloaded and the *Update visual baselines* workflow cannot be dispatched until it is on `main`; strata-react's suite matches CI's 158 within its tolerance on this Chromium for most shots. If CI's run differs, rewrite them with that workflow after merge.
 - Review fixes on PR #36: `src/flashtap/cli.py` prints rounds as UTF-8 (Windows' cp1252 console could not print an emoji, failing `python -m flashtap round` there); `SettingsScreen.tsx` reads the list of kinds of round through its own `DataView` (it fell back silently on an error); `PlayScreen.tsx` drops every cached round on Next, the one on screen too, so changing the kind and back asks for a new round rather than replaying the first; `mocks/handlers.ts` counts round requests and gains `modesError`, `modesFew`; tests for each.
 - `tests/`: unit and integration suites for the above; `fail_under` 95.
-- `README.md`, `AGENTS.md`, `NOTICE`, `docs/{overview,implementation-plan,progress,deploying}.md`, `deploy/flashtap.service`, `tests/**/README.md`, `web/tests/README.md`, `docs/prompts/`: describe Flashtap. `AGENTS.md`: what Strata lacks is now added to strata-react rather than raised as an issue (Jonathan, 2026-11-22).
+- `README.md`, `AGENTS.md`, `NOTICE`, `docs/{overview,implementation-plan,progress,deploying}.md`, `deploy/flashtap.service`, `tests/**/README.md`, `web/tests/README.md`, `docs/prompts/`: describe Flashtap. `AGENTS.md`: what Strata lacks is now added to strata-react rather than raised as an issue (the owner, 2026-11-22).
 
 ## 2026-11-09
 
 **Regenerate visual baselines on the CI runner (branch `claude/project-thread-iw7199`)**
-Jonathan wants every dependency kept current, including Dependabot's playwright and lucide-react bumps. Those change the Chromium or the icons behind every screenshot, and a laptop cannot reproduce the CI Chromium, so the baselines are now written by a manual workflow.
+The owner wants every dependency kept current, including Dependabot's playwright and lucide-react bumps. Those change the Chromium or the icons behind every screenshot, and a laptop cannot reproduce the CI Chromium, so the baselines are now written by a manual workflow.
 
 - `.github/workflows/update-visual-baselines.yml`: **new**; manual run on a chosen branch: `test:visual:update`, then `test:visual` to prove stability, then commits `web/tests/visual/baselines` to that branch.
 - `AGENTS.md`: CI section mentions it.
 
 **Move onto the strata-python library (branch `claude/project-thread-iw7199`)**
-Jonathan asked for the shared server code to live in a `strata-python` project (like strata-react) so the template stops duplicating it, and for apps to track its latest. This replaces the template's own copies; behaviour is unchanged except where noted.
+The owner asked for the shared server code to live in a `strata-python` project (like strata-react) so the template stops duplicating it, and for apps to track its latest. This replaces the template's own copies; behaviour is unchanged except where noted.
 
 - `pyproject.toml`, `uv.lock`: depend on `strata-python` as a git source tracking `main` (the lock pins the commit); pytest options `strata_env_prefix`/`strata_tuning_vars` configure the library's plugin.
 - `src/app/oslib.py`, `scripts/check.py`, `tests/utils/http_server.py`, `tests/unit/test_oslib.py`, `tests/unit/test_http_server.py`: **removed**, now `strata_python.oslib`, `strata-check` and the plugin's `http_server` fixture (the library tests them, with real processes and sockets).

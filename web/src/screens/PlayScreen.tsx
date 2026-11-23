@@ -11,8 +11,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Volume2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { Button, DataView, EmptyState, Field, IconButton, NativeSelect, PageHeader, Skeleton, Status, cn, useLoad } from 'strata-react'
-import { api, isMode, keys, MODES, type Mode, type Round } from '../api'
+import { Button, ChoiceGrid, ChoiceGridSkeleton, DataView, EmptyState, Field, IconButton, NativeSelect, PageHeader, Skeleton, useLoad, type ChoiceState } from 'strata-react'
+import { api, isMode, keys, MODES, type Mode, type Option, type Round } from '../api'
 import { feedback, outcome, type Turn } from '../play'
 import { say } from '../speech'
 
@@ -59,6 +59,8 @@ function Game({ mode }: { mode: Mode }) {
   )
 }
 
+const marks = { wrong: 'Not this one', right: 'Right', answer: 'This one' }
+
 export function Board({ round, onNext }: { round: Round; onNext: () => void }) {
   const queryClient = useQueryClient()
   const [turn, setTurn] = useState<Turn>({ tapped: [] })
@@ -67,8 +69,11 @@ export function Board({ round, onNext }: { round: Round; onNext: () => void }) {
 
   useEffect(() => { say(round.prompt) }, [round.prompt])
 
-  const tap = (id: string) => {
-    if (done || turn.tapped.includes(id)) return
+  // ChoiceGrid draws the state and refuses a second tap on a closed tile; the answer key stays here.
+  const tileState = (o: Option): ChoiceState =>
+    turn.tapped.includes(o.id) ? (o.correct ? 'right' : 'wrong') : o.correct && done ? 'answer' : 'open'
+
+  const tap = (id: string) => { // only an open tile reaches here: ChoiceGrid closes tapped tiles and, once answered, every tile
     const next = { tapped: [...turn.tapped, id] }
     setTurn(next)
     say(feedback(round, next))
@@ -89,28 +94,17 @@ export function Board({ round, onNext }: { round: Round; onNext: () => void }) {
         finding={done ? { text: state === 'right' ? 'That’s right.' : 'The answer is shown below.', action: <Button variant="default" onClick={next} autoFocus>Next</Button> } : undefined}
       />
       <p id="prompt" className="sr-only">{round.prompt}</p>
-      <div className="play-show" aria-hidden>{round.show}</div>
-      <ul className="play-tiles" aria-label="Choices">
-        {round.options.map(o => {
-          const wrong = turn.tapped.includes(o.id) && !o.correct
-          const reveal = o.correct && done
-          return (
-            <li key={o.id}>
-              <button
-                type="button"
-                className={cn('play-tile', wrong && 'play-tile-wrong', reveal && 'play-tile-right')}
-                aria-label={o.word}
-                aria-disabled={wrong || done || undefined}
-                onClick={() => tap(o.id)}
-              >
-                <span className="play-tile-picture" aria-hidden>{o.picture}</span>
-                {wrong && <Status tone="neutral" className="play-tile-mark">Not this one</Status>}
-                {reveal && <Status tone="success" className="play-tile-mark">{state === 'right' ? 'Right' : 'This one'}</Status>}
-              </button>
-            </li>
-          )
-        })}
-      </ul>
+      <div className="type-picture break-words" aria-hidden>{round.show}</div>
+      <ChoiceGrid
+        label="Choices"
+        items={round.options}
+        itemKey={o => o.id}
+        itemLabel={o => o.word}
+        renderPicture={o => o.picture}
+        state={tileState}
+        marks={marks}
+        onChoose={o => tap(o.id)}
+      />
     </section>
   )
 }
@@ -121,9 +115,7 @@ function RoundSkeleton() {
     <div className="grid gap-6" aria-hidden>
       <Skeleton className="h-8 w-64" />
       <Skeleton className="h-20 w-40" />
-      <div className="play-tiles">
-        {[0, 1, 2, 3].map(i => <Skeleton key={i} className="play-tile" />)}
-      </div>
+      <ChoiceGridSkeleton count={4} />
     </div>
   )
 }
