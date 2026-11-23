@@ -1,0 +1,19 @@
+import { Meta } from '@storybook/addon-docs/blocks'
+
+<Meta title="Introduction" />
+
+# Flashtap
+
+Early years learning games, built on [strata-react](https://github.com/jburnhams/strata-react). Each
+story is a whole screen, opened through the app's own route tree at a URL, with the server put into
+one state by MSW (the same handlers the jsdom tests and the visual suite use). Use the toolbar to
+switch between light and dark.
+
+- **Play**: a round per kind (`?mode=`), its prompt as the `PageHeader` title, large tiles from
+  `styles/play.css`, `ToggleGroup` for the kind of round with its choice in the URL.
+- **Settings**: `Tabs` with the tab in the URL, a form started from the server's values
+  (`NativeSelect`, `NumberField`, `AsyncButton`), `ColorSchemeChoice`.
+
+Every story is screenshotted in Chromium, light and dark, and compared with a committed baseline in
+CI (`npm run test:visual`). States reached by a tap (a wrong tile, the right one) are route shots
+in `strata-visual.config.ts`.

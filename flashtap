@@ -1,0 +1,3 @@
+#!/bin/bash
+# Launcher: runs the flashtap CLI in the uv-managed project environment (same as `uv run flashtap`).
+exec uv run --project "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" flashtap "$@"
