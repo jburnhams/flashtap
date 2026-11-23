@@ -45,3 +45,38 @@ def test_serve_starts_the_server_on_the_default_port(monkeypatch):
     monkeypatch.setattr(server_app, "main", lambda argv: called.append(argv))
     assert cli.main(["serve"]) == 0
     assert called == [["--host", "127.0.0.1", "--port", "8361"]]
+
+
+def test_content_check_passes_on_the_shipped_packs(capsys):
+    assert cli.main(["content", "check"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("ok: 7 packs, ")
+    assert "15 objectives (12 mapped, 3 out of scope)" in out
+
+
+def test_content_check_names_each_problem(tmp_path, capsys):
+    (tmp_path / "bad.toml").write_text(
+        'pack = "bad"\nversion = 1\ntitle = "Bad"\nstatus = "draft"\n'
+        '[[skills]]\nid = "x.a"\ntitle = "A"\nstrand = "x.nowhere"\n',
+        encoding="utf-8",
+    )
+    assert cli.main(["content", "check", "--packs", str(tmp_path)]) == 1
+    assert capsys.readouterr().out.splitlines() == [
+        "x.a: strand 'x.nowhere' does not exist",
+        "1 problem(s) in 1 pack(s)",
+    ]
+
+
+def test_content_list_prints_skills_by_strand(capsys):
+    assert cli.main(["content", "list"]) == 0
+    out = capsys.readouterr().out
+    assert "Mathematics / Counting objects\n" in out
+    assert "  maths.counting.objects  Count a set of things  (eyfs, played in counting)\n" in out
+    assert "  maths.counting.one_to_one  Touch or tag each thing once\n" in out
+
+
+def test_content_list_json_is_the_api_shape(capsys):
+    assert cli.main(["content", "list", "--json"]) == 0
+    s = json.loads(capsys.readouterr().out)
+    assert set(s) == {"packs", "skills", "objectives", "phonics"}
+    assert len(s["objectives"]) == 15

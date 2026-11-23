@@ -1,0 +1,96 @@
+# Words and pictures the rounds use (was src/flashtap/lexicon.py's tables), with their sounds.
+#
+# segments: the spelling split into graphemes, each one GPC from the phonics inventory ("oo:uː" where a grapheme has
+#   two sounds). Only words whose every grapheme is in the inventory are segmented; they are the decodable words.
+# onset: the first grapheme alone, for words with a GPC outside the inventory (horse ends in "se").
+# neither: the first sound is outside the inventory too (aeroplane), so the word is left out of sound rounds.
+# plural / article: written down where "+s" or "a" would be wrong ("sheep", "some grapes", "an elephant" is automatic).
+# Phonetic segmentations were drafted, not checked by a phonics teacher: the pack stays "draft" until they are.
+
+pack = "words"
+version = 1
+title = "Words and pictures"
+status = "draft"
+
+words = [
+  # Animals (Matching, Counting, Letters)
+  { id = "sheep", word = "sheep", category = "animals", picture = "🐑", plural = "sheep", segments = ["sh", "ee", "p"] },
+  { id = "cow", word = "cow", category = "animals", picture = "🐄", segments = ["c", "ow"] },
+  { id = "pig", word = "pig", category = "animals", picture = "🐖", segments = ["p", "i", "g"] },
+  { id = "horse", word = "horse", category = "animals", picture = "🐎", onset = "h" },
+  { id = "chicken", word = "chicken", category = "animals", picture = "🐓", segments = ["ch", "i", "ck", "e", "n"] },
+  { id = "dog", word = "dog", category = "animals", picture = "🐕", segments = ["d", "o", "g"] },
+  { id = "cat", word = "cat", category = "animals", picture = "🐈", segments = ["c", "a", "t"] },
+  { id = "duck", word = "duck", category = "animals", picture = "🦆", segments = ["d", "u", "ck"] },
+  { id = "lion", word = "lion", category = "animals", picture = "🦁", onset = "l" },
+  { id = "tiger", word = "tiger", category = "animals", picture = "🐅", onset = "t" },
+  { id = "elephant", word = "elephant", category = "animals", picture = "🐘", onset = "e" },
+  { id = "monkey", word = "monkey", category = "animals", picture = "🐒", onset = "m" },
+
+  # Food
+  { id = "apple", word = "apple", category = "food", picture = "🍎", onset = "a" },
+  { id = "banana", word = "banana", category = "food", picture = "🍌", onset = "b" },
+  { id = "grapes", word = "grapes", category = "food", picture = "🍇", plural = "grapes", article = "some", onset = "g" },
+  { id = "watermelon", word = "watermelon", category = "food", picture = "🍉", onset = "w" },
+  { id = "carrot", word = "carrot", category = "food", picture = "🥕", onset = "c" },
+  { id = "corn", word = "corn", category = "food", picture = "🌽", plural = "corn cobs", article = "some", segments = ["c", "or", "n"] },
+  { id = "pepper", word = "pepper", category = "food", picture = "🌶️", onset = "p" },
+  { id = "cheese", word = "cheese", category = "food", picture = "🧀", plural = "cheeses", article = "some", onset = "ch" },
+
+  # Vehicles
+  { id = "car", word = "car", category = "vehicles", picture = "🚗", segments = ["c", "ar"] },
+  { id = "taxi", word = "taxi", category = "vehicles", picture = "🚕", onset = "t" },
+  { id = "bus", word = "bus", category = "vehicles", picture = "🚌", plural = "buses", segments = ["b", "u", "s"] },
+  { id = "police", word = "police car", category = "vehicles", picture = "🚓", onset = "p" },
+  { id = "ambulance", word = "ambulance", category = "vehicles", picture = "🚑", onset = "a" },
+  { id = "fire", word = "fire engine", category = "vehicles", picture = "🚒", onset = "f" },
+  { id = "bicycle", word = "bicycle", category = "vehicles", picture = "🚲", onset = "b" },
+  { id = "aeroplane", word = "aeroplane", category = "vehicles", picture = "✈️" },  # UK English; "ae" is outside Phase 2-3
+  { id = "rocket", word = "rocket", category = "vehicles", picture = "🚀", segments = ["r", "o", "ck", "e", "t"] },
+
+  # Shapes (Colours, Shapes)
+  { id = "red_circle", word = "red circle", category = "shapes", picture = "🔴", colour = "red", shape = "circle" },
+  { id = "blue_circle", word = "blue circle", category = "shapes", picture = "🔵", colour = "blue", shape = "circle" },
+  { id = "green_circle", word = "green circle", category = "shapes", picture = "🟢", colour = "green", shape = "circle" },
+  { id = "yellow_circle", word = "yellow circle", category = "shapes", picture = "🟡", colour = "yellow", shape = "circle" },
+  { id = "red_square", word = "red square", category = "shapes", picture = "🟥", colour = "red", shape = "square" },
+  { id = "blue_square", word = "blue square", category = "shapes", picture = "🟦", colour = "blue", shape = "square" },
+  { id = "green_square", word = "green square", category = "shapes", picture = "🟩", colour = "green", shape = "square" },
+  { id = "orange_square", word = "orange square", category = "shapes", picture = "🟧", colour = "orange", shape = "square" },
+  { id = "white_square", word = "white square", category = "shapes", picture = "⬜", colour = "white", shape = "square" },
+  { id = "black_square", word = "black square", category = "shapes", picture = "⬛", colour = "black", shape = "square" },
+  { id = "orange_diamond", word = "orange diamond", category = "shapes", picture = "🔶", colour = "orange", shape = "diamond" },
+
+  # Decodable things: pictures for reading rounds (plan PR 3), every grapheme in Phase 2 or 3
+  { id = "sun", word = "sun", category = "things", picture = "☀️", segments = ["s", "u", "n"] },
+  { id = "hat", word = "hat", category = "things", picture = "🎩", segments = ["h", "a", "t"] },
+  { id = "pen", word = "pen", category = "things", picture = "🖊️", segments = ["p", "e", "n"] },
+  { id = "bed", word = "bed", category = "things", picture = "🛏️", segments = ["b", "e", "d"] },
+  { id = "map", word = "map", category = "things", picture = "🗺️", segments = ["m", "a", "p"] },
+  { id = "cap", word = "cap", category = "things", picture = "🧢", segments = ["c", "a", "p"] },
+  { id = "bat", word = "bat", category = "animals", picture = "🦇", segments = ["b", "a", "t"] },
+  { id = "rat", word = "rat", category = "animals", picture = "🐀", segments = ["r", "a", "t"] },
+  { id = "ten", word = "ten", category = "things", picture = "🔟", segments = ["t", "e", "n"] },
+  { id = "nut", word = "nut", category = "food", picture = "🥜", segments = ["n", "u", "t"] },
+  { id = "sock", word = "sock", category = "things", picture = "🧦", segments = ["s", "o", "ck"] },
+  { id = "bell", word = "bell", category = "things", picture = "🔔", segments = ["b", "e", "ll"] },
+  { id = "log", word = "log", category = "things", picture = "🪵", segments = ["l", "o", "g"] },
+  { id = "fox", word = "fox", category = "animals", picture = "🦊", plural = "foxes", segments = ["f", "o", "x"] },
+  { id = "box", word = "box", category = "things", picture = "📦", plural = "boxes", segments = ["b", "o", "x"] },
+  { id = "web", word = "web", category = "things", picture = "🕸️", segments = ["w", "e", "b"] },
+  { id = "van", word = "van", category = "vehicles", picture = "🚐", segments = ["v", "a", "n"] },
+  { id = "fish", word = "fish", category = "animals", picture = "🐟", plural = "fish", segments = ["f", "i", "sh"] },
+  { id = "ship", word = "ship", category = "vehicles", picture = "🚢", segments = ["sh", "i", "p"] },
+  { id = "chips", word = "chips", category = "food", picture = "🍟", plural = "chips", article = "some", segments = ["ch", "i", "p", "s"] },
+  { id = "ring", word = "ring", category = "things", picture = "💍", segments = ["r", "i", "ng"] },
+  { id = "moon", word = "moon", category = "things", picture = "🌙", segments = ["m", "oo:uː", "n"] },
+  { id = "book", word = "book", category = "things", picture = "📖", segments = ["b", "oo:ʊ", "k"] },
+  { id = "tree", word = "tree", category = "things", picture = "🌳", segments = ["t", "r", "ee"] },
+  { id = "bee", word = "bee", category = "animals", picture = "🐝", segments = ["b", "ee"] },
+  { id = "rain", word = "rain", category = "things", picture = "🌧️", article = "some", plural = "rain", segments = ["r", "ai", "n"] },
+  { id = "star", word = "star", category = "things", picture = "⭐", segments = ["s", "t", "ar"] },
+  { id = "coin", word = "coin", category = "things", picture = "🪙", segments = ["c", "oi", "n"] },
+  { id = "light", word = "light", category = "things", picture = "💡", segments = ["l", "igh", "t"] },
+  { id = "boat", word = "boat", category = "vehicles", picture = "⛵", segments = ["b", "oa", "t"] },
+  { id = "fork", word = "fork", category = "things", picture = "🍴", segments = ["f", "or", "k"] },
+]

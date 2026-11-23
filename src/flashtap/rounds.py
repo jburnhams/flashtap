@@ -22,7 +22,7 @@ from flashtap import lexicon
 from flashtap.lexicon import Thing
 
 MIN_CHOICES = 2
-MAX_CHOICES = 8  # Colours has nine non-red shapes and Food eight pictures, so 8 is the most every mode can fill
+MAX_CHOICES = 8  # the smallest pool a mode draws from (Colours: the shapes not of one colour) still fills 8
 SEED_LIMIT = 2**31  # seeds fit a JavaScript number and a 32-bit column
 
 
@@ -43,6 +43,15 @@ MODE_NAMES: dict[Mode, tuple[str, str]] = {
     Mode.LETTERS: ("Letters", "Find the picture whose word starts with the letter"),
     Mode.COUNTING: ("Counting", "Count the pictures and tap the number"),
     Mode.MIXED: ("Mixed", "A different kind of round each time"),
+}
+# The skills each kind of round practises (ids in the content packs; tests/unit/test_content.py checks they exist). A
+# round gives evidence on these once attempts are recorded (plan PR 4); the Content screen shows which skills have one.
+MODE_SKILLS: dict[Mode, tuple[str, ...]] = {
+    Mode.MATCHING: ("language.vocabulary.receptive",),
+    Mode.COLOURS: ("language.vocabulary.colours",),
+    Mode.SHAPES: ("maths.geometry.name_2d",),
+    Mode.LETTERS: ("literacy.gpc.initial_letter",),
+    Mode.COUNTING: ("maths.counting.objects", "maths.cardinality.last_number", "maths.numerals.recognise"),
 }
 PLAYABLE = (Mode.MATCHING, Mode.COLOURS, Mode.SHAPES, Mode.LETTERS, Mode.COUNTING)
 

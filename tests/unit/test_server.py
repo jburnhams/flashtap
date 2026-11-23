@@ -59,3 +59,12 @@ def test_bad_round_queries_are_refused(client, params):
 def test_settings_refuse_a_bad_value(client):
     assert client.put("/api/settings", json={"choices": "12"}).status_code == 400
     assert client.get("/api/settings").json() == {"mode": "mixed", "choices": "4", "tries": "0"}
+
+
+def test_content_lists_skills_objectives_and_phonics(client):
+    s = client.get("/api/content").json()
+    skills = {k["id"]: k for k in s["skills"]}
+    assert skills["literacy.gpc.initial_letter"]["modes"] == ["letters"]
+    assert skills["maths.subitising.perceptual"]["stages"] == ["eyfs"]
+    assert sum(1 for o in s["objectives"] if o["out_of_scope"]) == 3
+    assert s["phonics"][0]["sets"][0]["gpcs"][1] == {"grapheme": "a", "phoneme": "æ", "example": "ant"}

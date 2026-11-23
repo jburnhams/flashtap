@@ -1,0 +1,41 @@
+# Oral language the early literacy and maths rounds lean on: knowing the word for a picture or a colour.
+# Kept small: only what a round or an edge needs today (spec §5, "Listening/oral language").
+
+pack = "language"
+version = 1
+title = "Communication and language: vocabulary and listening"
+status = "draft"
+
+[[strands]]
+id = "language.vocabulary"
+domain = "language"
+title = "Vocabulary"
+
+[[strands]]
+id = "language.listening"
+domain = "language"
+title = "Listening and understanding"
+
+[[skills]]
+id = "language.vocabulary.receptive"
+title = "Find the picture for a spoken word"
+strand = "language.vocabulary"
+description = "Hear the name of an everyday thing (animal, food, vehicle) and find its picture among others of its kind."
+
+[[skills]]
+id = "language.vocabulary.colours"
+title = "Know the colour words"
+strand = "language.vocabulary"
+description = "Hear a colour's name and find the thing of that colour."
+edges = [
+  { relation = "part_of", to = "language.vocabulary.receptive", confidence = "medium", source = "src.flashtap_judgement" },
+]
+
+[[skills]]
+id = "language.listening.story"
+title = "Listen to a short story or text"
+strand = "language.listening"
+description = "Follow a story or a short non-fiction text read aloud, with pictures."
+edges = [
+  { relation = "facilitates", from = "language.vocabulary.receptive", confidence = "high", source = "src.eef_preparing_for_literacy" },
+]

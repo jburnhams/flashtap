@@ -8,6 +8,7 @@
 // `states: { error: [roundError] }` in the visual config.
 import { delay, http, HttpResponse } from 'msw'
 import { isMode, paths, type Round, type Settings } from '../api'
+import { content } from './content'
 import { defaultSettings, modes, rounds } from './fixtures'
 
 /** What the mock server holds. Writes change it, so a test can save a setting and see it used. */
@@ -50,6 +51,7 @@ export const handlers = [
     mock.roundRequests += 1
     return HttpResponse.json(roundFor(new URL(request.url).searchParams.get('mode')))
   }),
+  http.get(at(paths.content), () => HttpResponse.json(content)),
 ]
 
 const down = () => HttpResponse.json({ detail: 'down' }, { status: 503 })
@@ -63,3 +65,9 @@ export const roundError = http.get(at(paths.round), down)
 export const modesFew = http.get(at(paths.modes), () => HttpResponse.json(modes.filter(m => m.mode === 'matching' || m.mode === 'counting')))
 export const modesError = http.get(at(paths.modes), down)
 export const modesLoading = http.get(at(paths.modes), async () => { await delay('infinite'); return HttpResponse.json(null) })
+export const contentLoading = http.get(at(paths.content), async () => { await delay('infinite'); return HttpResponse.json(null) })
+export const contentError = http.get(at(paths.content), down)
+/** A server with no packs to show (a fresh install whose packs failed to ship). */
+export const contentEmpty = http.get(at(paths.content), () => HttpResponse.json({ ...content, skills: [], objectives: [], phonics: [] }))
+/** Every pack reviewed: the header's warning goes. */
+export const contentReviewed = http.get(at(paths.content), () => HttpResponse.json({ ...content, packs: content.packs.map(p => ({ ...p, status: 'reviewed' })) }))

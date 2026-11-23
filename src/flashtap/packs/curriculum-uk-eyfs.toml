@@ -1,0 +1,160 @@
+# The EYFS Early Learning Goals for mathematics and literacy, each mapped to skills or set aside with the reason
+# (spec §18, P0 exit: every objective mapped or explicitly marked out of scope).
+#
+# Stages are labels: the EYFS goals describe what is typical at the end of Reception, and Flashtap uses them to report
+# coverage, never to decide what a learner may play. Key stage 1 objectives are another curriculum pack that maps to
+# these skills and to new ones. Wording is the framework's, from the edition named in the source.
+
+pack = "curriculum.uk_eyfs"
+version = 1
+title = "Curriculum: EYFS Early Learning Goals (mathematics, literacy)"
+status = "draft"
+
+[curriculum]
+id = "uk_eyfs"
+title = "EYFS statutory framework (England)"
+source = "src.eyfs_2026"
+stages = [{ id = "eyfs", title = "Early Years Foundation Stage" }]
+
+# Mathematics: ELG Number
+
+[[objectives]]
+id = "uk_eyfs.elg.number.1"
+stage = "eyfs"
+area = "Mathematics"
+goal = "Number"
+text = "Have a deep understanding of number to 10, including the composition of each number."
+skills = [
+  "maths.counting.objects",
+  "maths.cardinality.last_number",
+  "maths.cardinality.give_n",
+  "maths.cardinality.conservation",
+  "maths.numerals.quantity",
+  "maths.numerals.zero",
+  "maths.composition.part_whole",
+]
+
+[[objectives]]
+id = "uk_eyfs.elg.number.2"
+stage = "eyfs"
+area = "Mathematics"
+goal = "Number"
+text = "Subitise (recognise quantities without counting) up to 5."
+skills = ["maths.subitising.perceptual"]
+
+[[objectives]]
+id = "uk_eyfs.elg.number.3"
+stage = "eyfs"
+area = "Mathematics"
+goal = "Number"
+text = "Automatically recall (without reference to rhymes, counting or other aids) number bonds up to 5 (including subtraction facts) and some number bonds to 10, including double facts."
+skills = ["maths.composition.bonds_to_5", "maths.composition.bonds_to_10", "maths.composition.doubles"]
+note = "Recall, not working out: evidence needs fast correct answers over time, never time alone (spec §6)."
+
+# Mathematics: ELG Numerical Patterns
+
+[[objectives]]
+id = "uk_eyfs.elg.numerical_patterns.1"
+stage = "eyfs"
+area = "Mathematics"
+goal = "Numerical Patterns"
+text = "Verbally count beyond 20, recognising the pattern of the counting system."
+skills = ["maths.verbal_count.forwards", "maths.verbal_count.decades"]
+note = "Spoken counting needs a spoken answer; until speech input, evidence comes from what-comes-next items."
+
+[[objectives]]
+id = "uk_eyfs.elg.numerical_patterns.2"
+stage = "eyfs"
+area = "Mathematics"
+goal = "Numerical Patterns"
+text = "Compare quantities up to 10 in different contexts, recognising when one quantity is greater than, less than or the same as the other quantity."
+skills = ["maths.comparison.more_fewer", "maths.comparison.order"]
+
+[[objectives]]
+id = "uk_eyfs.elg.numerical_patterns.3"
+stage = "eyfs"
+area = "Mathematics"
+goal = "Numerical Patterns"
+text = "Explore and represent patterns within numbers up to 10, including evens and odds, double facts and how quantities can be distributed equally."
+skills = ["maths.patterns.odd_even", "maths.composition.doubles", "maths.patterns.equal_sharing"]
+
+# Literacy: ELG Comprehension
+
+[[objectives]]
+id = "uk_eyfs.elg.comprehension.1"
+stage = "eyfs"
+area = "Literacy"
+goal = "Comprehension"
+text = "Demonstrate understanding of what has been read to them by retelling stories and narratives using their own words and recently introduced vocabulary."
+out_of_scope = "Retelling in their own words is spoken and open-ended; tap rounds cannot observe it. Ordering a story's pictures (literacy.comprehension.sequence) is related evidence, not this goal."
+
+[[objectives]]
+id = "uk_eyfs.elg.comprehension.2"
+stage = "eyfs"
+area = "Literacy"
+goal = "Comprehension"
+text = "Anticipate (where appropriate) key events in stories."
+skills = ["literacy.comprehension.predict"]
+
+[[objectives]]
+id = "uk_eyfs.elg.comprehension.3"
+stage = "eyfs"
+area = "Literacy"
+goal = "Comprehension"
+text = "Use and understand recently introduced vocabulary during discussions about stories, non-fiction, rhymes and poems and during role-play."
+skills = ["literacy.comprehension.vocabulary"]
+note = "Understanding only: using the words in discussion and role-play is spoken and stays with the adults around the learner."
+
+# Literacy: ELG Word Reading
+
+[[objectives]]
+id = "uk_eyfs.elg.word_reading.1"
+stage = "eyfs"
+area = "Literacy"
+goal = "Word Reading"
+text = "Say a sound for each letter in the alphabet and at least 10 digraphs."
+skills = ["literacy.gpc.sound_from_grapheme", "literacy.gpc.grapheme_from_sound"]
+note = "Phases 2 and 3 of the phonics sequence hold every letter and 15 or more digraphs. Saying needs speech input; choosing (grapheme_from_sound) is the evidence until then."
+
+[[objectives]]
+id = "uk_eyfs.elg.word_reading.2"
+stage = "eyfs"
+area = "Literacy"
+goal = "Word Reading"
+text = "Read words consistent with their phonic knowledge by sound-blending."
+skills = ["literacy.decoding.blend_words"]
+
+[[objectives]]
+id = "uk_eyfs.elg.word_reading.3"
+stage = "eyfs"
+area = "Literacy"
+goal = "Word Reading"
+text = "Read aloud simple sentences and books that are consistent with their phonic knowledge, including some common exception words."
+skills = ["literacy.decoding.sentences", "literacy.word_recognition.exception_words"]
+note = "Reading aloud needs speech input; picking the picture a sentence describes is the evidence until then."
+
+# Literacy: ELG Writing
+
+[[objectives]]
+id = "uk_eyfs.elg.writing.1"
+stage = "eyfs"
+area = "Literacy"
+goal = "Writing"
+text = "Write recognisable letters, most of which are correctly formed."
+out_of_scope = "Letter formation is handwriting with a pencil; tap rounds cannot observe it. The skill is named (literacy.handwriting.letter_formation) so a tracing mechanic can map to it later."
+
+[[objectives]]
+id = "uk_eyfs.elg.writing.2"
+stage = "eyfs"
+area = "Literacy"
+goal = "Writing"
+text = "Spell words by identifying sounds in them and representing the sounds with a letter or letters."
+skills = ["literacy.spelling.build_words", "literacy.phonemic.segment_oral"]
+
+[[objectives]]
+id = "uk_eyfs.elg.writing.3"
+stage = "eyfs"
+area = "Literacy"
+goal = "Writing"
+text = "Write simple phrases and sentences that can be read by others."
+out_of_scope = "Composing and writing a sentence is free writing; tap rounds cannot observe it. Arranging given words into a sentence may come with the sequence mechanic, as related evidence only."

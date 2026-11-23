@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flashtap"
-version = "0.2.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
+version = "0.3.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
 description = "Flashtap: learning games that progress by ability, a FastAPI + strata-react web app"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -45,7 +45,7 @@ omit = ["*/__main__.py"]
 skip_empty = true
 show_missing = false
 # Measured from the unit suite only (tests/unit). Ratchet this up as coverage improves.
-fail_under = 95
+fail_under = 98
 
 [tool.ruff]
 line-length = 120
