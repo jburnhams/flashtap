@@ -20,7 +20,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
-from pydantic import AwareDatetime, BaseModel
+from pydantic import AwareDatetime, BaseModel, Field
 
 
 class SkillUse(BaseModel):
@@ -38,6 +38,9 @@ class Event(BaseModel):
     version: int
     choices: int
     seed: int
+    # The content packs the round drew from, {pack: version} (rounds.content_of). Empty in an export from before
+    # 0.7.0, when every pack was at version 1: a rebuild then takes the packs as they are.
+    content: dict[str, int] = Field(default_factory=dict[str, int])
     mechanic: str
     options: int
     skills: list[SkillUse]

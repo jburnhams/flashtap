@@ -2,6 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 from strata_python.db.web import database
 
+from flashtap import rounds
+from flashtap.mechanics import Mode
 from flashtap.server import app as server_app
 from flashtap.server.app import create_app
 
@@ -133,7 +135,16 @@ def test_learner_records_over_http(client):
     assert ack.json() == {"event_id": "e" * 32, "first_correct": False, "duplicate": False}
     assert client.post("/api/attempts", json=_attempt(fox, right=False)).json()["duplicate"] is True
     assert client.post("/api/attempts", json=_attempt(fox, seed=2)).status_code == 409  # same event id, other contents
-    assert client.post("/api/attempts", json={**_attempt(fox), "version": 9}).status_code == 400
+    fresh = _attempt(fox, event_id="1" * 32)  # a new event: a used id is checked against its log entry first
+    assert client.post("/api/attempts", json={**fresh, "version": 9}).status_code == 400
+    # A round served from packs the server no longer has is refused, not judged against today's round.
+    stale = client.post("/api/attempts", json={**fresh, "content": {**rounds.content_of(Mode.COUNTING), "words": 0}})
+    assert stale.status_code == 400
+    assert "words@0" in stale.json()["detail"]
+    # A retry of a logged event is matched against what was logged, packs included, without rebuilding the round.
+    served = {**_attempt(fox, right=False), "content": rounds.content_of(Mode.COUNTING)}
+    assert client.post("/api/attempts", json=served).json()["duplicate"] is True
+    assert client.post("/api/attempts", json={**served, "content": {"words": 0}}).status_code == 409
     assert client.post("/api/attempts", json=_attempt("0" * 32, event_id="f" * 32)).status_code == 404
     assert client.post("/api/attempts", json={**_attempt(fox), "event_id": "not an id"}).status_code == 422
 

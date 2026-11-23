@@ -59,6 +59,20 @@
       "title": "Choices",
       "type": "integer"
      },
+     "content": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "integer"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Content"
+     },
      "decision_id": {
       "anyOf": [
        {
@@ -381,6 +395,13 @@
       "title": "Choices",
       "type": "integer"
      },
+     "content": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Content",
+      "type": "object"
+     },
      "decision_id": {
       "anyOf": [
        {
@@ -616,10 +637,11 @@
       "type": "string"
      },
      "format": {
-      "default": "flashtap-learner@2",
+      "default": "flashtap-learner@3",
       "enum": [
        "flashtap-learner@1",
-       "flashtap-learner@2"
+       "flashtap-learner@2",
+       "flashtap-learner@3"
       ],
       "title": "Format",
       "type": "string"
@@ -864,6 +886,20 @@
        }
       ],
       "title": "Choices"
+     },
+     "content": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "integer"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Content"
      },
      "id": {
       "title": "Id",
@@ -1561,6 +1597,13 @@
       "title": "Choices",
       "type": "integer"
      },
+     "content": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Content",
+      "type": "object"
+     },
      "done_feedback": {
       "default": "",
       "title": "Done Feedback",
@@ -1650,6 +1693,7 @@
     "required": [
      "mode",
      "version",
+     "content",
      "choices",
      "seed",
      "mechanic",

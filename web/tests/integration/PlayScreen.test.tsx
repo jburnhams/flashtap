@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AttemptIn } from '../../src/api'
+import { rounds } from '../../src/mocks/fixtures'
 import { attemptFails, learnersError, nextError, quickLookGoes, roundError, SESSION, sessionError } from '../../src/mocks/handlers'
 import { openApp, screen, within } from '../utils/render'
 import { mock, server } from '../utils/server'
@@ -252,7 +253,7 @@ describe('Play records rounds for the learner playing', () => {
     await user.click(screen.getByRole('row', { name: tile('cow') }))
     await vi.waitFor(() => expect(mock.attempts).toHaveLength(1))
     const [a] = mock.attempts
-    expect(a).toMatchObject({ learner_id: FOX, mode: 'matching', version: 1, choices: 4, seed: 7, asked: 'mixed', first_answer: { option: 'duck' }, tries: 2, outcome: 'right' })
+    expect(a).toMatchObject({ learner_id: FOX, mode: 'matching', version: 1, content: rounds.matching.content, choices: 4, seed: 7, asked: 'mixed', first_answer: { option: 'duck' }, tries: 2, outcome: 'right' })
     expect(a.event_id).toMatch(/^[0-9a-f]{32}$/)
     expect(Date.parse(a.answered_at)).toBeGreaterThanOrEqual(Date.parse(a.presented_at))
     await user.click(screen.getByRole('button', { name: 'Next' }))

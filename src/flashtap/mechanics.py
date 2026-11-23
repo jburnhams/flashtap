@@ -103,6 +103,7 @@ class Place(BaseModel):
 class Round(ApiModel):  # every field is always sent, so the schema (and the web app's generated type) needs no `?`
     mode: Mode  # the kind actually played (never MIXED)
     version: int = Field(ge=1)  # the template's version: with mode, choices and seed it rebuilds the round exactly
+    content: dict[str, int]  # the content packs it drew from and their versions (rounds.content_of): the other half
     choices: int
     seed: int = Field(ge=0, lt=SEED_LIMIT)
     mechanic: Mechanic

@@ -127,7 +127,7 @@ function Game({ mode, learner, session }: { mode: Mode; learner: LearnerRow | nu
   const round = useLoad({ queryKey: keys.round(mode, visit, n), queryFn: ({ signal }) => api.round(mode, signal), staleTime: Infinity })
   const record = useCallback(
     (who: LearnerRow, r: Round, a: Answered) => {
-      api.recordAttempt({ event_id: newId(), learner_id: who.id, session_id: session, mode: r.mode, version: r.version, choices: r.choices, seed: r.seed, asked: mode, ...a }).then(
+      api.recordAttempt({ event_id: newId(), learner_id: who.id, session_id: session, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: mode, ...a }).then(
         () => {
           setUnsaved(false)
           void queryClient.invalidateQueries({ queryKey: ['learners'] })
@@ -169,7 +169,7 @@ function Decisions({ session, learner }: { session: SessionInfo; learner: Learne
   const saving = useRef<Promise<unknown>>(Promise.resolve())
   const onward = () => { void saving.current.then(() => setSeq(n => n + 1)) }
   const record = (d: Next, r: Round, a: Answered) => {
-    saving.current = api.recordAttempt({ event_id: newId(), learner_id: learner.id, session_id: session.id, decision_id: d.id, mode: r.mode, version: r.version, choices: r.choices, seed: r.seed, asked: 'next', ...a }).then(
+    saving.current = api.recordAttempt({ event_id: newId(), learner_id: learner.id, session_id: session.id, decision_id: d.id, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: 'next', ...a }).then(
       () => {
         setUnsaved(false)
         void queryClient.invalidateQueries({ queryKey: ['learners'] })

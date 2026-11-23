@@ -293,6 +293,10 @@ export interface components {
             asked: components["schemas"]["Mode"] | "next";
             /** Choices */
             choices: number;
+            /** Content */
+            content?: {
+                [key: string]: number;
+            } | null;
             /** Decision Id */
             decision_id?: string | null;
             /** Event Id */
@@ -423,6 +427,10 @@ export interface components {
             asked: string;
             /** Choices */
             choices: number;
+            /** Content */
+            content?: {
+                [key: string]: number;
+            };
             /** Decision Id */
             decision_id?: string | null;
             /** Event Id */
@@ -519,10 +527,10 @@ export interface components {
             exported_at: string;
             /**
              * Format
-             * @default flashtap-learner@2
+             * @default flashtap-learner@3
              * @enum {string}
              */
-            format: "flashtap-learner@1" | "flashtap-learner@2";
+            format: "flashtap-learner@1" | "flashtap-learner@2" | "flashtap-learner@3";
             learner: components["schemas"]["LearnerRow"];
             /** Models */
             models: components["schemas"]["ModelInfo"][];
@@ -609,6 +617,10 @@ export interface components {
             candidates?: components["schemas"]["Candidate"][];
             /** Choices */
             choices?: number | null;
+            /** Content */
+            content?: {
+                [key: string]: number;
+            } | null;
             /** Id */
             id: string;
             mode?: components["schemas"]["Mode"] | null;
@@ -857,6 +869,10 @@ export interface components {
             answer: string;
             /** Choices */
             choices: number;
+            /** Content */
+            content: {
+                [key: string]: number;
+            };
             /**
              * Done Feedback
              * @default

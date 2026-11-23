@@ -5,12 +5,16 @@ Each decision is made again from what the server knew when it made it: the attem
 they stood then), the session's earlier decisions, its start and settings, the same key for the draw and the same
 time. The engine is a pure function of those, so a decision that comes out different means the log, the policy or the
 code under it changed, and the replay says which decision and how. Only the current policy is kept, as only the current
-version of each round template is: a decision made by another is reported, not remade.
+version of each round template and content pack is: a decision made by another policy, or for a round drawn from packs
+since changed (its `content`, the versions its attempt records too), is reported, not remade: the round it served
+can no longer be rebuilt, and a difference would come from the packs, not the log. A change to a skill pack the round
+does not draw from still shows as a difference in the candidates.
 """
 
 from collections.abc import Sequence
 from datetime import datetime
 
+from flashtap import rounds
 from flashtap.engine.model import Graph, Params, fold
 from flashtap.engine.policy import POLICY, Choice, Config, Logged, Past, decide
 from flashtap.learners.evidence import Event, ordered
@@ -76,6 +80,10 @@ def replay(
         where = f"decision {d.seq} of session {d.session_id}"
         if d.policy != POLICY.id:
             out.append(f"{where}: made by {d.policy}, which is not kept (now {POLICY.id})")
+            continue
+        if d.mode is not None and d.content and d.content != (now := rounds.content_of(d.mode)):
+            made, kept = (", ".join(f"{k}@{v}" for k, v in sorted(c.items())) for c in (d.content, now))
+            out.append(f"{where}: made from {made}, which are not kept (now {kept})")
             continue
         started, config = sessions.get(d.session_id, (None, None))
         if started is None or config is None:

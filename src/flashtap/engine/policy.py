@@ -40,6 +40,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+from flashtap import rounds
 from flashtap.engine.model import SHAPES, Knowledge, RoundShape
 from flashtap.mechanics import SEED_LIMIT, Mode
 
@@ -114,6 +115,7 @@ class Choice(BaseModel):
     action: Action
     mode: Mode | None = None
     version: int | None = None
+    content: dict[str, int] | None = None  # the packs the round draws from, as its attempt will record them
     choices: int | None = None
     seed: int | None = None
     skill: str | None = None
@@ -245,6 +247,7 @@ def decide(k: Knowledge, past: Past, config: Config, key: str, now: datetime, po
         action=Action.ROUND,
         mode=pick.mode,
         version=shape.version,
+        content=rounds.content_of(pick.mode),
         choices=config.choices,
         seed=seed,
         skill=pick.skill,

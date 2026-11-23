@@ -146,12 +146,13 @@ class EvidenceRow(BaseModel):
 
 
 def describe(e: Event) -> str:
-    """The first answer in words, from the rebuilt round; the bare id when its template version is no longer kept."""
+    """The first answer in words, from the rebuilt round; the bare id when its template version or the packs it was
+    made from are no longer kept (a round rebuilt from today's words could put another word under that id)."""
     option = e.first_answer.get("option")
     if not isinstance(option, str):
         return "an arrangement"
     try:
-        r = rounds.generate(Mode(e.mode), e.choices, e.seed, e.version)
+        r = rounds.generate(Mode(e.mode), e.choices, e.seed, e.version, e.content or None)
     except ValueError:
         return option
     return next((o.word for o in r.options if o.id == option), option)

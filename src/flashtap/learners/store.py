@@ -1,8 +1,9 @@
 """Reading and writing the learner records: learners, attempts (idempotent by event_id), tombstones, export and delete.
 
-The server judges every attempt itself: the browser sends the round's (mode, version, choices, seed) and the first
-answer, and the round is rebuilt here to decide whether that answer was right (the spec's rule that the server owns
-the truth). A browser that sends the same attempt twice (a retry after a lost answer, or a queue replayed) gets the
+The server judges every attempt itself: the browser sends the round's (mode, version, choices, seed, content) and the
+first answer, and the round is rebuilt here to decide whether that answer was right (the spec's rule that the server
+owns the truth). An attempt on a round made from packs the server no longer has (a pack's version was raised between
+the round being served and answered) is refused rather than judged against today's round, which may be another. A browser that sends the same attempt twice (a retry after a lost answer, or a queue replayed) gets the
 same acknowledgement; one that sends a different attempt under a used event_id is refused (409), since an event, once
 logged, is never rewritten (§14).
 """
@@ -155,6 +156,10 @@ class AttemptIn(BaseModel):
     version: int = Field(ge=1)
     choices: int = Field(ge=rounds.MIN_CHOICES, le=rounds.MAX_CHOICES)
     seed: int = Field(ge=0, lt=SEED_LIMIT)
+    # The round's `content` as served: the packs it drew from and their versions. Sent back so the server judges the
+    # round that was shown; None (a browser from before 0.7.0, or a queue it left) is judged against the packs as
+    # they are now, which is what that browser was served unless a pack changed in between.
+    content: dict[str, int] | None = None
     asked: Mode | Literal["next"]  # the kind the grown-up picked: mixed, the kind itself, or next (the engine chose)
     presented_at: AwareDatetime
     answered_at: AwareDatetime
@@ -171,9 +176,8 @@ class Ack(BaseModel):
 
 
 def _judge(a: AttemptIn) -> tuple[rounds.Round, bool]:
-    if a.mode is Mode.MIXED:
-        raise ValueError("mode is the kind played; a mixed round reports its own kind")
-    r = rounds.generate(a.mode, a.choices, a.seed, a.version)  # ValueError (400) for a version no longer kept
+    # ValueError (400) for a template version or pack version no longer kept
+    r = rounds.generate(a.mode, a.choices, a.seed, a.version, a.content)
     ans = a.first_answer
     if r.mechanic in PLACE:
         if ans.placement is None:
@@ -204,6 +208,7 @@ def _row(a: AttemptIn, r: rounds.Round, right: bool, received: datetime) -> Atte
         version=r.version,
         choices=r.choices,
         seed=r.seed,
+        content=r.content,
         mechanic=r.mechanic.value,
         options=0 if r.mechanic in PLACE else len(r.options),
         skills=[{"skill": s.skill, "role": s.role.value} for s in r.skills],
@@ -219,24 +224,39 @@ def _row(a: AttemptIn, r: rounds.Round, right: bool, received: datetime) -> Atte
     )
 
 
-_SAME = (
-    "learner_id",
-    "session_id",
-    "mode",
-    "version",
-    "choices",
-    "seed",
-    "asked",
-    "first_answer",
-    "tries",
-    "outcome",
-    "decision_id",
-)
-
-
-def _same(old: Attempt, new: Attempt) -> bool:
-    return all(getattr(old, f) == getattr(new, f) for f in _SAME) and all(
-        utc(getattr(old, f)) == utc(getattr(new, f)) for f in ("presented_at", "answered_at")
+def _same(old: Attempt, a: AttemptIn) -> bool:
+    """Whether `a` is the attempt already logged as `old`, compared with what the browser sent rather than with a
+    round rebuilt now: a retry of an attempt logged before a pack changed is still the same attempt."""
+    sent = (
+        a.learner_id,
+        a.session_id,
+        a.mode.value,
+        a.version,
+        a.choices,
+        a.seed,
+        str(a.asked),
+        a.first_answer.model_dump(exclude_none=True),
+        a.tries,
+        a.outcome,
+        a.decision_id,
+    )
+    kept = (
+        old.learner_id,
+        old.session_id,
+        old.mode,
+        old.version,
+        old.choices,
+        old.seed,
+        old.asked,
+        old.first_answer,
+        old.tries,
+        old.outcome,
+        old.decision_id,
+    )
+    return (
+        sent == kept
+        and (a.content is None or a.content == old.content)
+        and (utc(old.presented_at), utc(old.answered_at)) == (a.presented_at, a.answered_at)
     )
 
 
@@ -252,19 +272,22 @@ def hold(db: Session, learner_id: str) -> None:
 
 def record(db: Session, a: AttemptIn, at: datetime | None = None) -> Ack:
     get_learner(db, a.learner_id)
-    r, right = _judge(a)
+    if a.mode is Mode.MIXED:
+        raise ValueError("mode is the kind played; a mixed round reports its own kind")
     hold(db, a.learner_id)
-    row = _row(a, r, right, at or now())
+    # A duplicate first, before the round is rebuilt: the packs may have moved on since it was logged.
     old = db.get(Attempt, a.event_id)
     if old is not None:
-        if not _same(old, row):
+        if not _same(old, a):
             raise Conflict(
                 f"Event {a.event_id} is already logged with different contents; an event is never rewritten."
             )
         db.rollback()  # nothing to write: let the lock go
         return Ack(event_id=a.event_id, first_correct=old.first_correct, duplicate=True)
+    r, right = _judge(a)
+    row = _row(a, r, right, at or now())
     if a.decision_id is not None:
-        _check_decision(db, a)
+        _check_decision(db, a, r)
     sitting = db.get(Sitting, a.session_id)
     if sitting is None:
         db.add(Sitting(id=a.session_id, learner_id=a.learner_id, started_at=row.presented_at, last_at=row.answered_at))
@@ -280,12 +303,13 @@ def record(db: Session, a: AttemptIn, at: datetime | None = None) -> Ack:
     return Ack(event_id=a.event_id, first_correct=right, duplicate=False)
 
 
-def _check_decision(db: Session, a: AttemptIn) -> None:
+def _check_decision(db: Session, a: AttemptIn, r: rounds.Round) -> None:
     """An attempt that names a decision answers the round that decision chose, in its session, once."""
     d = db.get(Decision, a.decision_id)
     if d is None or d.learner_id != a.learner_id or d.session_id != a.session_id:
         raise ValueError(f"No decision {a.decision_id} in session {a.session_id} for this learner.")
-    if (d.action, d.mode, d.version, d.choices, d.seed) != ("round", a.mode.value, a.version, a.choices, a.seed):
+    chosen = (d.action, d.mode, d.version, d.choices, d.seed, d.content)
+    if chosen != ("round", r.mode.value, r.version, r.choices, r.seed, r.content):
         raise ValueError(f"Decision {a.decision_id} chose a different round.")
     other = db.scalar(select(Attempt.event_id).where(Attempt.decision_id == a.decision_id))
     if other is not None:
@@ -321,6 +345,7 @@ def events(db: Session, learner_id: str) -> list[Event]:
             version=x.version,
             choices=x.choices,
             seed=x.seed,
+            content=x.content,
             mechanic=x.mechanic,
             options=x.options,
             skills=[SkillUse(skill=s["skill"], role=s["role"]) for s in x.skills],
@@ -375,8 +400,9 @@ class SessionOut(BaseModel):
 class Export(BaseModel):
     """Everything held about one learner (§17), and the estimates made from it, so a rebuild can be checked."""
 
-    # @2 (0.6.0) adds the engine's decisions and each session's policy; an @1 file still reads, with none of either.
-    format: Literal["flashtap-learner@1", "flashtap-learner@2"] = "flashtap-learner@2"
+    # @2 (0.6.0) adds the engine's decisions and each session's policy; @3 (0.7.0) each attempt's and decision's
+    # content packs. Older files still read, with none of what they lack.
+    format: Literal["flashtap-learner@1", "flashtap-learner@2", "flashtap-learner@3"] = "flashtap-learner@3"
     exported_at: datetime
     app_version: str
     learner: LearnerRow
@@ -413,6 +439,7 @@ def logged(x: Decision) -> Logged:
         version=x.version,
         choices=x.choices,
         seed=x.seed,
+        content=x.content,
         skill=x.skill,
         rationale=[Why(w) for w in x.rationale],
         probability=x.probability,

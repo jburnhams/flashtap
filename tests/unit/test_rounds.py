@@ -246,7 +246,16 @@ PRIMARY = [SkillRole(skill="x", role=QRole.PRIMARY)]
 def _choose(options: list[Option], answer: str = "a", **kw: object) -> Round:
     fields = {"mechanic": Mechanic.SELECT_ONE, "skills": PRIMARY, "options": options, "answer": answer} | kw
     return Round.model_validate(
-        {"mode": Mode.MATCHING, "version": 1, "choices": 2, "seed": 1, "prompt": "p", "say": "p", **fields}
+        {
+            "mode": Mode.MATCHING,
+            "version": 1,
+            "content": {},
+            "choices": 2,
+            "seed": 1,
+            "prompt": "p",
+            "say": "p",
+            **fields,
+        }
     )
 
 
@@ -285,7 +294,16 @@ def test_check_refuses_a_round_without_a_primary_skill_and_misplaced_exposure():
 def _place(pieces: list[Piece], places: list[Place], **kw: object) -> Round:
     fields = {"mechanic": Mechanic.SORT, "skills": PRIMARY, "pieces": pieces, "places": places, "done_feedback": "Yes!"}
     return Round.model_validate(
-        {"mode": Mode.SORT_SOUNDS, "version": 1, "choices": 2, "seed": 1, "prompt": "p", "say": "p", **(fields | kw)}
+        {
+            "mode": Mode.SORT_SOUNDS,
+            "version": 1,
+            "content": {},
+            "choices": 2,
+            "seed": 1,
+            "prompt": "p",
+            "say": "p",
+            **(fields | kw),
+        }
     )
 
 
@@ -350,3 +368,14 @@ def test_tries_allowed_never_reaches_the_last_option_and_counts_checks_on_place_
 def test_the_place_and_choose_families_cover_the_mechanics_once():
     assert set(Mechanic) == CHOOSE | PLACE
     assert not CHOOSE & PLACE
+
+
+def test_a_round_names_the_packs_it_drew_from_and_rebuilds_only_from_them() -> None:
+    r = rounds.generate(Mode.LETTERS, 4, 7)
+    # The words and phonics behind the pictures and letters, and the packs of the skills it names; never a curriculum.
+    assert set(r.content) == {"words", "phonics.letters_and_sounds", "literacy.early", "language"}
+    assert rounds.generate(Mode.LETTERS, 4, 7, r.version, r.content) == r
+    with pytest.raises(ValueError, match=r"made from .*words@0.*not kept"):
+        rounds.generate(Mode.LETTERS, 4, 7, r.version, {**r.content, "words": 0})
+    mixed = rounds.generate(Mode.MIXED, 4, 3)
+    assert mixed.content == rounds.content_of(mixed.mode)  # the kind played, not Mixed

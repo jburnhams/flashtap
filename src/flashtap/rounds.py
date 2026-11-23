@@ -7,15 +7,23 @@ thousands of seeds. Raise a template's `version` whenever its function would giv
 gave before; only the current version of each is kept, and asking for another is refused rather than answered
 differently. The server picks a seed when the client sends none and returns it in the round.
 
+The template's code is half of a round; the content packs it draws from are the other half (the words and pictures, the
+phonics inventory, the skills it names). A round carries the versions of those packs (`content`, from `content_of`),
+an attempt stores them, and a rebuild names them: a round made from packs since changed is refused, as a template
+version no longer kept is, rather than rebuilt from today's words and judged against the wrong round (spec §14,
+"record generator seed, source versions"; docs/content.md).
+
 `mechanics.check` refuses a round whose answer is not one and unmistakable, and `generate` runs it on every round
 served. The 0.1 generators broke this in several ways (two red shapes for "Which one is red?", Counting looping above
 ten choices, tiles printing their own names); tests/unit/test_rounds.py walks 1,000 seeds of every template.
 """
 
 import random
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from functools import cache
 
+from flashtap import content
 from flashtap.kinds import Body, choose, place
 from flashtap.mechanics import (
     PLACE,
@@ -49,6 +57,7 @@ __all__ = [
     "Round",
     "Template",
     "check",
+    "content_of",
     "generate",
     "tries_allowed",
 ]
@@ -138,9 +147,42 @@ MODE_NAMES: dict[Mode, tuple[str, str]] = {
 MODE_SKILLS: dict[Mode, tuple[str, ...]] = {m: tuple(s for s, _ in t.skills) for m, t in TEMPLATES.items()}
 
 
-def generate(mode: Mode, choices: int, seed: int | None = None, version: int | None = None) -> Round:
-    """One checked round. `seed` None picks one (returned in the round); the same mode, choices, seed and version give
-    the same round, and the round's own (mode, version, choices, seed) rebuild it. `version` None is the current one; any other is refused (only the current one is kept)."""
+@cache
+def _content(mode: Mode) -> tuple[tuple[str, int], ...]:
+    t = TEMPLATES[mode]
+    named = {s for s, _ in t.skills}
+    # Every kind counts the packs behind the lexicon (words and the phonics inventory) as drawn from, even the two that
+    # only use numbers (Missing number, Order): over-claiming only refuses a rebuild that would have matched, while
+    # under-claiming would judge an old answer against a changed round, which is the bug this guards against.
+    return tuple(
+        sorted(
+            (p.pack, p.version)
+            for p in content.load().packs
+            if p.words or p.phonics or any(s.id in named for s in p.skills)
+        )
+    )
+
+
+def content_of(mode: Mode) -> dict[str, int]:
+    """The packs a round of this kind draws from, each with its version: `{"words": 1, ...}`. Read from the packs on
+    first use, not at import, so a broken pack still lets `flashtap content check` start and name the problem."""
+    return dict(_content(mode))
+
+
+def _versions(c: Mapping[str, int]) -> str:
+    return ", ".join(f"{k}@{v}" for k, v in sorted(c.items())) or "no packs"
+
+
+def generate(
+    mode: Mode,
+    choices: int,
+    seed: int | None = None,
+    version: int | None = None,
+    content: Mapping[str, int] | None = None,
+) -> Round:
+    """One checked round. `seed` None picks one (returned in the round); the same mode, choices, seed, version and
+    content give the same round, and the round's own (mode, version, choices, seed, content) rebuild it. `version` and
+    `content` None are the current ones; any other is refused (only the current template and packs are kept)."""
     if not MIN_CHOICES <= choices <= MAX_CHOICES:
         raise ValueError(f"choices must be between {MIN_CHOICES} and {MAX_CHOICES}, not {choices}")
     if seed is None:
@@ -157,11 +199,18 @@ def generate(mode: Mode, choices: int, seed: int | None = None, version: int | N
     t = TEMPLATES[played]
     if version is not None and version != t.version:
         raise ValueError(f"{played} is at version {t.version}; version {version} is not kept")
+    now = content_of(played)
+    if content is not None and dict(content) != now:
+        raise ValueError(
+            f"{played} was made from {_versions(content)}; the packs are now {_versions(now)} and the earlier ones are "
+            "not kept"
+        )
     b = t.build(rng, choices)
     return check(
         Round(
             mode=played,
             version=t.version,
+            content=now,
             choices=choices,
             seed=seed,
             mechanic=t.mechanic,

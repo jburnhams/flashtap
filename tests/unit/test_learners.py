@@ -356,7 +356,7 @@ def test_profile_export_and_evidence_rows(db_session: Session, fox: str) -> None
     assert p.struck == 0
     assert [m.model for m in p.models] == ["bkt@1", "rule@1"]
     out = store.export(db_session, fox, SKILLS, at=T0)
-    assert out.format == "flashtap-learner@2"
+    assert out.format == "flashtap-learner@3"
     assert out.decisions == []
     assert out.sessions[0].policy is None
     assert len(out.events) == 2
@@ -374,6 +374,14 @@ def test_profile_export_and_evidence_rows(db_session: Session, fox: str) -> None
     assert give[0].correct
     old = store.events(db_session, fox)[0].model_copy(update={"version": 9})
     assert evidence_rows([old], "maths.counting.objects", {})[0].answer == old.first_answer["option"]
+    # The packs a round drew from are logged with it and exported; a round from packs since changed is not rebuilt
+    # from today's words (its answer could name another picture), and one logged before packs were recorded is.
+    first = store.events(db_session, fox)[0]
+    assert first.content == rounds.content_of(Mode.COUNTING) == out.events[0].content
+    stale = first.model_copy(update={"content": {**first.content, "words": first.content["words"] + 1}})
+    assert evidence_rows([stale], "maths.counting.objects", {})[0].answer == first.first_answer["option"]
+    unrecorded = first.model_copy(update={"content": {}})
+    assert evidence_rows([unrecorded], "maths.counting.objects", {})[0].answer == rows[0].answer
 
 
 # Where the records live
