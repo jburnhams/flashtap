@@ -1,0 +1,17 @@
+{
+  "why": "How a spoken sentence is cut into lines, each found by its own text in the voice clips. src/flashtap/voice.py segments() and web/src/voice.ts segments() must agree, and both are tested against this file.",
+  "cases": [
+    ["Find the cow.", ["Find the cow."]],
+    ["Yes! You found the cow.", ["Yes!", "You found the cow."]],
+    ["No, that's a bus. Try again.", ["No, that's a bus.", "Try again."]],
+    ["Listen. /ʃ/ Which letters make that sound?", ["Listen.", "/ʃ/", "Which letters make that sound?"]],
+    ["Listen. /ʃ/. Which letters make that sound?", ["Listen.", "/ʃ/", "Which letters make that sound?"]],
+    ["/iː/", ["/iː/"]],
+    ["Yes! 0, 1, 8 and 10.", ["Yes!", "0", "1", "8", "10"]],
+    ["Which one next? Counting or Listen?", ["Which one next?", "Counting or Listen?"]],
+    ["  Look quickly!   How many cows? ", ["Look quickly!", "How many cows?"]],
+    ["You put 3 in the basket. That’s too many. Here is the answer.", ["You put 3 in the basket.", "That’s too many.", "Here is the answer."]],
+    ["Put 1/2 in", ["Put 1/2 in"]],
+    ["", []]
+  ]
+}

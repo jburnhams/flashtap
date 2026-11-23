@@ -11,6 +11,7 @@ import { isMode, paths, type AttemptIn, type LearnerRow, type Next, type OfferOu
 import { content } from './content'
 import { defaultSettings, modes, rounds } from './fixtures'
 import { countingEvidence, foxProfile, FOX, learners, owlProfile } from './learners'
+import { voice } from './voice'
 
 /** A round of a kind, a choice between two kinds (`pick:a/b`), a break or the end. `+rate` asks for the faces after it. */
 type Plan = Round['mode'] | `${Round['mode']}+rate` | `pick:${Round['mode']}/${Round['mode']}` | 'break' | 'end'
@@ -38,6 +39,10 @@ export const mock = {
   /** A grown-up's overrides sent, and the ids withdrawn. */
   told: [] as (OverrideIn & { learner_id: string })[],
   withdrawn: [] as string[],
+  /** The recorded voice: the clips list and every sound. A kept recording changes it. */
+  voice: structuredClone(voice),
+  /** Recordings kept, in order: the sound and the WAV's size. */
+  recordings: [] as { line: string; bytes: number }[],
 }
 
 /** Back to the healthy state: call between tests and stories. */
@@ -54,6 +59,19 @@ export function resetMock() {
   mock.ratings = []
   mock.told = []
   mock.withdrawn = []
+  mock.voice = structuredClone(voice)
+  mock.recordings = []
+}
+
+/** A short silent PCM WAV (16-bit mono, 8 kHz), for every clip the mock voice serves: something real to play. */
+export function silentWav(seconds = 0.2): ArrayBuffer {
+  const frames = Math.round(8000 * seconds)
+  const b = new DataView(new ArrayBuffer(44 + frames * 2))
+  const text = (at: number, t: string) => { for (let i = 0; i < t.length; i++) b.setUint8(at + i, t.charCodeAt(i)) }
+  text(0, 'RIFF'); b.setUint32(4, 36 + frames * 2, true); text(8, 'WAVE'); text(12, 'fmt ')
+  b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true); b.setUint32(24, 8000, true)
+  b.setUint32(28, 16000, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); text(36, 'data'); b.setUint32(40, frames * 2, true)
+  return b.buffer
 }
 
 export const SESSION = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
@@ -98,6 +116,18 @@ export function roundFor(mode: string | null): Round {
 }
 
 export const handlers = [
+  http.get(at(paths.voice), () => HttpResponse.json(mock.voice)),
+  http.get(at(`${paths.voice}/clips/:name`), () => new HttpResponse(silentWav(), { headers: { 'Content-Type': 'audio/wav' } })),
+  http.put(at(`${paths.voice}/recordings`), async ({ request }) => {
+    const line = new URL(request.url).searchParams.get('line') ?? ''
+    const row = mock.voice.sounds.find(s => s.line === line)
+    if (!row) return HttpResponse.json({ detail: `${line} is not a sound of the phonics inventory: only sounds are recorded here` }, { status: 400 })
+    const bytes = (await request.arrayBuffer()).byteLength
+    mock.recordings.push({ line, bytes })
+    Object.assign(row, { source: 'recorded', clip: `api/v1/voice/clips/kept${mock.recordings.length}.wav` })
+    mock.voice.clips[line] = row.clip!
+    return HttpResponse.json(row)
+  }),
   http.get(at(paths.health), () => HttpResponse.json({ ok: true, version: '0.2.0' })),
   http.get(at(paths.settings), () => HttpResponse.json(mock.settings)),
   http.put(at(paths.settings), async ({ request }) => {
@@ -177,6 +207,14 @@ export const handlers = [
 ]
 
 const down = () => HttpResponse.json({ detail: 'down' }, { status: 503 })
+
+export const voiceError = http.get(at(paths.voice), down)
+export const voiceLoading = http.get(at(paths.voice), async () => { await delay('infinite'); return HttpResponse.json(null) })
+export const voiceAllRecorded = http.get(at(paths.voice), () => {
+  const sounds = voice.sounds.map(s => (s.vowel ? s : { ...s, source: 'recorded' as const, clip: `api/v1/voice/clips/r${s.phoneme}.wav` }))
+  return HttpResponse.json({ sounds, clips: Object.fromEntries(sounds.filter(s => s.clip).map(s => [s.line, s.clip!])) })
+})
+export const keepRecordingFails = http.put(at(`${paths.voice}/recordings`), down)
 
 export const settingsLoading = http.get(at(paths.settings), async () => { await delay('infinite'); return HttpResponse.json(null) })
 export const settingsError = http.get(at(paths.settings), down)

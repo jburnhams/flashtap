@@ -66,5 +66,8 @@ def test_content_migration_fills_the_packs_each_old_round_drew_from(db_backend: 
     assert read(decided["d1"]) is None
     # The table names the packs each kind draws from today. A pack's version raised later does not touch it (old rows
     # were made at version 1); a kind that comes to draw from other packs changes this line, never the migration.
-    assert {m.value: set(rounds.content_of(m)) for m in rounds.PLAYABLE} == {k: set(v) for k, v in CONTENT.items()}
+    # A kind added after the migration (Sounds) has no old rows to fill, so it is not in the table.
+    older = {m.value: set(rounds.content_of(m)) for m in rounds.PLAYABLE if m.value in CONTENT}
+    assert older == {k: set(v) for k, v in CONTENT.items()}
+    assert len(older) == len(CONTENT)
     assert {v for c in CONTENT.values() for v in c.values()} == {1}

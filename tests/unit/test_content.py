@@ -92,8 +92,8 @@ def test_phase_2_starts_s_a_t_p_and_every_letter_has_a_sound_by_phase_3():
 def test_words_resolve_to_their_sounds():
     r = content.load()
     w = r.words
-    assert [g.key for g in r.word_gpcs(w["chicken"])] == ["ch:tʃ", "i:ɪ", "ck:k", "e:e", "n:n"]  # noqa: RUF001 (IPA)
-    assert [g.key for g in r.word_gpcs(w["moon"])] == ["m:m", "oo:uː", "n:n"]  # noqa: RUF001 (IPA)
+    assert [g.key for g in r.word_gpcs(w["chicken"])] == ["ch:tʃ", "i:ɪ", "ck:k", "e:e", "n:n"]
+    assert [g.key for g in r.word_gpcs(w["moon"])] == ["m:m", "oo:uː", "n:n"]
     onset = r.onset(w["horse"])
     assert onset is not None
     assert onset.key == "h:h"

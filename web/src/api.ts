@@ -2,7 +2,7 @@
 // strata-react's useLoad with the typed client below, which throws HttpError on a non-2xx answer; the
 // screens never call fetch themselves. Every URL is built here, with the app's base in front, so the app
 // works at the server's root and behind a reverse proxy at /<prefix>/.
-import { createTypedApi, withBase } from 'strata-react'
+import { createTypedApi, fetchJson, withBase } from 'strata-react'
 
 // The shapes are generated from the server's OpenAPI schema (`api.generated.ts`, by strata-react's
 // strata-api-types from `web/openapi.json`, which `flashtap openapi` writes), so they follow the Python
@@ -13,7 +13,7 @@ import type { paths as ApiPaths, Schema } from './api.generated'
 
 export type Mode = Schema<'Mode'>
 /** The kinds of round, as the server lists them (src/flashtap/mechanics.py `Mode`), Mixed last. */
-export const MODES = ['matching', 'colours', 'shapes', 'letters', 'counting', 'missing', 'quick_look', 'listen', 'give', 'order', 'capitals', 'sort_sounds', 'mixed'] as const satisfies readonly Mode[]
+export const MODES = ['matching', 'colours', 'shapes', 'letters', 'counting', 'missing', 'quick_look', 'listen', 'give', 'order', 'capitals', 'sort_sounds', 'sounds', 'mixed'] as const satisfies readonly Mode[]
 export const isMode = (v: string | null): v is Mode => MODES.includes(v as Mode)
 
 /** `GET /api/settings`: the kind of round, and how many choices and tries, as numbers. */
@@ -77,6 +77,11 @@ export type Engagement = Schema<'Engagement'>
 export type KindRow = Schema<'KindRow'>
 export type Hypothesis = Schema<'Hypothesis'>
 
+/** `GET /api/v1/voice`: the clip of each line that has one (line -> URL under the app's base), and every phonics sound. */
+export type VoiceOut = Schema<'VoiceOut'>
+/** A phonics sound: its letters, how the browser describes it, and its clip (made from IPA for a vowel, recorded for a consonant). */
+export type SoundRow = Schema<'SoundRow'>
+
 /** A random 32-hex-digit id for an event or a session. Not `crypto.randomUUID`: that needs a secure context, and the
  * app is often served over plain http on a home network; `getRandomValues` works anywhere. */
 export function newId(): string {
@@ -94,6 +99,7 @@ export const paths = {
   attempts: '/api/attempts',
   sessions: '/api/v1/sessions',
   overrides: '/api/v1/learners',
+  voice: '/api/v1/voice',
 } as const
 
 /** The query keys the screens share, so a write can invalidate every read it changes. */
@@ -107,6 +113,7 @@ export const keys = {
   learners: ['learners'],
   profile: (id: string) => ['learners', id, 'profile'],
   evidence: (id: string, skill: string) => ['learners', id, 'evidence', skill],
+  voice: ['voice'],
 } as const
 
 // Every request goes through strata-react's typed client over the generated `paths`: it puts the app's base
@@ -122,6 +129,10 @@ export const api = {
   // The server answers the kind actually played (never Mixed), which the schema's whole-enum `mode` cannot say.
   round: (mode: Mode, signal?: AbortSignal) => http.get('/api/round', { query: { mode }, signal }) as Promise<Round>,
   content: () => http.get('/api/content'),
+  voice: () => http.get('/api/v1/voice'),
+  // A recording is a WAV body, not JSON, which the typed client only sends: fetchJson with the same base and errors.
+  keepRecording: (line: string, wav: Blob) =>
+    fetchJson<SoundRow>(withBase(`${paths.voice}/recordings?line=${encodeURIComponent(line)}`), { method: 'PUT', body: wav, headers: { 'Content-Type': 'audio/wav' } }),
   learners: () => http.get('/api/learners'),
   addLearner: (nickname: string) => http.post('/api/learners', { json: { nickname } }),
   deleteLearner: (id: string) => http.delete('/api/learners/{learner_id}', { path: { learner_id: id } }),
@@ -134,9 +145,7 @@ export const api = {
   pick: (sessionId: string, seq: number, offer: number) => http.post('/api/v1/sessions/{session_id}/decisions/{seq}/pick', { path: { session_id: sessionId, seq }, json: { offer } }) as Promise<Next>,
   rate: (eventId: string, value: Face) => http.post('/api/attempts/{event_id}/rating', { path: { event_id: eventId }, json: { value, scale: 'enjoyment' } }),
   tell: (learnerId: string, body: OverrideIn) => http.post('/api/v1/learners/{learner_id}/overrides', { path: { learner_id: learnerId }, json: body }),
-  // No body: the typed client still asks for `json` on a POST without one, so it is given as undefined (fetchJson
-  // then sends none). strata-react#305.
-  withdraw: (learnerId: string, overrideId: string) => http.post('/api/v1/learners/{learner_id}/overrides/{override_id}/withdraw', { path: { learner_id: learnerId, override_id: overrideId }, json: undefined }),
+  withdraw: (learnerId: string, overrideId: string) => http.post('/api/v1/learners/{learner_id}/overrides/{override_id}/withdraw', { path: { learner_id: learnerId, override_id: overrideId } }),
   strike: (eventId: string, reason: string) => http.post('/api/attempts/{event_id}/strike', { path: { event_id: eventId }, json: { reason } }),
 }
 

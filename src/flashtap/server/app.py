@@ -19,6 +19,10 @@ POST /api/v1/sessions/{id}/next {seq} (decision number seq: a round, a break or 
 again, the same one); POST /api/v1/sessions/{id}/decisions/{seq}/pick {offer} (the learner's pick from a choice of
 two, once); POST /api/v1/evaluations/replay {learner_id | simulated} (remake the logged decisions and score
 the models' predictions).
+The recorded voice (src/flashtap/voice.py): GET /api/v1/voice (each line with a clip, and every phonics sound with its
+clip or none); GET /api/v1/voice/clips/{name} (a clip, cached for good: named by its content); PUT
+/api/v1/voice/recordings?line=/ʃ/ (a WAV body: a person's recording of a sound, kept over any made one); DELETE
+/api/v1/voice/recordings?line=/ʃ/.
 Every other path serves the web app (`src/flashtap/server/static/index.html` when built with `cd web && npm run build`,
 else the plain stand-in `landing.html`), so a reload or a shared link opens that screen: the app routes in the browser."""
 
@@ -27,12 +31,13 @@ import re
 from collections.abc import Sequence
 from typing import Annotated
 
-from fastapi import FastAPI, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from strata_python import web
 from strata_python.db.web import DbSession, add_database
 
-from flashtap import __version__, content, rounds, settings
+from flashtap import __version__, content, rounds, settings, voice
 from flashtap.engine import model, sessions
 from flashtap.engine.policy import Config
 from flashtap.learners import db as learner_db
@@ -96,6 +101,7 @@ def create_app() -> FastAPI:
         app, [SkillInfo(id=s.id, title=s.title, domain=s.domain, strand=s.strand) for s in summary.skills]
     )
     add_engine_routes(app, model.graph(registry), {s.id: s.title for s in summary.skills})
+    add_voice_routes(app, voice.Store(voice.home()))
 
     web.add_web(app, STATIC, LANDING)
     return app
@@ -195,6 +201,47 @@ def add_engine_routes(app: FastAPI, g: model.Graph, titles: dict[str, str]) -> N
     @app.post("/api/v1/evaluations/replay", response_model=sessions.ReplayOut)
     def post_replay(body: sessions.ReplayIn, s: Db) -> sessions.ReplayOut:  # pyright: ignore[reportUnusedFunction]
         return sessions.evaluate(s, body, g)
+
+
+def add_voice_routes(app: FastAPI, store: voice.Store) -> None:
+    """The recorded voice (flashtap.voice): which lines have clips, the clips, and a person's recordings of the sounds."""
+
+    def sound(line: str) -> voice.SoundRow:
+        for row in voice.sound_rows(store.read()):
+            if row.line == line:
+                return row
+        raise ValueError(f"{line!r} is not a sound of the phonics inventory: only sounds are recorded here")
+
+    @app.get("/api/v1/voice", response_model=voice.VoiceOut)
+    def get_voice() -> voice.VoiceOut:  # pyright: ignore[reportUnusedFunction]
+        return voice.voice_out(store)
+
+    @app.get("/api/v1/voice/clips/{name}", response_class=FileResponse)
+    def get_clip(name: str) -> FileResponse:  # pyright: ignore[reportUnusedFunction]
+        path = store.path_of(name)
+        if path is None or not path.is_file():
+            raise HTTPException(404, f"no clip {name}")
+        # named by the hash of its bytes, so a clip never changes under its name: the browser keeps it
+        return FileResponse(
+            path, media_type="audio/wav", headers={"Cache-Control": "public, max-age=31536000, immutable"}
+        )
+
+    @app.put("/api/v1/voice/recordings", response_model=voice.SoundRow)
+    async def put_recording(line: str, request: Request) -> voice.SoundRow:  # pyright: ignore[reportUnusedFunction]
+        sound(line)
+        wav = await request.body()
+        if len(wav) > voice.MAX_RECORDING_BYTES:
+            raise ValueError(f"a recording is at most {voice.MAX_RECORDING_S:g} seconds")
+        store.put(line, wav, source="recorded", voice="recording")  # read_wav refuses what is not a short PCM WAV
+        return sound(line)
+
+    @app.delete("/api/v1/voice/recordings", status_code=204)
+    def delete_recording(line: str) -> Response:  # pyright: ignore[reportUnusedFunction]
+        c = store.clip(sound(line).line)
+        if c is None or c.source != "recorded":
+            raise HTTPException(404, f"no recording of {line}")
+        store.remove(line)
+        return Response(status_code=204)
 
 
 def main(argv: Sequence[str] | None = None) -> None:

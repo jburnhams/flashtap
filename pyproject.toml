@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flashtap"
-version = "0.8.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
+version = "0.9.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
 description = "Flashtap: learning games that progress by ability, a FastAPI + strata-react web app"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -69,6 +69,7 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "C4", "PT", "S", "TID"]
 ignore = ["E501"]        # the formatter wraps code; long comments and docstrings stay (the house style comments the why)
+allowed-confusables = ["ɪ", "ɑ", "ː", "’"]    # IPA in the phonics sounds (/iː/, /aɪ/), and the curly apostrophe the web app says ("That’s too many.")
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "pytest.importorskip".msg = "Do not skip when a dependency is missing: install it (locally and in CI) and let the test fail if it is not there. A deliberate skip is a marker with a reason, see AGENTS.md (Testing)."

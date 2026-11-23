@@ -37,14 +37,13 @@
 // or wrong. With the grown-up choosing the kind, the faces still come every few rounds for a learner who is recorded.
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, ButtonLink, ChoiceGrid, ChoiceGridSkeleton, DataView, Done, EmptyState, format, Field, NativeSelect, PageHeader, PlaceBoard, SayAgain, Skeleton, speak, useLoad, useSearchParam, type ChoiceState, type Load, type PlaceState } from 'strata-react'
+import { Button, ButtonLink, ChoiceGrid, ChoiceGridSkeleton, DataView, Done, EmptyState, format, Field, NativeSelect, PageHeader, PlaceBoard, SayAgain, Skeleton, useLoad, useSearchParam, type ChoiceState, type Load, type PlaceState } from 'strata-react'
 import { api, isPlayChoice, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type Face, type LearnerRow, type Mode, type Next, type OfferOut, type Option, type PlayChoice, type Round, type SessionInfo, type Settings } from '../api'
+import { LANG, useVoice } from '../voice'
 import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRight, solution, type Placement, type Turn } from '../play'
-// Every prompt and answer is said aloud in UK English (the content's dialect): a learner who cannot read yet still
-// needs the prompt. Browser voices cannot say an isolated sound such as /m/; recorded clips replace this for phonics
-// (docs/implementation-plan.md, decision 4).
-const LANG = 'en-GB'
-const say = (text: string) => speak(text, { lang: LANG })
+// Every prompt and answer is said aloud: a learner who cannot read yet still needs the prompt. It is said from the
+// recorded clips where they cover it (../voice.ts), else in the browser's UK English voice. A prompt said unasked
+// waits for the clips list (`voice.ready`), so the first one is in the same voice as the rest.
 
 export const modeLabels: Record<Mode, string> = {
   matching: 'Matching',
@@ -59,6 +58,7 @@ export const modeLabels: Record<Mode, string> = {
   order: 'Order',
   capitals: 'Capitals',
   sort_sounds: 'Sort by sound',
+  sounds: 'Sounds',
   mixed: 'Mixed',
 }
 
@@ -232,15 +232,16 @@ function Decisions({ session, learner }: { session: SessionInfo; learner: Learne
 /** A choice of two: the learner taps the one they want to play next; the server keeps the pick, then it is played. */
 function PickOne({ decision, offers, onPicked }: { decision: Next; offers: OfferOut[]; onPicked: (n: Next) => void }) {
   const [failed, setFailed] = useState(false)
+  const voice = useVoice()
   const question = `Which one next? ${offers.map(o => o.title).join(' or ')}?`
-  useEffect(() => { say(question) }, [question])
+  useEffect(() => { if (voice.ready) voice.say(question) }, [question, voice])
   const choose = (o: OfferOut) => {
     setFailed(false)
     api.pick(decision.session_id, decision.seq, offers.indexOf(o)).then(onPicked, () => setFailed(true))
   }
   return (
     <section aria-labelledby="pick" className="grid gap-6">
-      <PageHeader title="Which one next?" actions={<SayAgain text={question} lang={LANG} verb="Say again" />} />
+      <PageHeader title="Which one next?" actions={<Say text={question} verb="Say again" />} />
       <p id="pick" className="sr-only">{question}</p>
       <ChoiceGrid label="Which one next?" items={offers} itemKey={o => o.mode} itemLabel={o => o.title} renderPicture={o => o.picture} state={() => 'open'} marks={pickMarks} onChoose={choose} size="lg" />
       {failed && <p role="status" className="type-caption text-muted-foreground">That pick did not reach the server: tap one again.</p>}
@@ -269,7 +270,7 @@ function HowWasIt({ onRated }: { onRated: (v: Face) => Promise<unknown> }) {
     <section aria-labelledby="how" className="grid gap-3">
       <div className="flex items-center gap-2">
         <h2 id="how" className="type-heading">How was that one?</h2>
-        <SayAgain text="How was that one?" lang={LANG} verb="Say" />
+        <Say text="How was that one?" verb="Say" />
       </div>
       <ChoiceGrid label="How was that one?" items={FACES} itemKey={f => String(f.value)} itemLabel={f => f.word} renderPicture={f => f.picture} state={() => 'open'} marks={pickMarks} onChoose={f => rate(f.value)} />
       {said === 'failed' && <p role="status" className="type-caption text-muted-foreground">That face was not saved.</p>}
@@ -280,7 +281,8 @@ function HowWasIt({ onRated }: { onRated: (v: Face) => Promise<unknown> }) {
 /** An offered break: keeping on is the filled button (a break is offered, never forced), stopping ends the session here. */
 function BreakOffer({ decision, onContinue }: { decision: Next; onContinue: () => void }) {
   const [stopped, setStopped] = useState(false)
-  useEffect(() => { say('Time for a break?') }, [])
+  const voice = useVoice()
+  useEffect(() => { if (voice.ready) voice.say('Time for a break?') }, [voice])
   if (stopped) return <Done title={`Played ${format.count(decision.rounds_played, 'round')}`} next="Come back later: the next session picks up from these rounds." />
   return (
     <PageHeader
@@ -328,10 +330,18 @@ function useAttempt(report: ((a: Answered) => void) | undefined) {
   return { answered, ended }
 }
 
+/** Say it again, from the clips where they cover it: named by the words it says (a sound by its description). */
+function Say({ text, verb }: { text: string; verb: string }) {
+  const voice = useVoice()
+  return <SayAgain text={voice.words(text)} parts={voice.parts(text)} lang={LANG} verb={verb} />
+}
+
 /** A round, answered by a tap or by an arrangement as its mechanic says. */
 export function Board({ round, onNext, onAnswered, onRated }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void; onRated?: (v: Face) => Promise<unknown> }) {
   const queryClient = useQueryClient()
-  useEffect(() => { say(round.say) }, [round.say])
+  const voice = useVoice()
+  // Said once per round, when the clips list is known; `voice` changes only then, so a later re-render never repeats it.
+  useEffect(() => { if (voice.ready) voice.say(round.say) }, [round.say, voice])
   const next = () => {
     // The round just played is not shown again: drop every round, this one too while it is still on
     // screen, so coming back to this kind of round (a new Game, counting from 0) asks the server afresh.
@@ -347,7 +357,7 @@ function RoundHeader({ round, over, onNext }: { round: Round; over: 'right' | 'm
     <>
       <PageHeader
         title={round.prompt}
-        actions={<SayAgain text={round.say} lang={LANG} verb="Say again" />}
+        actions={<Say text={round.say} verb="Say again" />}
         finding={over ? { text: over === 'right' ? 'That’s right.' : 'The answer is shown below.', action: <Button variant="default" onClick={onNext} autoFocus>Next</Button> } : undefined}
       />
       <p id="prompt" className="sr-only">{round.prompt}</p>
@@ -367,10 +377,11 @@ function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: 
   const tileState = (o: Option): ChoiceState =>
     turn.tapped.includes(o.id) ? (o.correct ? 'right' : 'wrong') : o.correct && done ? 'answer' : 'open'
 
+  const voice = useVoice()
   const tap = (id: string) => { // only an open tile reaches here: ChoiceGrid closes tapped tiles and, once answered, every tile
     const next = { tapped: [...turn.tapped, id] }
     setTurn(next)
-    say(feedback(round, next))
+    voice.say(feedback(round, next))
     attempt.answered({ option: id })
     const after = outcome(round, next)
     if (after !== 'playing') attempt.ended(after)
@@ -435,11 +446,12 @@ function Arrange({ round, onNext, onAnswered, onRated }: { round: Round; onNext:
 
   const move = (piece: string, place: string | null) => setPlacement(m => ({ ...m, [piece]: place ?? undefined }))
 
+  const voice = useVoice()
   const check = () => {
     const n = checks + 1
     setChecks(n)
     setChecked(placement)
-    say(placeFeedback(round, placement, n))
+    voice.say(placeFeedback(round, placement, n))
     attempt.answered({ placement: Object.fromEntries(Object.entries(placement).filter((e): e is [string, string] => e[1] !== undefined)) })
     const after = placeOutcome(round, n, arrangedRight(round, placement))
     if (after !== 'playing') attempt.ended(after)

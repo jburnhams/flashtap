@@ -329,6 +329,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/voice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Voice */
+        get: operations["get_voice_api_v1_voice_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/voice/clips/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Clip */
+        get: operations["get_clip_api_v1_voice_clips__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/voice/recordings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Recording */
+        put: operations["put_recording_api_v1_voice_recordings_put"];
+        post?: never;
+        /** Delete Recording */
+        delete: operations["delete_recording_api_v1_voice_recordings_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -662,7 +714,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "mixed";
+            mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "mixed";
             /** Rate Every */
             rate_every: number;
             /** Session Minutes */
@@ -823,7 +875,7 @@ export interface components {
          *     saved settings still name them).
          * @enum {string}
          */
-        Mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "mixed";
+        Mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "mixed";
         /** ModeInfo */
         ModeInfo: {
             /** Description */
@@ -1372,6 +1424,25 @@ export interface components {
             /** Skill */
             skill: string;
         };
+        /** SoundRow */
+        SoundRow: {
+            /** Clip */
+            clip: string | null;
+            /** Describe */
+            describe: string;
+            /** Example */
+            example: string;
+            /** Graphemes */
+            graphemes: string[];
+            /** Line */
+            line: string;
+            /** Phoneme */
+            phoneme: string;
+            /** Source */
+            source: ("generated" | "recorded") | null;
+            /** Vowel */
+            vowel: boolean;
+        };
         /**
          * State
          * @enum {string}
@@ -1429,6 +1500,15 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VoiceOut */
+        VoiceOut: {
+            /** Clips */
+            clips: {
+                [key: string]: string;
+            };
+            /** Sounds */
+            sounds: components["schemas"]["SoundRow"][];
         };
         /**
          * Why
@@ -2098,6 +2178,115 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Next"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_voice_api_v1_voice_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceOut"];
+                };
+            };
+        };
+    };
+    get_clip_api_v1_voice_clips__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_recording_api_v1_voice_recordings_put: {
+        parameters: {
+            query: {
+                line: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SoundRow"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_recording_api_v1_voice_recordings_delete: {
+        parameters: {
+            query: {
+                line: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

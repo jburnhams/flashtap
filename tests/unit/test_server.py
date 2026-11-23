@@ -37,7 +37,7 @@ def test_modes_lists_every_mode(client):
     modes = client.get("/api/modes").json()
     assert [m["mode"] for m in modes] == [
         "matching", "colours", "shapes", "letters", "counting",
-        "missing", "quick_look", "listen", "give", "order", "capitals", "sort_sounds", "mixed",
+        "missing", "quick_look", "listen", "give", "order", "capitals", "sort_sounds", "sounds", "mixed",
     ]  # fmt: skip
     assert modes[0] == {
         "mode": "matching",
@@ -204,7 +204,7 @@ def test_engine_sessions_next_and_replay(client):
     assert n["round"]["choices"] == 3
     assert n["round"]["tries"] == 1
     assert n["rationale"][0] == "placement_probe"
-    assert len(n["candidates"]) == 12
+    assert len(n["candidates"]) == len(rounds.PLAYABLE)  # one candidate per kind of round
     assert client.post(f"/api/v1/sessions/{s['id']}/next", json={"seq": 0}).json() == n
     assert client.post(f"/api/v1/sessions/{s['id']}/next", json={"seq": 5}).status_code == 400
     assert client.post(f"/api/v1/sessions/{'f' * 32}/next", json={"seq": 0}).status_code == 404
@@ -287,3 +287,43 @@ def test_choices_picks_ratings_and_overrides_over_http(client):
     assert export["format"] == "flashtap-learner@4"
     assert len(export["ratings"]) == 1
     assert len(export["overrides"]) == 1
+
+
+def test_voice_lists_sounds_and_takes_a_recording_of_one(client):
+    from strata_python.testing import sine_wav
+
+    out = client.get("/api/v1/voice").json()
+    assert out["clips"] == {}
+    assert len(out["sounds"]) == 45
+    sh = next(x for x in out["sounds"] if x["line"] == "/ʃ/")
+    assert sh == {**sh, "graphemes": ["sh"], "clip": None, "source": None, "vowel": False}
+
+    wav = sine_wav(0.8, rate=24000)
+    put = client.put("/api/v1/voice/recordings", params={"line": "/ʃ/"}, content=wav)
+    assert put.status_code == 200
+    assert put.json()["source"] == "recorded"
+    url = client.get("/api/v1/voice").json()["clips"]["/ʃ/"]
+    assert url == put.json()["clip"]
+    assert url.startswith("api/v1/voice/clips/")
+    got = client.get("/" + url)
+    assert got.content == wav
+    assert got.headers["content-type"] == "audio/wav"
+    assert "immutable" in got.headers["cache-control"]
+
+    assert client.delete("/api/v1/voice/recordings", params={"line": "/ʃ/"}).status_code == 204
+    assert client.delete("/api/v1/voice/recordings", params={"line": "/ʃ/"}).status_code == 404
+    assert client.get("/" + url).status_code == 404  # a clip no line holds is not served
+    assert client.get("/api/v1/voice/clips/manifest.json").status_code == 404
+
+
+def test_voice_refuses_a_line_that_is_not_a_sound_and_a_file_that_is_not_a_wav(client):
+    from strata_python.testing import sine_wav
+
+    not_sound = client.put("/api/v1/voice/recordings", params={"line": "Listen."}, content=sine_wav(0.5, rate=24000))
+    assert not_sound.status_code == 400
+    assert "only sounds" in not_sound.json()["detail"]
+    bad = client.put("/api/v1/voice/recordings", params={"line": "/m/"}, content=b"not a wav")
+    assert bad.status_code == 400
+    long = client.put("/api/v1/voice/recordings", params={"line": "/m/"}, content=sine_wav(11, rate=24000))
+    assert long.status_code == 400
+    assert client.get("/api/v1/voice").json()["clips"] == {}

@@ -96,6 +96,20 @@ export default defineVisualConfig({
         },
       },
       { name: 'content', path: '/content', states: { skills: [], curriculum: { path: '/content?tab=curriculum' } } },
+      {
+        // A sound's Record dialog before a take (recording itself needs a microphone: the jsdom tests use a fake one).
+        name: 'sounds',
+        path: '/sounds',
+        states: {
+          list: [],
+          record: {
+            setup: async page => {
+              await page.getByRole('button', { name: 'Record the first sound in pan' }).click()
+              await page.getByRole('dialog', { name: 'Record the first sound in pan' }).waitFor()
+            },
+          },
+        },
+      },
       { name: 'settings', path: '/settings', states: { play: [], sessions: { path: '/settings?tab=sessions' }, appearance: { path: '/settings?tab=appearance' } } },
     ],
   },

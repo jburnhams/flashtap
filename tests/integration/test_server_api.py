@@ -5,6 +5,7 @@ import urllib.request
 
 from strata_python.db.web import database
 
+from flashtap import rounds
 from flashtap.server.app import create_app
 
 
@@ -16,7 +17,7 @@ def _get(url: str):
 def test_a_real_server_answers_health_modes_and_rounds(live_app):
     with live_app(create_app()) as base:
         assert _get(f"{base}/api/health")["ok"] is True
-        assert len(_get(f"{base}/api/modes")) == 13
+        assert len(_get(f"{base}/api/modes")) == len(rounds.PLAYABLE) + 1  # every kind, and Mixed
         r = _get(f"{base}/api/round?mode=counting&choices=8&seed=99")
         assert len(r["options"]) == 8
         assert _get(f"{base}/api/round?mode=counting&choices=8&seed=99") == r
