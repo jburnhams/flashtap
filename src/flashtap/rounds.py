@@ -116,7 +116,7 @@ def _options(shown: list[Thing], answer: Thing, success: str) -> list[Option]:
 
 
 def _matching(rng: random.Random, choices: int, seed: int) -> Round:
-    pool = rng.choice(lexicon.MATCHING_POOLS)  # one category per round: a cow among buses is too easy
+    pool = rng.choice(lexicon.words().matching_pools)  # one category per round: a cow among buses is too easy
     answer = rng.choice(pool)
     shown = _pick(rng, pool, answer, choices)
     return Round(
@@ -130,9 +130,9 @@ def _matching(rng: random.Random, choices: int, seed: int) -> Round:
 
 
 def _colours(rng: random.Random, choices: int, seed: int) -> Round:
-    answer = rng.choice(lexicon.SHAPES)
+    answer = rng.choice(lexicon.words().shapes)
     colour = answer.colour or ""
-    pool = [t for t in lexicon.SHAPES if t.colour != colour or t is answer]  # exactly one shape of that colour
+    pool = [t for t in lexicon.words().shapes if t.colour != colour or t is answer]  # exactly one shape of that colour
     shown = _pick(rng, pool, answer, choices)
     return Round(
         mode=Mode.COLOURS,
@@ -145,8 +145,8 @@ def _colours(rng: random.Random, choices: int, seed: int) -> Round:
 
 
 def _shapes(rng: random.Random, choices: int, seed: int) -> Round:
-    answer = rng.choice(lexicon.SHAPES)
-    shown = _pick(rng, lexicon.SHAPES, answer, choices)
+    answer = rng.choice(lexicon.words().shapes)
+    shown = _pick(rng, lexicon.words().shapes, answer, choices)
     return Round(
         mode=Mode.SHAPES,
         seed=seed,
@@ -158,9 +158,11 @@ def _shapes(rng: random.Random, choices: int, seed: int) -> Round:
 
 
 def _letters(rng: random.Random, choices: int, seed: int) -> Round:
-    answer = rng.choice(lexicon.LETTER_WORDS)
+    answer = rng.choice(lexicon.words().letter_words)
     letter = answer.letter or ""
-    pool = [t for t in lexicon.LETTER_WORDS if t.letter != letter or t is answer]  # only one word with that letter
+    pool = [
+        t for t in lexicon.words().letter_words if t.letter != letter or t is answer
+    ]  # only one word with that letter
     shown = _pick(rng, pool, answer, choices)
     return Round(
         mode=Mode.LETTERS,
@@ -177,7 +179,7 @@ NUMBERS = range(1, 11)
 
 
 def _counting(rng: random.Random, choices: int, seed: int) -> Round:
-    thing = rng.choice(lexicon.COUNTABLE)
+    thing = rng.choice(lexicon.words().countable)
     n = rng.randint(1, COUNT_MOST)
     others = rng.sample([k for k in NUMBERS if k != n], choices - 1)  # 9 others, and MAX_CHOICES is 8
     shown = [n, *others]

@@ -2,13 +2,14 @@
 sound it starts with.
 
 The words live in the `words` content pack (`src/flashtap/packs/words.toml`), with their graphemes and phonemes; this
-module turns them into the `Thing`s the round generators use. Plurals and articles are written per word where a rule
+module turns them into the `Thing`s the round generators use (`words()`, read once on first use). Plurals and articles are written per word where a rule
 would be wrong ("sheep", "some grapes"). `onset` is the word's first GPC from the phonics inventory, or None when its
 first sound is outside it; the Letters round uses only words whose first grapheme is one letter, so "What starts with
 C?" never mixes /k/ (cat) with /tʃ/ (chicken).
 """
 
 from dataclasses import dataclass
+from functools import cache
 
 from flashtap import content
 from flashtap.content.model import GPC
@@ -46,39 +47,64 @@ class Thing:
         return self.word[0].upper() + self.word[1:]
 
 
-def _things() -> tuple[Thing, ...]:
+@dataclass(frozen=True)
+class Lexicon:
+    everything: tuple[Thing, ...]
+
+    def category(self, name: str) -> tuple[Thing, ...]:
+        return tuple(t for t in self.everything if t.category == name)
+
+    @property
+    def animals(self) -> tuple[Thing, ...]:
+        return self.category("animals")
+
+    @property
+    def food(self) -> tuple[Thing, ...]:
+        return self.category("food")
+
+    @property
+    def vehicles(self) -> tuple[Thing, ...]:
+        return self.category("vehicles")
+
+    @property
+    def shapes(self) -> tuple[Thing, ...]:
+        return self.category("shapes")
+
+    @property
+    def matching_pools(self) -> tuple[tuple[Thing, ...], ...]:
+        """Matching keeps a round inside one category, so a cow is never matched among buses."""
+        return (self.animals, self.food, self.vehicles)
+
+    @property
+    def countable(self) -> tuple[Thing, ...]:
+        """Pictures a learner can count in a row."""
+        return self.animals + self.food
+
+    @property
+    def letter_words(self) -> tuple[Thing, ...]:
+        """Words with a plain first sound, for Letters."""
+        return tuple(t for t in self.animals + self.food if t.letter is not None)
+
+
+@cache
+def words() -> Lexicon:
+    """The words from the packs, read on first use rather than at import: a broken pack must not stop
+    `flashtap content check` from starting and naming what is wrong."""
     r = content.load()
-    return tuple(
-        Thing(
-            id=w.id,
-            picture=w.picture,
-            word=w.word,
-            category=w.category,
-            plural=w.plural,
-            article=w.article,
-            onset=r.onset(w),
-            colour=w.colour or None,
-            shape=w.shape or None,
+    return Lexicon(
+        tuple(
+            Thing(
+                id=w.id,
+                picture=w.picture,
+                word=w.word,
+                category=w.category,
+                plural=w.plural,
+                article=w.article,
+                onset=r.onset(w),
+                colour=w.colour or None,
+                shape=w.shape or None,
+            )
+            for w in r.words.values()
+            if w.picture
         )
-        for w in r.words.values()
-        if w.picture
     )
-
-
-EVERYTHING = _things()
-
-
-def _category(name: str) -> tuple[Thing, ...]:
-    return tuple(t for t in EVERYTHING if t.category == name)
-
-
-ANIMALS = _category("animals")
-FOOD = _category("food")
-VEHICLES = _category("vehicles")
-SHAPES = _category("shapes")
-
-# Matching keeps a round inside one category, so a cow is never matched among buses.
-MATCHING_POOLS = (ANIMALS, FOOD, VEHICLES)
-# Counting needs pictures a child can count in a row; Letters needs words with a plain first sound.
-COUNTABLE = ANIMALS + FOOD
-LETTER_WORDS = tuple(t for t in ANIMALS + FOOD if t.letter is not None)

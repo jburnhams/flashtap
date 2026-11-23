@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 
 from flashtap import content, lexicon, rounds
-from flashtap.content import registry
 from flashtap.content.model import Relation
 
 
@@ -197,6 +196,10 @@ skills = ["maths.place_value.tens_ones"]
             "x.a: number_range is a range: give [low, high]",
         ),
         (
+            '[[skills]]\nid = "x.a"\ntitle = "A"\nstrand = "maths.counting"\ndimensions = { number_range = [] }\n',
+            "x.a: number_range is a range: give [low, high]",
+        ),
+        (
             '[[skills]]\nid = "x.a"\ntitle = "A"\nstrand = "maths.counting"\ndimensions = { arrangement = ["spiral"] }\n',
             "x.a: arrangement: spiral (allowed: line, scattered, dice, ten_frame, fingers)",
         ),
@@ -315,15 +318,10 @@ def test_read_refuses_an_empty_folder(tmp_path):
     assert [str(p) for p in found] == [f"{tmp_path}: no *.toml packs"]
 
 
-def test_load_refuses_bad_packs(packs, monkeypatch):
+def test_load_refuses_bad_packs(packs):
     problems_with(packs, "not toml at all = =")
-    monkeypatch.setattr(registry, "build", lambda: content.build(packs))
-    registry.load.cache_clear()
-    try:
-        with pytest.raises(content.ContentError, match=r"1 content problem\(s\); first: zz-test.toml: not TOML"):
-            registry.load()
-    finally:
-        registry.load.cache_clear()
+    with pytest.raises(content.ContentError, match=r"1 content problem\(s\); first: zz-test.toml: not TOML"):
+        content.load(packs)
 
 
 def test_the_summary_flattens_the_registry():
@@ -351,4 +349,4 @@ def test_the_summary_flattens_the_registry():
 
 def test_the_lexicon_comes_from_the_words_pack():
     words = content.load().words
-    assert {t.id for t in lexicon.EVERYTHING} == {w.id for w in words.values() if w.picture}
+    assert {t.id for t in lexicon.words().everything} == {w.id for w in words.values() if w.picture}

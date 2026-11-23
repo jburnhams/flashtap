@@ -246,8 +246,10 @@ def check(r: Registry) -> list[Problem]:
 
 def _dimension_values(dim: Dimension, values: tuple[int, int] | tuple[str, ...]) -> list[str]:
     if dim.kind == "range":
-        lo, hi = values[0], values[-1]
-        if len(values) != 2 or not isinstance(lo, int) or not isinstance(hi, int):
+        if len(values) != 2:
+            return [f"{dim.id} is a range: give [low, high]"]
+        lo, hi = values
+        if not isinstance(lo, int) or not isinstance(hi, int):
             return [f"{dim.id} is a range: give [low, high]"]
         low, high = dim.low or 0, dim.high or 0  # Dimension's validator: a range has both
         if not low <= lo <= hi <= high:
@@ -322,9 +324,9 @@ def build(folder: Path = PACKS) -> tuple[Registry, list[Problem]]:
 
 
 @cache
-def load() -> Registry:
-    """The packaged packs, checked. Raises ContentError if any problem is found; read once per process."""
-    r, problems = build()
+def load(folder: Path = PACKS) -> Registry:
+    """The packs in `folder` (the packaged ones by default), checked. Raises ContentError on any problem; read once."""
+    r, problems = build(folder)
     if problems:
         raise ContentError(problems)
     return r

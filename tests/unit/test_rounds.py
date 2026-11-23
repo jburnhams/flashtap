@@ -30,14 +30,14 @@ def test_colours_never_offers_a_second_shape_of_the_named_colour(choices, seed):
     """The old generator drew distractors from every shape, so "Which one is red?" could show two red ones."""
     r = rounds.generate(Mode.COLOURS, choices, seed)
     colour = r.show.lower()
-    colours = {t.id: t.colour for t in lexicon.SHAPES}
+    colours = {t.id: t.colour for t in lexicon.words().shapes}
     assert [o.id for o in r.options if colours[o.id] == colour] == [r.answer]
 
 
 @given(choice_counts, seeds)
 def test_letters_has_one_word_with_the_letter_and_no_digraph_words(choices, seed):
     r = rounds.generate(Mode.LETTERS, choices, seed)
-    by_id = {t.id: t for t in lexicon.ANIMALS + lexicon.FOOD}
+    by_id = {t.id: t for t in lexicon.words().animals + lexicon.words().food}
     assert [o.id for o in r.options if by_id[o.id].letter == r.show] == [r.answer]
     assert not {"chicken", "cheese"} & {o.id for o in r.options}  # "ch" is not the sound of C
 
@@ -66,10 +66,10 @@ def test_counting_says_one_and_many_properly():
 def test_matching_stays_in_one_category_and_uses_articles():
     for seed in range(200):
         r = rounds.generate(Mode.MATCHING, 4, seed)
-        cats = {t.category for t in lexicon.EVERYTHING if t.id in {o.id for o in r.options}}
+        cats = {t.category for t in lexicon.words().everything if t.id in {o.id for o in r.options}}
         assert len(cats) == 1
         assert r.show == next(o.picture for o in r.options if o.correct)
-    elephant = next(t for t in lexicon.ANIMALS if t.id == "elephant")
+    elephant = next(t for t in lexicon.words().animals if t.id == "elephant")
     assert elephant.a == "an elephant"
 
 
