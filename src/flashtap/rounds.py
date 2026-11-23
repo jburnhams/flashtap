@@ -1,229 +1,189 @@
-"""Rounds: one question, a set of pictures or numbers to tap, and exactly one right answer.
+"""Rounds: the kinds of round, what each one is (its template), and how a round is built and checked.
 
-Ported from the TypeScript library's `services/gameService.ts`, with two changes the spec (docs/implementation-plan.md)
-asks for before anything else is built on it:
+A template is a kind of round at a version: its mechanic, the skills it gives evidence on and in what role (the spec's
+Q-matrix, §8), and the function that builds its body (`flashtap.kinds`). A round is a pure function of (kind, version,
+choices, seed): the same four give the same round, so a round a learner saw can be rebuilt exactly and a test can walk
+thousands of seeds. Raise a template's `version` whenever its function would give a different round for a seed it
+gave before; only the current version of each is kept, and asking for another is refused rather than answered
+differently. The server picks a seed when the client sends none and returns it in the round.
 
-- **Seeded.** A round is a pure function of (mode, choices, seed): the same three give the same round, so a round a
-  child saw can be rebuilt exactly, and a test can walk thousands of seeds. The server picks a seed when the client
-  sends none and returns it in the round.
-- **Checked.** `check()` refuses a round with no right answer, more than one, repeated options or too few choices,
-  and `generate()` runs it on every round. The old generators broke all of these somewhere: Colours could offer the red
-  circle and the red square for "Which one is red?", Counting spun forever above ten choices (its distractors came from
-  1-10), and every option printed its own name, so Letters and Colours were reading tasks.
+`mechanics.check` refuses a round whose answer is not one and unmistakable, and `generate` runs it on every round
+served. The 0.1 generators broke this in several ways (two red shapes for "Which one is red?", Counting looping above
+ten choices, tiles printing their own names); tests/unit/test_rounds.py walks 1,000 seeds of every template.
 """
 
 import random
-from collections.abc import Sequence
-from enum import StrEnum
+from collections.abc import Callable
+from dataclasses import dataclass
 
-from pydantic import BaseModel, Field
+from flashtap.kinds import Body, choose, place
+from flashtap.mechanics import (
+    PLACE,
+    SEED_LIMIT,
+    InvalidRound,
+    Mechanic,
+    Mode,
+    Option,
+    Piece,
+    Place,
+    QRole,
+    Round,
+    SkillRole,
+    check,
+)
 
-from flashtap import lexicon
-from flashtap.lexicon import Thing
+__all__ = [
+    "MAX_CHOICES",
+    "MIN_CHOICES",
+    "MODE_NAMES",
+    "MODE_SKILLS",
+    "PLAYABLE",
+    "SEED_LIMIT",
+    "TEMPLATES",
+    "InvalidRound",
+    "Mechanic",
+    "Mode",
+    "Option",
+    "Piece",
+    "Place",
+    "Round",
+    "Template",
+    "check",
+    "generate",
+    "tries_allowed",
+]
 
 MIN_CHOICES = 2
-MAX_CHOICES = 8  # the smallest pool a mode draws from (Colours: the shapes not of one colour) still fills 8
-SEED_LIMIT = 2**31  # seeds fit a JavaScript number and a 32-bit column
+MAX_CHOICES = 8  # the smallest pool a choose kind draws from (Colours: the shapes not of one colour) still fills 8
+
+P, S, C = QRole.PRIMARY, QRole.SECONDARY, QRole.CONFOUND
 
 
-class Mode(StrEnum):
-    MATCHING = "matching"
-    COLOURS = "colours"
-    SHAPES = "shapes"
-    LETTERS = "letters"
-    COUNTING = "counting"
-    MIXED = "mixed"
+@dataclass(frozen=True)
+class Template:
+    mode: Mode
+    version: int
+    mechanic: Mechanic
+    name: str
+    description: str  # what the learner does, for the list a grown-up picks from
+    skills: tuple[tuple[str, QRole], ...]
+    build: Callable[[random.Random, int], Body]
 
 
-# What each mode asks, for the mode list a person picks from.
+TEMPLATES: dict[Mode, Template] = {
+    t.mode: t
+    for t in (
+        Template(
+            Mode.MATCHING, 1, Mechanic.SELECT_ONE, "Matching", "Find the animal, food or vehicle that was named",
+            (("language.vocabulary.receptive", P),), choose.matching,
+        ),
+        Template(
+            Mode.COLOURS, 1, Mechanic.SELECT_ONE, "Colours", "Find the shape of the named colour",
+            (("language.vocabulary.colours", P),), choose.colours,
+        ),
+        Template(
+            Mode.SHAPES, 1, Mechanic.SELECT_ONE, "Shapes", "Find the named coloured shape",
+            (("maths.geometry.name_2d", P), ("language.vocabulary.colours", C)), choose.shapes,
+        ),
+        Template(
+            Mode.LETTERS, 1, Mechanic.SELECT_ONE, "Letters", "Find the picture whose word starts with the letter",
+            (("literacy.gpc.initial_letter", P), ("literacy.phonemic.initial_sound", S), ("language.vocabulary.receptive", C)),
+            choose.letters,
+        ),
+        Template(
+            Mode.COUNTING, 1, Mechanic.SELECT_ONE, "Counting", "Count the pictures and tap the number",
+            (("maths.counting.objects", P), ("maths.cardinality.last_number", S), ("maths.numerals.recognise", C)),
+            choose.counting,
+        ),
+        Template(
+            Mode.MISSING, 1, Mechanic.FILL_MISSING, "Missing number", "Find the number missing from a run",
+            (("maths.verbal_count.one_more", P), ("maths.verbal_count.forwards", S), ("maths.numerals.recognise", C)),
+            choose.missing,
+        ),
+        Template(
+            Mode.QUICK_LOOK, 1, Mechanic.BRIEF_EXPOSURE, "Quick look", "See a few pictures for a moment and say how many",
+            (("maths.subitising.perceptual", P), ("maths.numerals.recognise", C)), choose.quick_look,
+        ),
+        Template(
+            Mode.LISTEN, 1, Mechanic.AUDIO_RESPOND, "Listen", "Hear a word and tap the letter it starts with",
+            (("literacy.gpc.grapheme_from_sound", P), ("literacy.phonemic.initial_sound", S)), choose.listen,
+        ),
+        Template(
+            Mode.GIVE, 1, Mechanic.GIVE_N, "Give a number", "Put the asked-for number of pictures in the basket",
+            (("maths.cardinality.give_n", P), ("maths.counting.one_to_one", C)), place.give,
+        ),
+        Template(
+            Mode.ORDER, 1, Mechanic.SEQUENCE, "Order", "Put numbers in order, smallest first",
+            (("maths.comparison.order", P), ("maths.numerals.recognise", C)), place.order,
+        ),
+        Template(
+            Mode.CAPITALS, 1, Mechanic.MATCH_PAIRS, "Capitals", "Put each small letter on its capital",
+            (("literacy.letters.case_match", P), ("literacy.letters.identify", S)), place.capitals,
+        ),
+        Template(
+            Mode.SORT_SOUNDS, 1, Mechanic.SORT, "Sort by sound", "Put pictures with the letter of their first sound",
+            (("literacy.phonemic.initial_sound", P), ("literacy.gpc.sound_from_grapheme", S), ("language.vocabulary.receptive", C)),
+            place.sort_sounds,
+        ),
+    )
+}  # fmt: skip
+
+PLAYABLE = tuple(TEMPLATES)
+# What each kind asks, for the list a person picks from (GET /api/modes), Mixed last.
 MODE_NAMES: dict[Mode, tuple[str, str]] = {
-    Mode.MATCHING: ("Matching", "Find the animal, food or vehicle that was named"),
-    Mode.COLOURS: ("Colours", "Find the shape of the named colour"),
-    Mode.SHAPES: ("Shapes", "Find the named coloured shape"),
-    Mode.LETTERS: ("Letters", "Find the picture whose word starts with the letter"),
-    Mode.COUNTING: ("Counting", "Count the pictures and tap the number"),
+    **{m: (t.name, t.description) for m, t in TEMPLATES.items()},
     Mode.MIXED: ("Mixed", "A different kind of round each time"),
 }
-# The skills each kind of round practises (ids in the content packs; tests/unit/test_content.py checks they exist). A
-# round gives evidence on these once attempts are recorded (plan PR 4); the Content screen shows which skills have one.
-MODE_SKILLS: dict[Mode, tuple[str, ...]] = {
-    Mode.MATCHING: ("language.vocabulary.receptive",),
-    Mode.COLOURS: ("language.vocabulary.colours",),
-    Mode.SHAPES: ("maths.geometry.name_2d",),
-    Mode.LETTERS: ("literacy.gpc.initial_letter",),
-    Mode.COUNTING: ("maths.counting.objects", "maths.cardinality.last_number", "maths.numerals.recognise"),
-}
-PLAYABLE = (Mode.MATCHING, Mode.COLOURS, Mode.SHAPES, Mode.LETTERS, Mode.COUNTING)
+# The skills each kind gives evidence on (any role), for the Content screen; tests/unit/test_content.py checks they exist.
+MODE_SKILLS: dict[Mode, tuple[str, ...]] = {m: tuple(s for s, _ in t.skills) for m, t in TEMPLATES.items()}
 
 
-class Option(BaseModel):
-    id: str
-    picture: str  # what the tile shows: an emoji or a numeral
-    word: str  # what it is, for a screen reader; never printed on the tile, which would give the answer away
-    correct: bool
-    feedback: str  # said when this option is tapped: the success message on the right one
-
-
-class Round(BaseModel):
-    mode: Mode  # the mode actually played (never MIXED)
-    seed: int = Field(ge=0, lt=SEED_LIMIT)
-    prompt: str  # said aloud and shown: "Find the cow"
-    show: str  # the big picture or word above the options: "🐄", "RED", "C", "🍎 🍎 🍎"
-    options: list[Option]
-    answer: str  # the right option's id
-    tries: int | None = (
-        None  # taps allowed before the round counts as missed; None: no limit. Set by the server from the settings
-    )
-
-
-class InvalidRound(ValueError):
-    """A generated round that breaks a rule `check` enforces: a bug in a generator, never a child's mistake."""
-
-
-def check(r: Round) -> Round:
-    ids = [o.id for o in r.options]
-    right = [o for o in r.options if o.correct]
-    if len(right) != 1:
-        raise InvalidRound(f"{r.mode} seed {r.seed}: {len(right)} right answers")
-    if right[0].id != r.answer:
-        raise InvalidRound(f"{r.mode} seed {r.seed}: answer {r.answer} is not the right option {right[0].id}")
-    if len(set(ids)) != len(ids) or len({o.picture for o in r.options}) != len(ids):
-        raise InvalidRound(f"{r.mode} seed {r.seed}: repeated options")
-    if len(ids) < MIN_CHOICES:
-        raise InvalidRound(f"{r.mode} seed {r.seed}: only {len(ids)} options")
-    return r
-
-
-def _pick(rng: random.Random, pool: Sequence[Thing], answer: Thing, choices: int) -> list[Thing]:
-    """The answer and `choices - 1` others from `pool`, shuffled. Callers pass a pool that holds no second right answer."""
-    others = [t for t in pool if t.id != answer.id]
-    shown = [answer, *rng.sample(others, min(choices - 1, len(others)))]
-    rng.shuffle(shown)
-    return shown
-
-
-def _options(shown: list[Thing], answer: Thing, success: str) -> list[Option]:
-    return [
-        Option(
-            id=t.id,
-            picture=t.picture,
-            word=t.word,
-            correct=t is answer,
-            feedback=success if t is answer else f"No, that's {t.a}.",
-        )
-        for t in shown
-    ]
-
-
-def _matching(rng: random.Random, choices: int, seed: int) -> Round:
-    pool = rng.choice(lexicon.words().matching_pools)  # one category per round: a cow among buses is too easy
-    answer = rng.choice(pool)
-    shown = _pick(rng, pool, answer, choices)
-    return Round(
-        mode=Mode.MATCHING,
-        seed=seed,
-        prompt=f"Find the {answer.word}.",
-        show=answer.picture,
-        options=_options(shown, answer, f"Yes! You found the {answer.word}."),
-        answer=answer.id,
-    )
-
-
-def _colours(rng: random.Random, choices: int, seed: int) -> Round:
-    answer = rng.choice(lexicon.words().shapes)
-    colour = answer.colour or ""
-    pool = [t for t in lexicon.words().shapes if t.colour != colour or t is answer]  # exactly one shape of that colour
-    shown = _pick(rng, pool, answer, choices)
-    return Round(
-        mode=Mode.COLOURS,
-        seed=seed,
-        prompt=f"Which one is {colour}?",
-        show=colour.upper(),
-        options=_options(shown, answer, f"Yes! That one is {colour}."),
-        answer=answer.id,
-    )
-
-
-def _shapes(rng: random.Random, choices: int, seed: int) -> Round:
-    answer = rng.choice(lexicon.words().shapes)
-    shown = _pick(rng, lexicon.words().shapes, answer, choices)
-    return Round(
-        mode=Mode.SHAPES,
-        seed=seed,
-        prompt=f"Find the {answer.word}.",
-        show=answer.picture,
-        options=_options(shown, answer, f"Yes! You found the {answer.word}."),
-        answer=answer.id,
-    )
-
-
-def _letters(rng: random.Random, choices: int, seed: int) -> Round:
-    answer = rng.choice(lexicon.words().letter_words)
-    letter = answer.letter or ""
-    pool = [
-        t for t in lexicon.words().letter_words if t.letter != letter or t is answer
-    ]  # only one word with that letter
-    shown = _pick(rng, pool, answer, choices)
-    return Round(
-        mode=Mode.LETTERS,
-        seed=seed,
-        prompt=f"What starts with the letter {letter}?",
-        show=letter,
-        options=_options(shown, answer, f"Yes! {answer.label} starts with {letter}."),
-        answer=answer.id,
-    )
-
-
-COUNT_MOST = 5  # up to five pictures in the row: enough to count, few enough to see at once
-NUMBERS = range(1, 11)
-
-
-def _counting(rng: random.Random, choices: int, seed: int) -> Round:
-    thing = rng.choice(lexicon.words().countable)
-    n = rng.randint(1, COUNT_MOST)
-    others = rng.sample([k for k in NUMBERS if k != n], choices - 1)  # 9 others, and MAX_CHOICES is 8
-    shown = [n, *others]
-    rng.shuffle(shown)
-    many = thing.word if n == 1 else thing.many
-    return Round(
-        mode=Mode.COUNTING,
-        seed=seed,
-        prompt=f"How many {thing.many} are there?",
-        show=" ".join([thing.picture] * n),
-        options=[
-            Option(
-                id=f"n{k}",
-                picture=str(k),
-                word=str(k),
-                correct=k == n,
-                feedback=f"Yes! There {'is' if n == 1 else 'are'} {n} {many}." if k == n else f"No, that's {k}.",
-            )
-            for k in shown
-        ],
-        answer=f"n{n}",
-    )
-
-
-_GENERATORS = {
-    Mode.MATCHING: _matching,
-    Mode.COLOURS: _colours,
-    Mode.SHAPES: _shapes,
-    Mode.LETTERS: _letters,
-    Mode.COUNTING: _counting,
-}
-
-
-def generate(mode: Mode, choices: int, seed: int | None = None) -> Round:
-    """One checked round. `seed` None picks one (returned in the round); the same mode, choices and seed give the same round."""
+def generate(mode: Mode, choices: int, seed: int | None = None, version: int | None = None) -> Round:
+    """One checked round. `seed` None picks one (returned in the round); the same mode, choices, seed and version give
+    the same round, and the round's own (mode, version, choices, seed) rebuild it. `version` None is the current one; any other is refused (only the current one is kept)."""
     if not MIN_CHOICES <= choices <= MAX_CHOICES:
         raise ValueError(f"choices must be between {MIN_CHOICES} and {MAX_CHOICES}, not {choices}")
     if seed is None:
         seed = random.randrange(SEED_LIMIT)
+    played = mode
+    if mode is Mode.MIXED:
+        # Mixed picks the kind and then the round's own seed from `seed`, so the round carries a (kind, seed) that
+        # rebuilds it without going through Mixed. (0.2 drew the round from the same generator after picking the kind,
+        # so a Mixed round's reported kind and seed rebuilt a different round.)
+        pick = random.Random(seed)
+        played = pick.choice(PLAYABLE)
+        seed = pick.randrange(SEED_LIMIT)
     rng = random.Random(seed)
-    played = rng.choice(PLAYABLE) if mode is Mode.MIXED else mode
-    return check(_GENERATORS[played](rng, choices, seed))
+    t = TEMPLATES[played]
+    if version is not None and version != t.version:
+        raise ValueError(f"{played} is at version {t.version}; version {version} is not kept")
+    b = t.build(rng, choices)
+    return check(
+        Round(
+            mode=played,
+            version=t.version,
+            choices=choices,
+            seed=seed,
+            mechanic=t.mechanic,
+            skills=[SkillRole(skill=s, role=r) for s, r in t.skills],
+            prompt=b.prompt,
+            say=b.say or b.prompt,
+            show=b.show,
+            exposure_ms=b.exposure_ms,
+            options=b.options,
+            answer=b.answer,
+            pieces=b.pieces,
+            places=b.places,
+            done_feedback=b.done_feedback,
+        )
+    )
 
 
-def tries_allowed(tries: int, options: int) -> int | None:
-    """How many taps a round allows before it counts as missed: None for no limit (tries 0), else `tries`, at most one fewer than the options so the last one is never a give-away."""
-    return None if tries <= 0 else max(1, min(tries, options - 1))
+def tries_allowed(tries: int, r: Round) -> int | None:
+    """How many tries a round allows before it counts as missed: None for no limit (tries 0). A choose round counts
+    taps, at most one fewer than its options so the last one is never a give-away; a place round counts checks."""
+    if tries <= 0:
+        return None
+    if r.mechanic in PLACE:
+        return tries
+    return max(1, min(tries, len(r.options) - 1))

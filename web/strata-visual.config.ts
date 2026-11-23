@@ -40,6 +40,25 @@ export default defineVisualConfig({
         },
       },
       { name: 'counting', path: '/?mode=counting' },
+      {
+        name: 'order',
+        path: '/?mode=order',
+        states: {
+          // Partway: two numbers placed and checked (first right, second not yet), a third picked up.
+          checked: {
+            setup: async page => {
+              for (const [n, where] of [['1', 'first'], ['7', 'second']]) {
+                await page.getByRole('button', { name: n, exact: true }).click()
+                await page.getByRole('button', { name: `Put ${n} in ${where}` }).click()
+              }
+              await page.getByRole('button', { name: 'Check' }).click()
+              await page.getByRole('button', { name: '9', exact: true }).click()
+              await page.getByText('Not yet').first().waitFor()
+            },
+          },
+        },
+      },
+      { name: 'give', path: '/?mode=give' },
       { name: 'content', path: '/content', states: { skills: [], curriculum: { path: '/content?tab=curriculum' } } },
       { name: 'settings', path: '/settings', states: { play: [], appearance: { path: '/settings?tab=appearance' } } },
     ],

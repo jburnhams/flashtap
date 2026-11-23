@@ -1,5 +1,15 @@
 # Progress log
 
+## 2026-11-23: the mechanics, new kinds of round (plan PR 3)
+
+- Asked for: the next PR of the plan, the eight mechanics with templates that declare their Q-matrix roles and named distractor generators.
+- One `Round` shape for both families rather than a type per mechanic: a one-tap round has `options`, a placing round `pieces` and `places`. A place says which pieces it `takes` and how many it `holds`, and the arrangement is right when every place holds exactly that many of them. That one rule is give-N (the basket takes every apple, holds 4), sequence and match (one each), and sort (a group holds all of its pictures); the browser checks with the same rule (`play.ts`), the server's `check` proves it can be met and is met only one way.
+- Q-matrix roles are `primary`, `secondary` and `confound`; the spec's own words were not in front of this thread, so these are the plan's reading of §8, kept to three until the learner model (PR 4) needs more. A confound is a skill needed to answer that could explain an error by itself (reading the numeral in Counting, knowing the picture's word in Sort by sound).
+- Every wrong option names its generator (`distractor`), so a 9 tapped for six can be read as a reversal later. Near numbers fill at most half of the wrong options, so a round is not always a run of neighbours with the answer in the middle.
+- Listen never offers a second letter for the same sound (c and k for /k/), and Sort by sound only pairs sounds spelt by one letter among its pictures: either would make two answers right.
+- Mixed now picks the kind and then the round's own seed from the seed it is given. In 0.2 and 0.3 a Mixed round reported its kind and seed, but rebuilding from them gave a different round, because the kind had been drawn from the same generator first.
+- The placing board went into strata-react (`PlaceBoard`, PR #285) rather than this repo, following "add components to strata react as needed". It is two taps, pick up then put down, because React Aria's drag and drop starts only from a pointer drag, Enter or a screen reader, never from a tap, and dragging with a small finger (after a long press on iPad) is the harder gesture.
+
 ## 2026-11-23: content packs, the P0 ontology seed (plan PR 2)
 
 - Asked for: the next PR of the plan, the content packs for the earliest skills, built to grow through every school year by ability, never by age.

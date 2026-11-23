@@ -22,10 +22,23 @@ def test_doctor_success_and_missing_module(capsys, monkeypatch):
 def test_round_prints_the_same_round_for_a_seed(capsys):
     assert cli.main(["round", "--mode", "matching", "--seed", "7"]) == 0
     first = capsys.readouterr().out
-    assert "(matching, seed 7)" in first
+    assert "(matching v1, select_one, seed 7)" in first
+    assert "(same_category)" in first
     assert first.count("\n  * ") == 1
     assert cli.main(["round", "--mode", "matching", "--seed", "7"]) == 0
     assert capsys.readouterr().out == first
+
+
+def test_round_prints_what_is_said_and_where_pieces_go(capsys):
+    assert cli.main(["round", "--mode", "listen", "--seed", "2"]) == 0
+    assert "  said: " in capsys.readouterr().out
+    assert cli.main(["round", "--mode", "give", "--seed", "2", "--version", "1"]) == 0
+    out = capsys.readouterr().out
+    assert "  pieces: " in out
+    assert "🧺: " in out
+    assert " of " in out
+    assert cli.main(["round", "--mode", "order", "--seed", "2"]) == 0
+    assert "first: " in capsys.readouterr().out
 
 
 def test_round_json_follows_the_settings(capsys):
@@ -72,7 +85,8 @@ def test_content_list_prints_skills_by_strand(capsys):
     out = capsys.readouterr().out
     assert "Mathematics / Counting objects\n" in out
     assert "  maths.counting.objects  Count a set of things  (eyfs, played in counting)\n" in out
-    assert "  maths.counting.one_to_one  Touch or tag each thing once\n" in out
+    assert "  maths.counting.one_to_one  Touch or tag each thing once  (played in give)\n" in out
+    assert "  maths.verbal_count.decades  Count across a decade  (eyfs)\n" in out  # no kind of round plays it yet
 
 
 def test_content_list_json_is_the_api_shape(capsys):
