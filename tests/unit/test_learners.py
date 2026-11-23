@@ -383,7 +383,7 @@ def test_with_no_database_configured_the_records_go_beside_the_settings(
     for var in ("STRATA_DB_URL", "FLASHTAP_DATABASE_URL", "STRATA_DB_DATABASE"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("FLASHTAP_HOME", str(tmp_path / "home"))
-    assert learner_db.url() == "sqlite:///" + str(tmp_path / "home" / "learners.db")
+    assert learner_db.default_url() == "sqlite:///" + str(tmp_path / "home" / "learners.db")
     engine = learner_db.open_engine()
     with Session(engine) as s:
         assert store.add_learner(s, "Fox").nickname == "Fox"
@@ -391,7 +391,9 @@ def test_with_no_database_configured_the_records_go_beside_the_settings(
     assert (tmp_path / "home" / "learners.db").exists()
 
 
-def test_the_built_in_project_matches_pyproject(db_project) -> None:
+def test_the_package_declaration_is_the_one_pyproject_names(db_project) -> None:
+    # Project.load(__file__) reads src/flashtap/strata-db.toml, which an installed wheel ships; strata-db and the
+    # pytest plugin reach it through pyproject.toml's `file`. Both must land on the same project.
     p = learner_db.PROJECT
     assert (p.app, p.models, p.migrations_dir, p.schema) == (
         db_project.app,

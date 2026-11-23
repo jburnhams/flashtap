@@ -56,12 +56,12 @@ function FormSkeleton() {
 export function SettingsForm({ current, modes }: { current: Settings; modes: ModeInfo[] }) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<Mode>(current.mode)
-  const [choices, setChoices] = useState<number | null>(Number(current.choices))
-  const [tries, setTries] = useState<number | null>(Number(current.tries))
+  const [choices, setChoices] = useState<number | null>(current.choices)
+  const [tries, setTries] = useState<number | null>(current.tries)
 
   const save = useAsyncAction(
     async () => {
-      await api.saveSettings({ mode, choices: String(choices), tries: String(tries ?? 0) })
+      await api.saveSettings({ mode, choices: choices as number, tries: tries ?? 0 }) // not null: validate refused that before this runs
       await queryClient.invalidateQueries({ queryKey: keys.settings })
       queryClient.removeQueries({ queryKey: ['round'] }) // rounds already fetched were made with the old settings
     },

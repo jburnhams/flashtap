@@ -12,7 +12,9 @@ def test_entry_point_runs_as_a_module(cli_subprocess):
 def test_a_setting_changed_from_the_cli_reaches_the_api(cli, client):
     cli("set", "mode", "letters")
     assert client.get("/api/round").json()["mode"] == "letters"
-    assert cli("set", "mode", "default").stdout.strip() == "mode = mixed"
+    assert cli("set", "mode", "default").stdout.startswith(
+        "mode = mixed  (one of: matching, "
+    )  # `set` lists the choices
     assert cli("set", "choices", "20", check=False).code != 0
 
 

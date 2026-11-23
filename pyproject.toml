@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
-    "strata-python[db]>=0.2,<0.3",   # brings FastAPI, uvicorn, pydantic and pytest; [db] SQLAlchemy, Alembic and psycopg for the learner records. While 0.x, capped below the next minor
+    "strata-python[db]>=0.2.6,<0.3",   # brings FastAPI, uvicorn, pydantic and pytest; [db] SQLAlchemy, Alembic and psycopg for the learner records. While 0.x, capped below the next minor
 ]
 
 [project.scripts]
@@ -24,12 +24,19 @@ dev = [
 ]
 
 [tool.strata-db]
-# strata_python.db: the learner records (src/flashtap/learners/). SQLite in tests and when no database is configured;
-# the app's schema in the shared Postgres when deployed (docs/deploying.md). The migrations live inside the package so
-# an installed wheel can migrate at start.
-app = "flashtap"
-models = "flashtap.learners.models:Base"
-migrations = "src/flashtap/migrations"
+# strata_python.db: the learner records (src/flashtap/learners/). The declaration lives in the package
+# (src/flashtap/strata-db.toml), so an installed wheel can find it and migrate at start.
+file = "src/flashtap/strata-db.toml"
+
+[tool.strata-public-check]
+# AGENTS.md rule 8: the shapes an identifying detail about a learner usually takes (an age, a birth date). A word list
+# cannot catch a name; review guards the rest. tests/unit/test_privacy.py checks these catch the usual shapes.
+deny = [
+    { pattern = '\b\d{1,2}[- ]years?[- ]old\b', kind = "an age" },
+    { pattern = '\b(?:one|two|three|four|five|six|seven|eight|nine|ten)[- ]years?[- ]old\b', kind = "an age" },
+    { pattern = '\bdate of birth\b|\bbirthday\b|\bdob\s*[:=]', kind = "a birth date" },
+]
+exclude = ["tests/unit/test_privacy.py"]   # it spells out the shapes the patterns must catch
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/flashtap"]
