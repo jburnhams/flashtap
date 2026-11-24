@@ -441,6 +441,8 @@ export interface components {
             first_answer: components["schemas"]["FirstAnswer"];
             /** Learner Id */
             learner_id: string;
+            /** Level */
+            level?: number | null;
             mode: components["schemas"]["Mode"];
             /**
              * Outcome
@@ -476,6 +478,8 @@ export interface components {
             information: number;
             /** Learning */
             learning: number;
+            /** Level */
+            level?: number | null;
             /**
              * Liked
              * @default 0
@@ -493,6 +497,11 @@ export interface components {
             set_aside: components["schemas"]["SetAside"] | null;
             /** Skill */
             skill: string;
+            /**
+             * Stepped
+             * @default 0
+             */
+            stepped: number;
             /** Utility */
             utility: number;
         };
@@ -605,6 +614,8 @@ export interface components {
             };
             /** First Correct */
             first_correct: boolean;
+            /** Level */
+            level?: number | null;
             /** Mechanic */
             mechanic: string;
             /** Mode */
@@ -691,10 +702,10 @@ export interface components {
             exported_at: string;
             /**
              * Format
-             * @default flashtap-learner@4
+             * @default flashtap-learner@5
              * @enum {string}
              */
-            format: "flashtap-learner@1" | "flashtap-learner@2" | "flashtap-learner@3" | "flashtap-learner@4";
+            format: "flashtap-learner@1" | "flashtap-learner@2" | "flashtap-learner@3" | "flashtap-learner@4" | "flashtap-learner@5";
             learner: components["schemas"]["LearnerRow"];
             /** Models */
             models: components["schemas"]["ModelInfo"][];
@@ -852,6 +863,8 @@ export interface components {
             } | null;
             /** Id */
             id: string;
+            /** Level */
+            level?: number | null;
             mode?: components["schemas"]["Mode"] | null;
             /** Offers */
             offers?: components["schemas"]["Offer"][] | null;
@@ -996,6 +1009,8 @@ export interface components {
             content: {
                 [key: string]: number;
             };
+            /** Level */
+            level?: number | null;
             mode: components["schemas"]["Mode"];
             /** Rationale */
             rationale: components["schemas"]["Why"][];
@@ -1213,7 +1228,7 @@ export interface components {
             learner_id?: string | null;
             /**
              * Policy
-             * @default utility@3
+             * @default utility@4
              */
             policy: string;
             simulated?: components["schemas"]["SimulatedIn"] | null;
@@ -1254,6 +1269,8 @@ export interface components {
             done_feedback: string;
             /** Exposure Ms */
             exposure_ms: number | null;
+            /** Level */
+            level: number | null;
             mechanic: components["schemas"]["Mechanic"];
             mode: components["schemas"]["Mode"];
             /** Options */
@@ -1532,7 +1549,7 @@ export interface components {
          * @description Rationale codes (§15 "validated item + rationale codes"): what a decision is for.
          * @enum {string}
          */
-        Why: "placement_probe" | "introduce" | "practise" | "spaced_review" | "consolidate" | "diagnostic_contrast" | "easier_after_misses" | "exploration" | "break_due" | "frustration_break" | "session_cap_rounds" | "session_cap_minutes" | "offered_choice" | "liked";
+        Why: "placement_probe" | "introduce" | "practise" | "spaced_review" | "consolidate" | "diagnostic_contrast" | "easier_after_misses" | "exploration" | "break_due" | "frustration_break" | "session_cap_rounds" | "session_cap_minutes" | "offered_choice" | "liked" | "step_up" | "step_down";
     };
     responses: never;
     parameters: never;
@@ -1923,6 +1940,7 @@ export interface operations {
                 choices?: number | null;
                 seed?: number | null;
                 version?: number | null;
+                level?: number | null;
             };
             header?: never;
             path?: never;

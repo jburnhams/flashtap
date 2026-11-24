@@ -4,6 +4,20 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-24
 
+**Steps of difficulty: the engine sets how many choices and how big the numbers (0.11.0, branch `claude/project-thread-v04dav`)**
+
+Asked for: what is next after the plan's PRs. The spec check's first gap was that the engine chose the kind of round but the number of choices and the number range stayed the grown-up's settings (§6, §13). Fluency and misconceptions were left for the next PR (they report on answers; this changes what is played).
+
+- `src/flashtap/rounds.py`: `Level` (choices, a grown-up's words, and `top`, the largest number) and each template's `levels`, easiest first; `generate(..., level=)` refuses a step out of range, other choices than the step's, or a step for Mixed; `at_level`. A round with no step is built as before, so no template version was raised.
+- `src/flashtap/kinds/choose.py`, `kinds/place.py`: Counting, Quick look, Missing, Give and Order take `top` (None: their fixed ranges as before).
+- `src/flashtap/mechanics.py`: `Round.level`. `src/flashtap/learners/evidence.py`: `Event.level`. `src/flashtap/learners/models.py`: a `level` column on `attempts` and `decisions`; `src/flashtap/migrations/20261124_69aa91735931_steps_of_difficulty_on_attempts_and_.py` **new** (nullable: every existing row has no step).
+- `src/flashtap/learners/store.py`: an attempt sends its round's `level` back and is judged on the round at that step; a resend with another step is a conflict; a decision's round must match it with its step. Export format `flashtap-learner@5`.
+- `src/flashtap/engine/model.py`: `Stair`, a staircase per kind folded from the log (up after 3 right in a row at a step, down after 2 missed; a right answer at a harder step or a miss at an easier one moves it there; struck and hand-picked rounds move none). `engine/policy.py`: `utility@4` sets each candidate's step (the stair's, the easiest for a kind not yet played or halfway up for a known skill, one easier after 2 misses), predicts with the step's options, and says `step_up`/`step_down` with the step in words; `utility@3` and before keep the grown-up's choices, so they replay. `engine/sessions.py` stores and serves the step. `engine/simulate.py`: simulated learners slip more at harder steps.
+- `src/flashtap/server/app.py`: `GET /api/round?level=` (instead of `choices`). `src/flashtap/settings.py`: `choices` is for the rounds a grown-up picks.
+- `web/openapi.json`, `web/src/api.generated.ts` regenerated; `web/src/screens/PlayScreen.tsx` sends each round's `level` with its answer; `web/src/mocks/fixtures.ts` and `handlers.ts` (rounds by hand have no step, the engine's do; `utility@4`); `web/tests/integration/PlayScreen.test.tsx`.
+- Tests: `tests/unit/test_rounds.py` (every step of every template over 300 seeds, numbers within the step, refusals), `test_engine.py` (the stair, steps in decisions and words, `utility@3` unchanged), `test_server.py` (a round and an attempt at a step), `test_learners.py`; `tests/integration/test_server_api.py`.
+- `pyproject.toml`, `uv.lock`: 0.11.0. `README.md`, `docs/implementation-plan.md` (item 8), `docs/progress.md`.
+
 **Latest strata-python and strata-react; the answer queue from strata-react (0.10.1, branch `claude/project-thread-rx0f3j`)**
 
 Asked for: use the latest strata-python and strata-react. strata-react 1.3.7 carries the answer queue Flashtap had copied (#308), so the copy went.

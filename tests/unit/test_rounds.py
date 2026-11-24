@@ -379,3 +379,70 @@ def test_a_round_names_the_packs_it_drew_from_and_rebuilds_only_from_them() -> N
         rounds.generate(Mode.LETTERS, 4, 7, r.version, {**r.content, "words": 0})
     mixed = rounds.generate(Mode.MIXED, 4, 3)
     assert mixed.content == rounds.content_of(mixed.mode)  # the kind played, not Mixed
+
+
+# Steps of difficulty (0.11.0): every step of every template, a few hundred seeds each, one unmistakable answer, the
+# step's own number of choices, and the number asked about kept within the step's top.
+def _asked(r: Round) -> int:
+    """The number a number round is about: the right numeral, how many go in the basket, or the largest to order."""
+    if r.mechanic is Mechanic.GIVE_N:
+        return r.places[0].holds
+    if r.mechanic is Mechanic.SEQUENCE:
+        return max(int(p.word) for p in r.pieces)
+    return int(next(o.word for o in r.options if o.correct))
+
+
+@pytest.mark.parametrize("mode", rounds.PLAYABLE)
+def test_every_step_of_every_template_gives_one_answer_at_its_own_size(mode):
+    t = TEMPLATES[mode]
+    assert t.levels, "every template has steps"
+    for level, step in enumerate(t.levels):
+        assert MIN_CHOICES <= step.choices <= MAX_CHOICES
+        assert step.says
+        for seed in range(300):
+            r = rounds.at_level(mode, level, seed)
+            assert (r.level, r.choices) == (level, step.choices)
+            assert rounds.generate(r.mode, r.choices, r.seed, r.version, r.content, r.level) == r  # it rebuilds
+            if r.mechanic in CHOOSE:
+                assert len(r.options) == step.choices
+                assert [o.id for o in r.options if o.correct] == [r.answer]
+            if step.top is not None:
+                assert _asked(r) <= step.top
+
+
+def test_number_steps_lay_out_what_they_say():
+    for seed in range(300):
+        count = rounds.at_level(Mode.COUNTING, 0, seed)  # up to 3 pictures, among the numerals to 5
+        assert len(count.show.split()) <= 3
+        assert all(1 <= int(o.word) <= 5 for o in count.options)
+        give = rounds.at_level(Mode.GIVE, 3, seed)  # up to 10 asked for, always more in the pile
+        assert len(give.pieces) > give.places[0].holds
+        order = rounds.at_level(Mode.ORDER, 3, seed)
+        assert len(order.pieces) == 5
+        assert all(0 <= int(p.word) <= 20 for p in order.pieces)
+        missing = rounds.at_level(Mode.MISSING, 0, seed)
+        assert all(0 <= int(o.word) <= 5 for o in missing.options)
+    assert max(rounds.at_level(Mode.GIVE, 3, s).places[0].holds for s in range(300)) == 10  # the top is reached
+
+
+def test_a_round_with_no_step_is_built_as_before_steps_existed():
+    # A step is a new part of the rebuild key, so a round made before 0.11.0 (no step) rebuilds unchanged: the
+    # numbers come from the kinds' fixed ranges, whatever the grown-up's choices.
+    for seed in range(200):
+        r = rounds.generate(Mode.COUNTING, 8, seed)
+        assert r.level is None
+        assert len(r.show.split()) <= 5
+        assert all(1 <= int(o.word) <= 10 for o in r.options)
+
+
+def test_a_step_out_of_range_or_with_other_choices_is_refused():
+    with pytest.raises(ValueError, match="counting has steps 0 to 3, not 4"):
+        rounds.at_level(Mode.COUNTING, 4, 1)
+    with pytest.raises(ValueError, match="counting has steps 0 to 3, not 9"):
+        rounds.generate(Mode.COUNTING, 4, 1, level=9)
+    with pytest.raises(ValueError, match="counting step 0 lays out 3, not 4"):
+        rounds.generate(Mode.COUNTING, 4, 1, level=0)
+    with pytest.raises(ValueError, match="not to Mixed"):
+        rounds.generate(Mode.MIXED, 4, 1, level=0)
+    with pytest.raises(ValueError, match="not to Mixed"):
+        rounds.at_level(Mode.MIXED, 0, 1)

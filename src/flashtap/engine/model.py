@@ -17,6 +17,15 @@ It is the P2 estimators' BKT (src/flashtap/learners/estimators.py) with three ch
   The scheduler uses it to bring a skill back for review (§13 "spaced reviews"); the prediction does not, until real
   delayed answers say how much forgetting there is (§13 "calibrate retention schedules on real delayed recall data").
 
+**Steps of difficulty** (spec §6; `rounds.Level`). Each kind of round keeps a staircase (`Stair`): the step the
+learner's last round of that kind was played at, moved up after `UP` first answers right in a row at it and down after
+`DOWN` missed in a row. A right answer at a harder step than the stair's (or a miss at an easier one) moves the stair
+there at once. Up after three and down after two settles where most first answers go right (near the three in four the
+scheduler aims for), and a run of misses brings the work down faster than a run of successes takes it up: the spec's
+"constrain frustration" (§12). Only rounds the engine made at a step move a stair; rounds played by hand carry none.
+The step changes the chance of a lucky answer (more tiles, less luck), not the skill's estimate: BKT stays one
+estimate per skill, over every step it was seen at (the spec's "core capability + parameters", §4).
+
 A grown-up's override (`evidence.Told`) sets a skill's estimate when it was made and marks it as having evidence of
 its own, so the graph no longer fills it in; "can do it" lifts its unseen prerequisites as a right answer would, and
 "not yet" caps its unseen dependents as a miss would (§13: "rapid acceleration, regression and manual overrides").
@@ -39,6 +48,8 @@ from flashtap.learners.evidence import TOLD_P, Event, Told, judge, ordered
 from flashtap.mechanics import PLACE, Mechanic, Mode
 
 DAY = 86400.0
+UP = 3  # first answers right in a row at a step before the next step up
+DOWN = 2  # missed in a row at a step before the step below
 
 
 @dataclass(frozen=True)
@@ -115,6 +126,33 @@ class SkillState:
         return 2 ** (-days / self.half_life)
 
 
+@dataclass
+class Stair:
+    """One kind of round's step of difficulty for a learner: where the next round of it is played, and the run at it."""
+
+    level: int  # the step the next round of this kind is played at (before any easing after misses)
+    last: int  # the step its last round was played at
+    right: int = 0  # first answers right in a row at `level`
+    wrong: int = 0  # missed in a row at `level`
+
+    def climb(self, level: int, right: bool, steps: int) -> None:
+        self.last = level
+        if level != self.level:
+            # A round at another step (eased after misses, or a pick from a choice) speaks for the stair only when it
+            # says more than the stair knows: right at a harder step, or missed at an easier one.
+            if right != (level > self.level):
+                return
+            self.level, self.right, self.wrong = level, 0, 0
+        if right:
+            self.right, self.wrong = self.right + 1, 0
+        else:
+            self.right, self.wrong = 0, self.wrong + 1
+        if self.right >= UP and self.level < steps - 1:
+            self.level, self.right = self.level + 1, 0
+        elif self.wrong >= DOWN and self.level > 0:
+            self.level, self.wrong = self.level - 1, 0
+
+
 def guess(options: int) -> float:
     """The chance of a lucky first answer: 1 in the tiles for a one-tap round, `PLACE_GUESS` for an arrangement."""
     return 1 / options if options else PLACE_GUESS
@@ -129,6 +167,7 @@ class Knowledge:
     skills: dict[str, SkillState] = field(default_factory=dict[str, SkillState])
     shown: set[str] = field(default_factory=set[str])
     counted: int = 0  # counted answers over every skill
+    stairs: dict[Mode, Stair] = field(default_factory=dict[Mode, Stair])  # per kind, once played at a step
 
     def state(self, skill: str) -> SkillState:
         s = self.skills.get(skill)
@@ -145,6 +184,10 @@ class Knowledge:
         return known * (1 - self.params.slip) + (1 - known) * guess(options)
 
     def observe(self, e: Event) -> None:
+        if e.level is not None and e.struck is None:
+            mode = Mode(e.mode)
+            steps = len(rounds.TEMPLATES[mode].levels)
+            self.stairs.setdefault(mode, Stair(level=e.level, last=e.level)).climb(e.level, e.first_correct, steps)
         for u in judge(e, self.shown):
             if not u.counted:
                 continue

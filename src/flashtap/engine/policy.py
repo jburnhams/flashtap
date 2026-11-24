@@ -33,6 +33,14 @@ one decision: a round, a choice between two rounds for the learner to pick, an o
 7. **Asking how it was**: a decision whose round is the `rate_every`th of the session (0: never) says `rate`, and
    Play shows the three faces after it. Optional: Next works without a face.
 
+8. **Steps of difficulty** (§6, from `utility@4`): each candidate is made at the step its kind's stair has reached
+   (`model.Stair`), one step easier after `GUARDED` misses in a row, and the round lays out that step's number of
+   choices. A kind with no stair yet starts at the easiest step, or halfway up when its skill is already known
+   (`MASTERED`, from the learner's own answers, the graph or a grown-up), so a learner who can already do it is not
+   walked up from the bottom (§13 "rapid acceleration"). The step decides the chance of a lucky answer in `p_right`.
+   The grown-up's number of choices (`Config.choices`) is for the rounds they pick by hand and for decisions of
+   `utility@3` and before, which replay with it.
+
 **Diagnostic contrasts** (§12): after a missed round, a candidate that shares a skill with it but leaves out another
 (Missing number after Counting: the numerals without the counting) isolates a cause; it gets a bonus for how uncertain
 the shared skills still are, and the rationale says so. A frustrated learner gets a break first, never more diagnosis.
@@ -86,6 +94,8 @@ class Why(StrEnum):
     CAP_MINUTES = "session_cap_minutes"
     OFFER = "offered_choice"
     LIKED = "liked"  # what they said they like moved it up
+    STEP_UP = "step_up"  # a step harder than their last round of this kind
+    STEP_DOWN = "step_down"  # a step easier than their last round of this kind
 
 
 class SetAside(StrEnum):
@@ -121,6 +131,8 @@ class Candidate(BaseModel):
     repetition: float
     diagnostic: float
     liked: float = 0.0  # the kind's preference, -1 to 1 (absent from decisions before 0.8.0, which had none)
+    level: int | None = None  # the step it would be played at (None before utility@4: the grown-up's choices)
+    stepped: int = 0  # 1 a step harder than their last round of this kind, -1 easier, 0 the same or none before
     utility: float
     probability: float  # of being picked; 0 when set aside
     set_aside: SetAside | None
@@ -136,6 +148,7 @@ class Offer(BaseModel):
     seed: int
     skill: str
     rationale: list[Why]
+    level: int | None = None  # the step of difficulty (utility@4 on); with the five above it rebuilds the round
 
 
 class Choice(BaseModel):
@@ -148,6 +161,7 @@ class Choice(BaseModel):
     content: dict[str, int] | None = None  # the packs the round draws from, as its attempt will record them
     choices: int | None = None
     seed: int | None = None
+    level: int | None = None  # the round's step of difficulty (utility@4 on)
     skill: str | None = None
     rationale: list[Why]
     probability: float  # of this pick: 1 for a break or an end, which are rules, not draws
@@ -238,7 +252,8 @@ class Policy:
     # 2 (0.8.0): choices, ratings and overrides. With none of them (a session snapshotted before, with no choice or
     # rating cadence, and a log with no ratings, picks or overrides) it decides exactly as 1 did, so `REPLAYS` keeps 1.
     # 3 (0.9.0): the Sounds round. Otherwise 2: each version weighs the kinds it had (`OFFERS`), so 1 and 2 are kept.
-    version: int = 3
+    # 4 (0.11.0): steps of difficulty. 3 and before lay out the grown-up's number of choices at no step, so they replay.
+    version: int = 4
     weights: Weights = field(default_factory=Weights)
     tau: float = 0.15  # softmax temperature: lower picks the best more often
     epsilon: float = 0.1  # share of every pick that is uniform over the eligible candidates
@@ -257,7 +272,13 @@ class Policy:
 # version, and a logged decision is remade against the kinds its own version had.
 _ALL = frozenset(s.mode for s in SHAPES)
 _BEFORE_SOUNDS = _ALL - {Mode.SOUNDS}
-OFFERS: dict[str, frozenset[Mode]] = {"utility@1": _BEFORE_SOUNDS, "utility@2": _BEFORE_SOUNDS, "utility@3": _ALL}
+OFFERS: dict[str, frozenset[Mode]] = {
+    "utility@1": _BEFORE_SOUNDS,
+    "utility@2": _BEFORE_SOUNDS,
+    "utility@3": _ALL,
+    "utility@4": _ALL,
+}
+STEPS_FROM = 4  # the first version that chooses a step of difficulty
 
 POLICY = Policy()
 REPLAYS = frozenset(OFFERS)  # logged policies the current code remakes exactly
@@ -347,6 +368,7 @@ def decide(
         content=o.content,
         choices=o.choices,
         seed=o.seed,
+        level=o.level,
         skill=o.skill,
         rationale=o.rationale,
         probability=pick.probability,
@@ -363,6 +385,10 @@ def _why(c: Candidate, misses: int, top: float) -> list[Why]:
         why.append(Why.EASIER)
     if c.liked > 0:
         why.append(Why.LIKED)
+    if c.stepped > 0:
+        why.append(Why.STEP_UP)
+    elif c.stepped < 0 and misses < GUARDED:  # after misses, EASIER already says why
+        why.append(Why.STEP_DOWN)
     if c.utility < top:
         why.append(Why.EXPLORE)
     return why
@@ -374,8 +400,9 @@ def _offer(c: Candidate, config: Config, seed: int, misses: int, top: float) -> 
         mode=c.mode,
         version=shape.version,
         content=rounds.content_of(c.mode),
-        choices=config.choices,
+        choices=config.choices if c.level is None else rounds.TEMPLATES[c.mode].levels[c.level].choices,
         seed=seed,
+        level=c.level,
         skill=c.skill,
         rationale=_why(c, misses, top),
     )
@@ -414,18 +441,20 @@ def _candidate(
     else:
         action = Why.CONSOLIDATE
 
-    p_right = k.p_right(shape.skills, shape.options(config.choices))
+    level, stepped = _step(k, shape, misses) if policy.version >= STEPS_FROM else (None, 0)
+    laid = config.choices if level is None else rounds.TEMPLATES[shape.mode].levels[level].choices
+    p_right = k.p_right(shape.skills, shape.options(laid))
     before = g.before.get(shape.primary, frozenset())
     ready = min((k.p(q) for q in before), default=1.0)
     learning = (1 - me.p) * ready
     reach = sum(1 for s in before | g.after.get(shape.primary, frozenset()) if not k.state(s).seen)
     information = entropy(p_right) * (1 + w.reach * reach) * (w.placing if placing else 1.0)
     retention = 1 - me.recall(now) if me.own and me.p >= MASTERED else 0.0
-    rounds = past.rounds()
-    switch = 1.0 if rounds and next(s for s in SHAPES if s.mode is rounds[-1]).mechanic is not shape.mechanic else 0.0
+    played = past.rounds()
+    switch = 1.0 if played and next(s for s in SHAPES if s.mode is played[-1]).mechanic is not shape.mechanic else 0.0
     enjoyment = 0.7 * max(0.0, 1 - abs(p_right - 0.75) / 0.75) + 0.3 * switch + w.liked * liked
     frustration = (1 - p_right) * (1 + misses)
-    recent = rounds[-4:]
+    recent = played[-4:]
     repetition = sum(m is shape.mode for m in recent) / 4
 
     contrast, diagnostic = False, 0.0
@@ -441,7 +470,7 @@ def _candidate(
         set_aside = SetAside.PREREQUISITE
     elif misses >= GUARDED and p_right < 0.6:
         set_aside = SetAside.FRUSTRATION
-    elif rounds[-2:] == [shape.mode, shape.mode]:
+    elif played[-2:] == [shape.mode, shape.mode]:
         set_aside = SetAside.REPEAT
 
     utility = (
@@ -467,10 +496,26 @@ def _candidate(
         repetition=round(repetition, 6),
         diagnostic=round(diagnostic, 6),
         liked=round(liked, 6),
+        level=level,
+        stepped=stepped,
         utility=round(utility, 6),
         probability=0.0,
         set_aside=set_aside,
     )
+
+
+def _step(k: Knowledge, shape: RoundShape, misses: int) -> tuple[int, int]:
+    """The step a round of `shape` is played at, and whether that is harder (1) or easier (-1) than the last one."""
+    steps = len(rounds.TEMPLATES[shape.mode].levels)
+    stair = k.stairs.get(shape.mode)
+    # no stair yet: the easiest step, or halfway up for a skill already known
+    start = steps // 2 if k.p(shape.primary) >= MASTERED else 0
+    level = stair.level if stair is not None else start
+    if misses >= GUARDED:
+        level = max(0, level - 1)
+    if stair is None:
+        return level, 0
+    return level, (level > stair.last) - (level < stair.last)
 
 
 _SAY: dict[Why, str] = {
@@ -488,15 +533,26 @@ _SAY: dict[Why, str] = {
     Why.CAP_MINUTES: "A session is {minutes} minutes at most.",
     Why.OFFER: "Two to pick from, so they choose what comes next.",
     Why.LIKED: "They have liked this kind of round.",
+    Why.STEP_UP: "A step harder than last time: {step}.",
+    Why.STEP_DOWN: "A step easier than last time: {step}.",
 }
+
+
+def step_says(mode: Mode | None, level: int | None) -> str:
+    """A step of difficulty in a grown-up's words ("numbers to 10, 4 to pick from"); empty for no step."""
+    if mode is None or level is None:
+        return ""
+    levels = rounds.TEMPLATES[mode].levels
+    return levels[level].says if 0 <= level < len(levels) else ""
 
 
 def explain(c: Choice, titles: Mapping[str, str], config: Config, rounds_played: int, picked: int | None = None) -> str:
     """The rationale in words, for the grown-up (the codes stay in the log). A choice picked is explained by the
     offer picked, after the choice itself."""
     o = c.offered(picked)
+    step = step_says(o.mode, o.level) if o is not None else step_says(c.mode, c.level)
     skill_id = o.skill if o is not None else c.skill or ""
     skill = titles.get(skill_id, skill_id)
     played = f"{rounds_played} round" + ("" if rounds_played == 1 else "s")
     codes = [*c.rationale, *(o.rationale if o is not None else [])]
-    return " ".join(_SAY[w].format(skill=skill, rounds=played, minutes=config.max_minutes) for w in codes)
+    return " ".join(_SAY[w].format(skill=skill, rounds=played, minutes=config.max_minutes, step=step) for w in codes)

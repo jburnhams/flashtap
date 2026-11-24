@@ -172,6 +172,7 @@ class AttemptIn(BaseModel):
     version: int = Field(ge=1)
     choices: int = Field(ge=rounds.MIN_CHOICES, le=rounds.MAX_CHOICES)
     seed: int = Field(ge=0, lt=SEED_LIMIT)
+    level: int | None = Field(default=None, ge=0)  # the round's step of difficulty as served; None: no step (by hand)
     # The round's `content` as served: the packs it drew from and their versions. Sent back so the server judges the
     # round that was shown; None (a browser from before 0.7.0, or a queue it left) is judged against the packs as
     # they are now, which is what that browser was served unless a pack changed in between.
@@ -195,7 +196,7 @@ class Ack(BaseModel):
 
 def _judge(a: AttemptIn) -> tuple[rounds.Round, bool]:
     # ValueError (400) for a template version or pack version no longer kept
-    r = rounds.generate(a.mode, a.choices, a.seed, a.version, a.content)
+    r = rounds.generate(a.mode, a.choices, a.seed, a.version, a.content, a.level)
     ans = a.first_answer
     if r.mechanic in PLACE:
         if ans.placement is None:
@@ -226,6 +227,7 @@ def _row(a: AttemptIn, r: rounds.Round, right: bool, received: datetime) -> Atte
         version=r.version,
         choices=r.choices,
         seed=r.seed,
+        level=r.level,
         content=r.content,
         mechanic=r.mechanic.value,
         options=0 if r.mechanic in PLACE else len(r.options),
@@ -252,6 +254,7 @@ def _same(old: Attempt, a: AttemptIn) -> bool:
         a.version,
         a.choices,
         a.seed,
+        a.level,
         str(a.asked),
         a.first_answer.model_dump(exclude_none=True),
         a.tries,
@@ -265,6 +268,7 @@ def _same(old: Attempt, a: AttemptIn) -> bool:
         old.version,
         old.choices,
         old.seed,
+        old.level,
         old.asked,
         old.first_answer,
         old.tries,
@@ -328,13 +332,13 @@ def _check_decision(db: Session, a: AttemptIn, r: rounds.Round) -> None:
     d = db.get(Decision, a.decision_id)
     if d is None or d.learner_id != a.learner_id or d.session_id != a.session_id:
         raise ValueError(f"No decision {a.decision_id} in session {a.session_id} for this learner.")
-    chosen = (d.action, d.mode, d.version, d.choices, d.seed, d.content)
+    chosen = (d.action, d.mode, d.version, d.choices, d.seed, d.content, d.level)
     if d.action == "choice":  # the round is the offer the learner picked
         o = logged(d).offered(d.picked)
         if o is None:
             raise ValueError(f"Decision {a.decision_id} is a choice nobody has picked from yet.")
-        chosen = ("round", o.mode.value, o.version, o.choices, o.seed, o.content)
-    if chosen != ("round", r.mode.value, r.version, r.choices, r.seed, r.content):
+        chosen = ("round", o.mode.value, o.version, o.choices, o.seed, o.content, o.level)
+    if chosen != ("round", r.mode.value, r.version, r.choices, r.seed, r.content, r.level):
         raise ValueError(f"Decision {a.decision_id} chose a different round.")
     other = db.scalar(select(Attempt.event_id).where(Attempt.decision_id == a.decision_id))
     if other is not None:
@@ -489,6 +493,7 @@ def events(db: Session, learner_id: str) -> list[Event]:
             version=x.version,
             choices=x.choices,
             seed=x.seed,
+            level=x.level,
             content=x.content,
             mechanic=x.mechanic,
             options=x.options,
@@ -576,11 +581,11 @@ class Export(BaseModel):
     """Everything held about one learner (§17), and the estimates made from it, so a rebuild can be checked."""
 
     # @2 (0.6.0) adds the engine's decisions and each session's policy; @3 (0.7.0) each attempt's and decision's
-    # content packs; @4 (0.8.0) ratings, a grown-up's overrides, and choices with their picks. Older files still
-    # read, with none of what they lack.
-    format: Literal["flashtap-learner@1", "flashtap-learner@2", "flashtap-learner@3", "flashtap-learner@4"] = (
-        "flashtap-learner@4"
-    )
+    # content packs; @4 (0.8.0) ratings, a grown-up's overrides, and choices with their picks; @5 (0.11.0) each
+    # attempt's and decision's step of difficulty. Older files still read, with none of what they lack.
+    format: Literal[
+        "flashtap-learner@1", "flashtap-learner@2", "flashtap-learner@3", "flashtap-learner@4", "flashtap-learner@5"
+    ] = "flashtap-learner@5"
     exported_at: datetime
     app_version: str
     learner: LearnerRow
@@ -619,6 +624,7 @@ def logged(x: Decision) -> Logged:
         version=x.version,
         choices=x.choices,
         seed=x.seed,
+        level=x.level,
         content=x.content,
         skill=x.skill,
         rationale=[Why(w) for w in x.rationale],

@@ -102,6 +102,18 @@
       "title": "Learner Id",
       "type": "string"
      },
+     "level": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Level"
+     },
      "mode": {
       "$ref": "#/components/schemas/Mode"
      },
@@ -189,6 +201,17 @@
       "title": "Learning",
       "type": "number"
      },
+     "level": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Level"
+     },
      "liked": {
       "default": 0.0,
       "title": "Liked",
@@ -226,6 +249,11 @@
      "skill": {
       "title": "Skill",
       "type": "string"
+     },
+     "stepped": {
+      "default": 0,
+      "title": "Stepped",
+      "type": "integer"
      },
      "utility": {
       "title": "Utility",
@@ -476,6 +504,17 @@
       "title": "First Correct",
       "type": "boolean"
      },
+     "level": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Level"
+     },
      "mechanic": {
       "title": "Mechanic",
       "type": "string"
@@ -687,12 +726,13 @@
       "type": "string"
      },
      "format": {
-      "default": "flashtap-learner@4",
+      "default": "flashtap-learner@5",
       "enum": [
        "flashtap-learner@1",
        "flashtap-learner@2",
        "flashtap-learner@3",
-       "flashtap-learner@4"
+       "flashtap-learner@4",
+       "flashtap-learner@5"
       ],
       "title": "Format",
       "type": "string"
@@ -1142,6 +1182,17 @@
       "title": "Id",
       "type": "string"
      },
+     "level": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Level"
+     },
      "mode": {
       "anyOf": [
        {
@@ -1582,6 +1633,17 @@
       },
       "title": "Content",
       "type": "object"
+     },
+     "level": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Level"
      },
      "mode": {
       "$ref": "#/components/schemas/Mode"
@@ -2068,7 +2130,7 @@
       "title": "Learner Id"
      },
      "policy": {
-      "default": "utility@3",
+      "default": "utility@4",
       "title": "Policy",
       "type": "string"
      },
@@ -2175,6 +2237,17 @@
       ],
       "title": "Exposure Ms"
      },
+     "level": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Level"
+     },
      "mechanic": {
       "$ref": "#/components/schemas/Mechanic"
      },
@@ -2251,6 +2324,7 @@
      "content",
      "choices",
      "seed",
+     "level",
      "mechanic",
      "skills",
      "prompt",
@@ -2919,7 +2993,9 @@
      "session_cap_rounds",
      "session_cap_minutes",
      "offered_choice",
-     "liked"
+     "liked",
+     "step_up",
+     "step_down"
     ],
     "title": "Why",
     "type": "string"
@@ -3459,6 +3535,23 @@
         }
        ],
        "title": "Version"
+      }
+     },
+     {
+      "in": "query",
+      "name": "level",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "minimum": 0,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Level"
       }
      }
     ],

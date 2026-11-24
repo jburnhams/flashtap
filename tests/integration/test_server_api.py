@@ -6,6 +6,7 @@ import urllib.request
 from strata_python.db.web import database
 
 from flashtap import rounds
+from flashtap.mechanics import Mode
 from flashtap.server.app import create_app
 
 
@@ -86,7 +87,7 @@ def _answer(base: str, fox: str, n: dict, right: bool, at: str) -> None:
         f"{base}/api/attempts",
         {
             "event_id": n["id"][:24] + "a" * 8, "learner_id": fox, "session_id": n["session_id"], "decision_id": n["id"],
-            "mode": r["mode"], "version": r["version"], "choices": r["choices"], "seed": r["seed"], "asked": "next",
+            "mode": r["mode"], "version": r["version"], "choices": r["choices"], "seed": r["seed"], "level": r["level"], "asked": "next",
             "presented_at": at, "answered_at": at, "first_answer": first, "tries": 1 if right else 2, "outcome": "right",
         },
     )  # fmt: skip
@@ -102,6 +103,7 @@ def test_the_engine_plans_a_whole_session_that_replays_exactly(live_app, cli_sub
         fox = _send(f"{base}/api/learners", {"nickname": "Fox"})["id"]
         session = _send(f"{base}/api/v1/sessions", {"learner_id": fox})
         actions = []
+        levels: list[tuple[str, int]] = []
         for seq in range(40):
             n = _send(f"{base}/api/v1/sessions/{session['id']}/next", {"seq": seq})
             assert _send(f"{base}/api/v1/sessions/{session['id']}/next", {"seq": seq}) == n  # asked again: the same
@@ -109,7 +111,10 @@ def test_the_engine_plans_a_whole_session_that_replays_exactly(live_app, cli_sub
             if n["action"] == "end":
                 break
             if n["action"] == "round":
-                assert n["round"]["choices"] == 3
+                # the engine's step of difficulty lays out the round, not the grown-up's 3 choices
+                r = n["round"]
+                assert r["choices"] == rounds.TEMPLATES[Mode(r["mode"])].levels[r["level"]].choices
+                levels.append((r["mode"], r["level"]))
                 _answer(base, fox, n, right=seq % 3 != 2, at=f"2026-11-02T09:00:{seq:02d}Z")
         replayed = _send(f"{base}/api/v1/evaluations/replay", {"learner_id": fox})
         with urllib.request.urlopen(f"{base}/api/learners/{fox}/export", timeout=10) as r:
@@ -117,6 +122,7 @@ def test_the_engine_plans_a_whole_session_that_replays_exactly(live_app, cli_sub
     database(app).close()
 
     assert actions.count("round") == 20
+    assert len(levels) == 20  # every round the engine chose came at a step (the climbing is in tests/unit)
     assert "break" in actions
     assert actions[-1] == "end"
     assert replayed["decisions"] == len(actions)

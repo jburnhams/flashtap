@@ -3,8 +3,9 @@
     flashtap serve [--host 127.0.0.1] [--port 8361]
 
 API (JSON): GET /api/health; GET and PUT /api/settings {mode?, choices?, tries?} (both from strata_python.web);
-GET /api/modes (each kind of round with its mechanic); GET /api/round?mode=&choices=&seed=&version= (each defaults to the
-settings; a fresh seed when none is given; a version other than the template's current one is refused with 400);
+GET /api/modes (each kind of round with its mechanic); GET /api/round?mode=&choices=&seed=&version=&level= (each defaults
+to the settings; a fresh seed when none is given; a version other than the template's current one is refused with 400;
+`level`, a step of difficulty, instead of `choices`, as the engine makes them);
 GET /api/rounds?mode=&count=&choices= (count fresh rounds at once, 1 to 20, for a device to keep for when it cannot reach
 the server; web/src/reserve.ts); GET /api/content (the content packs as rows: skills, curriculum objectives, phonics sets).
 Learner records (src/flashtap/learners/): GET and POST /api/learners {nickname}; PATCH and DELETE /api/learners/{id};
@@ -86,8 +87,15 @@ def create_app() -> FastAPI:
         choices: Annotated[int | None, Query(ge=MIN_CHOICES, le=MAX_CHOICES)] = None,
         seed: Annotated[int | None, Query(ge=0, lt=SEED_LIMIT)] = None,
         version: Annotated[int | None, Query(ge=1)] = None,
+        level: Annotated[int | None, Query(ge=0)] = None,
     ) -> Round:
-        r = rounds.generate(mode or settings.mode(), choices or settings.choices(), seed, version)
+        played = mode or settings.mode()
+        if level is not None:  # a step of difficulty lays out its own number of choices (rounds.Level)
+            if choices is not None:
+                raise ValueError("a step of difficulty sets the number of choices: send level or choices, not both")
+            r = rounds.at_level(played, level, seed, version)
+        else:
+            r = rounds.generate(played, choices or settings.choices(), seed, version)
         r.tries = rounds.tries_allowed(settings.tries(), r)
         return r
 

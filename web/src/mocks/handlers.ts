@@ -94,7 +94,7 @@ export function decisionFor(seq: number): Next {
   const rate = planned.endsWith('+rate')
   const step = planned.replace('+rate', '')
   const played = mock.plan.slice(0, seq).filter(p => p !== 'break' && p !== 'end').length
-  const base = { id: `d${seq}`.padEnd(32, '0'), session_id: SESSION, seq, at: '2026-11-23T09:00:00Z', policy: 'utility@3', probability: 1, rounds_played: played, candidates: [], offers: null, picked: null, rate }
+  const base = { id: `d${seq}`.padEnd(32, '0'), session_id: SESSION, seq, at: '2026-11-23T09:00:00Z', policy: 'utility@4', probability: 1, rounds_played: played, candidates: [], offers: null, picked: null, rate }
   if (step.startsWith('pick:')) {
     const offers = step.slice(5).split('/').map(m => offerFor(m as Round['mode']))
     const picked = mock.picks[seq] ?? null
@@ -103,7 +103,9 @@ export function decisionFor(seq: number): Next {
   }
   if (step === 'break') return { ...base, action: 'break', round: null, skill: null, skill_title: null, rationale: ['break_due'], why: `${played} round${played === 1 ? '' : 's'} played so far.` }
   if (step === 'end') return { ...base, action: 'end', round: null, skill: null, skill_title: null, rationale: ['session_cap_rounds'], why: `A session is ${played} round${played === 1 ? '' : 's'} at most.` }
-  const r = roundFor(step)
+  // The engine sets a step of difficulty (src/flashtap/rounds.py `Level`), sent back with the answer; the fixtures lay
+  // out 4, which is step 1 of the number kinds the tests play.
+  const r = { ...roundFor(step), level: 1 }
   const skill = r.skills[0]?.skill ?? ''
   return { ...base, action: 'round', round: r, skill, skill_title: titles[step] ?? skill, rationale: ['practise'], why: `Practising: ${titles[step] ?? skill}.`, probability: 0.42 }
 }
@@ -179,7 +181,7 @@ export const handlers = [
   }),
   http.post(at(paths.sessions), async ({ request }) => {
     const { learner_id } = (await request.json()) as { learner_id: string }
-    return HttpResponse.json({ id: SESSION, learner_id, policy: 'utility@3', config: { choices: 4, tries: 0, max_rounds: 20, max_minutes: 15, break_every: 10, choice_every: 5, rate_every: 4 }, started_at: '2026-11-23T09:00:00Z' }, { status: 201 })
+    return HttpResponse.json({ id: SESSION, learner_id, policy: 'utility@4', config: { choices: 4, tries: 0, max_rounds: 20, max_minutes: 15, break_every: 10, choice_every: 5, rate_every: 4 }, started_at: '2026-11-23T09:00:00Z' }, { status: 201 })
   }),
   http.post(at(`${paths.sessions}/:id/next`), async ({ request }) => {
     const { seq } = (await request.json()) as { seq: number }

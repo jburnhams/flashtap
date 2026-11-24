@@ -65,6 +65,46 @@ def test_round_query_overrides_and_no_limit_on_tries(client):
     assert sum(o["correct"] for o in r["options"]) == 1
 
 
+def test_a_round_at_a_step_of_difficulty(client):
+    r = client.get("/api/round", params={"mode": "counting", "level": 0, "seed": 5}).json()
+    assert (r["level"], r["choices"]) == (0, rounds.TEMPLATES[Mode.COUNTING].levels[0].choices)
+    assert r == rounds.at_level(Mode.COUNTING, 0, 5).model_dump(mode="json")
+    assert client.get("/api/round", params={"mode": "counting", "seed": 5}).json()["level"] is None  # by hand: no step
+    both = client.get("/api/round", params={"mode": "counting", "level": 0, "choices": 3})
+    assert both.status_code == 400
+    assert "level or choices, not both" in both.text
+    assert client.get("/api/round", params={"mode": "mixed", "level": 0}).status_code == 400
+    assert client.get("/api/round", params={"mode": "counting", "level": 4}).status_code == 400
+
+
+def test_an_attempt_at_a_step_is_judged_on_the_round_at_that_step(client):
+    fox = client.post("/api/learners", json={"nickname": "Fox"}).json()["id"]
+    r = rounds.at_level(Mode.MISSING, 2, 9)
+    attempt = {
+        "event_id": "a" * 32,
+        "learner_id": fox,
+        "session_id": "b" * 32,
+        "mode": "missing",
+        "version": r.version,
+        "content": r.content,
+        "choices": r.choices,
+        "seed": r.seed,
+        "level": 2,
+        "asked": "missing",
+        "presented_at": "2026-11-02T09:00:00Z",
+        "answered_at": "2026-11-02T09:00:04Z",
+        "first_answer": {"option": r.answer},
+        "tries": 1,
+        "outcome": "right",
+    }
+    assert client.post("/api/attempts", json={**attempt, "level": 0}).status_code == 400  # step 0 lays out 3, not 4
+    assert client.post("/api/attempts", json=attempt).json()["first_correct"] is True
+    assert client.post("/api/attempts", json={**attempt, "level": 1}).status_code == 409  # the same event, changed
+    log = client.get(f"/api/learners/{fox}/export").json()
+    assert log["format"] == "flashtap-learner@5"
+    assert [e["level"] for e in log["events"]] == [2]
+
+
 @pytest.mark.parametrize("params", [{"choices": 9}, {"choices": 1}, {"mode": "spelling"}, {"seed": -1}, {"version": 0}])
 def test_bad_round_queries_are_refused(client, params):
     assert client.get("/api/round", params=params).status_code == 422
@@ -211,7 +251,7 @@ def test_engine_sessions_next_and_replay(client):
     r = client.post("/api/v1/sessions", json={"learner_id": fox})
     assert r.status_code == 201
     s = r.json()
-    assert s["policy"] == "utility@3"
+    assert s["policy"] == "utility@4"
     assert s["config"] == {
         "choices": 3,
         "tries": 1,
@@ -223,7 +263,9 @@ def test_engine_sessions_next_and_replay(client):
     }
     n = client.post(f"/api/v1/sessions/{s['id']}/next", json={"seq": 0}).json()
     assert n["action"] == "round"
-    assert n["round"]["choices"] == 3
+    # the engine sets the step of difficulty (the easiest, knowing nothing yet), not the grown-up's 3 choices
+    assert n["round"]["level"] == 0
+    assert n["round"]["choices"] == rounds.TEMPLATES[Mode(n["round"]["mode"])].levels[0].choices
     assert n["round"]["tries"] == 1
     assert n["rationale"][0] == "placement_probe"
     assert len(n["candidates"]) == len(rounds.PLAYABLE)  # one candidate per kind of round
@@ -267,6 +309,7 @@ def test_choices_picks_ratings_and_overrides_over_http(client):
         "content": r["content"],
         "choices": r["choices"],
         "seed": r["seed"],
+        "level": r["level"],
         "asked": "next",
         "presented_at": "2026-11-02T09:00:00Z",
         "answered_at": "2026-11-02T09:00:04Z",
@@ -306,7 +349,7 @@ def test_choices_picks_ratings_and_overrides_over_http(client):
     out = client.post("/api/v1/evaluations/replay", json={"learner_id": fox}).json()
     assert (out["reproduced"], out["differences"]) == (out["decisions"], [])
     export = client.get(f"/api/learners/{fox}/export").json()
-    assert export["format"] == "flashtap-learner@4"
+    assert export["format"] == "flashtap-learner@5"
     assert len(export["ratings"]) == 1
     assert len(export["overrides"]) == 1
 

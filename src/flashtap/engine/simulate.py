@@ -4,7 +4,8 @@ before any real child has played, and a way to see what a change to the engine d
 A simulated learner has a hidden set of skills it knows. Its start follows the skill graph: a skill can be known only
 when its strong prerequisites are, and deeper skills are less likely, more so for a learner of lower ability `theta`
 (drawn per learner; nothing here is an age). It answers a round right with chance 1 - slip when it knows every skill
-the round names, else with the round's chance of a lucky answer. After a round it may learn the round's primary skill,
+the round names, less `STEP_COST` for each step of difficulty above the easiest (a bigger number range or more to
+choose from trips up even a learner who knows the skill), else with the round's chance of a lucky answer. After a round it may learn the round's primary skill,
 if it knows that skill's prerequisites, at its own learning rate; between sessions it forgets a little.
 
 `run` plays each learner through `sessions` sessions chosen by a policy (the engine's, or uniform at random for
@@ -29,6 +30,7 @@ from flashtap.learners.evidence import Event, SkillUse
 from flashtap.mechanics import SEED_LIMIT, Mode
 
 START = datetime(2026, 1, 5, 16, 0, tzinfo=UTC)
+STEP_COST = 0.06  # the share of right answers a knowing learner loses per step of difficulty
 CONFIG = Config(choices=4, tries=0)
 
 
@@ -82,9 +84,9 @@ def play(sim: Sim, g: Graph, sessions: int, policy: Policy | None) -> list[Event
             past = Past(started=past.started, decisions=list(decisions), answers=list(answers))
             if policy is not None:
                 c = decide(k, past, CONFIG, f"{sid}:{seq}", now, policy)
-                action, mode, seed = c.action, c.mode, c.seed
+                action, mode, seed, level = c.action, c.mode, c.seed, c.level
             else:
-                action, (mode, seed) = Action.ROUND, _uniform(f"{sid}:{seq}")
+                action, (mode, seed), level = Action.ROUND, _uniform(f"{sid}:{seq}"), None
                 if len(past.rounds()) >= CONFIG.max_rounds:
                     action, mode = Action.END, None
             decisions.append((action, mode))
@@ -94,16 +96,19 @@ def play(sim: Sim, g: Graph, sessions: int, policy: Policy | None) -> list[Event
                 now += timedelta(minutes=1)
                 continue
             shape = SHAPE[mode]
-            options = shape.options(CONFIG.choices)
-            right = rng.random() < ((1 - sim.slip) if set(shape.skills) <= sim.known else guess(options))
+            choices = CONFIG.choices if level is None else rounds.TEMPLATES[mode].levels[level].choices
+            options = shape.options(choices)
+            knowing = (1 - sim.slip) * (1 - STEP_COST * (level or 0))
+            right = rng.random() < (knowing if set(shape.skills) <= sim.known else guess(options))
             e = Event(
                 event_id=f"{rng.getrandbits(128):032x}",
                 session_id=sid,
                 mode=mode.value,
                 version=shape.version,
-                choices=CONFIG.choices,
+                choices=choices,
                 content=rounds.content_of(mode),
                 seed=seed,
+                level=level,
                 mechanic=shape.mechanic.value,
                 options=options,
                 skills=[SkillUse(skill=s, role=r) for s, r in shape.roles],
