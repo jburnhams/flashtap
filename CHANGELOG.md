@@ -4,6 +4,16 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-24
 
+**A Break screen: Play inside another app's frame, ending by telling the page around it (branch `claude/project-thread-r8f3oj`)**
+
+Asked for: a page of just the current learner's game, the size of a video, for Tubes to show over a paused video every so often (Tubes' breaks: a link, an interval, and a `{ type: 'tubes:done' }` message back). Flashtap knows only that message, not Tubes.
+
+- `web/src/screens/BreakScreen.tsx` **new**: `/break?learner=<id>&rounds=3` plays the engine's rounds for the learner (or `mode=<kind>` rounds, recorded for the learner named or for nobody), with no nav or choices on screen; after `rounds` rounds (default 3, counted on Next), or when the engine offers a break or ends the session, it posts `{ type: 'tubes:done' }` to its parent window and says the break is over. A learner the link names that Flashtap does not have is said, not played unrecorded.
+- `web/src/screens/PlayScreen.tsx`: `Game`, `Planned` and `RoundSkeleton` exported; `Game` and `Planned` take `embedded` (`onPlayed` on each round's Next, kept rounds played away included; `onOver` instead of the engine's break offer or session end).
+- `web/src/screens/Layout.tsx`: `Bare`, the shell of a framed page (the voice and the answers' queue, no nav); the queue's start shared as `useAnswers`. `web/src/routes.tsx`: `/break` under `Bare`.
+- `web/tests/integration/BreakScreen.test.tsx`, `web/tests/unit/break.test.ts` **new**. `web/stories/play.stories.tsx`: `Break`. `web/strata-visual.config.ts`: the `break` route, ready and over; ten new baselines, no others changed.
+- Nothing on the server: it already answers `/break` with the app and sends no header that stops it being framed.
+
 **Transfer rounds: a second, held-out form of every skill, which Generalised now needs passed (0.13.0, branch `claude/project-thread-o6fp99`)**
 
 Asked for: the next spec gap, transfer probes (§9 "holdout families for transfer evaluation", §13 "progress when ... transfer probes pass"). Corrects an earlier rule: Generalised was "right in at least two mechanics, in any role", which no skill could meet as the assessed skill (none was primary in two mechanics) and Listen plus Sounds never could.

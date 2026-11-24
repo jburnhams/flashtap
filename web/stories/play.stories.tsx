@@ -18,6 +18,8 @@ export const Matching: Story = {}
 export const Colours: Story = { render: () => <AppAt route="/?mode=colours" /> }
 export const Shapes: Story = { render: () => <AppAt route="/?mode=shapes" /> }
 export const Letters: Story = { render: () => <AppAt route="/?mode=letters" /> }
+/** Play inside another app's frame (a video player's break): no nav, rounds chosen for the learner in the link. */
+export const Break: Story = { render: () => <AppAt route={`/break?learner=${FOX}`} /> }
 export const Counting: Story = { render: () => <AppAt route="/?mode=counting" /> }
 export const Missing: Story = { render: () => <AppAt route="/?mode=missing" /> }
 /** A quick look while its pictures show (held on screen for the shot), and after they have gone. */
