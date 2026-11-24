@@ -62,6 +62,9 @@ def test_voice_build_makes_clips_through_strata_models_and_the_app_serves_them(c
     assert client.get("/" + a["clip"]).content == sine_wav(0.4, rate=24000)
     assert "sentences: 0 of" in cli("voice", "status").stdout
     assert cli("voice", "build", "--only", "sounds", "--limit", "33").stdout.startswith("made 0, kept")  # nothing again
+    # the speak role's model changes on the service: every made clip is made again, read from its registry
+    fake_models.models["speak"] = "kokoro-v2"
+    assert f"made {len(asked)}, kept 0," in cli("voice", "build", "--only", "sounds", "--limit", "33").stdout
     assert cli("voice", "lines", "--missing").stdout.count("missing") > 1000
 
 
