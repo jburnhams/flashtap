@@ -91,8 +91,8 @@ def test_content_list_prints_skills_by_strand(capsys):
     assert cli.main(["content", "list"]) == 0
     out = capsys.readouterr().out
     assert "Mathematics / Counting objects\n" in out
-    assert "  maths.counting.objects  Count a set of things  (eyfs, played in counting)\n" in out
-    assert "  maths.counting.one_to_one  Touch or tag each thing once  (played in give)\n" in out
+    assert "  maths.counting.objects  Count a set of things  (eyfs, played in counting, played in which_group)\n" in out
+    assert "  maths.counting.one_to_one  Touch or tag each thing once  (played in give, played in number_card)\n" in out
     assert "  maths.verbal_count.decades  Count across a decade  (eyfs)\n" in out  # no kind of round plays it yet
 
 

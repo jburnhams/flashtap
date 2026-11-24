@@ -30,6 +30,11 @@ A grown-up's override (`evidence.Told`) sets a skill's estimate when it was made
 its own, so the graph no longer fills it in; "can do it" lifts its unseen prerequisites as a right answer would, and
 "not yet" caps its unseen dependents as a miss would (§13: "rapid acceleration, regression and manual overrides").
 
+**Transfer** (`learners/transfer.py`): each skill's right primary answers in its practice kinds and its answers in
+its transfer kind are kept, the same rules the Learner screen uses, so the scheduler knows when a skill rated known
+in practice is due a check in its second form, and when that check has passed. They move no estimate beyond the
+answer itself.
+
 **Misconceptions** (`learners/misconceptions.py`): each attempt's traps are folded into one tally per misconception
 (`mistakes`), the same fold the Learner screen uses, so the scheduler can check a suspected one with a round that
 offers its trap. They move no estimate: the answers were already counted as wrong. Nor does speed: how quickly a
@@ -52,6 +57,7 @@ from flashtap.learners.estimators import PLACE_GUESS
 from flashtap.learners.evidence import TOLD_P, Event, Told, judge, ordered
 from flashtap.learners.misconceptions import Tally
 from flashtap.learners.misconceptions import observe as tally
+from flashtap.learners.transfer import is_practice, is_transfer, passed
 from flashtap.mechanics import PLACE, Mechanic, Mode
 
 DAY = 86400.0
@@ -176,6 +182,10 @@ class Knowledge:
     counted: int = 0  # counted answers over every skill
     stairs: dict[Mode, Stair] = field(default_factory=dict[Mode, Stair])  # per kind, once played at a step
     mistakes: dict[str, Tally] = field(default_factory=dict[str, Tally])  # per misconception a round has offered
+    # Per skill: counted primary answers right in its practice kinds, and its transfer answers, oldest first
+    # (learners/transfer.py): what the scheduler needs to know whether a transfer check is due.
+    practised: dict[str, int] = field(default_factory=dict[str, int])
+    transfers: dict[str, list[bool]] = field(default_factory=dict[str, list[bool]])
 
     def state(self, skill: str) -> SkillState:
         s = self.skills.get(skill)
@@ -216,6 +226,14 @@ class Knowledge:
                 s.half_life = max(1.0, s.half_life / 2)
             if u.role == "primary":
                 self._spread(u.skill, e.first_correct)
+                if is_transfer(e, u.skill, u.role):
+                    self.transfers.setdefault(u.skill, []).append(e.first_correct)
+                elif e.first_correct and is_practice(e):
+                    self.practised[u.skill] = self.practised.get(u.skill, 0) + 1
+
+    def transferred(self, skill: str) -> bool:
+        """Whether its transfer check has passed (`transfer.passed`)."""
+        return passed(self.transfers.get(skill, []))
 
     def tell(self, t: Told) -> None:
         s = self.state(t.skill)

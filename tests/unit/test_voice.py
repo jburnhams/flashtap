@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from strata_python.clients.models import RoleSettings
 from strata_python.testing import sine_wav
 from strata_python.wav import WavError
 
@@ -209,3 +210,22 @@ def test_voice_out_lists_every_sound_with_its_letters_and_clip(store: voice.Stor
     sh = next(s for s in out.sounds if s.line == "/ʃ/")
     assert sh.clip is None
     assert sh.describe == "the first sound in ship"
+
+
+def test_build_remakes_a_clip_from_another_model_or_other_settings(store: voice.Store, tmp_path: Path):
+    """The Speaker stand-in reports kokoro-v1 under settings h1; `now` is the speak role as the service reports it."""
+    voice.build(store, ["Listen."], speak=Speaker(tmp_path))
+    speak = Speaker(tmp_path)
+    assert voice.build(store, ["Listen."], now=RoleSettings("kokoro-v1", "h1"), speak=speak).kept == ["Listen."]
+    assert voice.build(store, ["Listen."], now=RoleSettings("kokoro-v1", None), speak=speak).kept == ["Listen."]
+    assert speak.calls == []
+    assert voice.build(store, ["Listen."], now=RoleSettings("kokoro-v1", "h2"), speak=speak).made == ["Listen."]
+    assert voice.build(store, ["Listen."], now=RoleSettings("kokoro-v2", None), speak=speak).made == ["Listen."]
+    assert len(speak.calls) == 2
+
+
+def test_build_never_remakes_a_recording_for_new_settings(store: voice.Store, tmp_path: Path):
+    store.put("/ɪ/", sine_wav(0.6, rate=24000), source="recorded", voice="recording")
+    speak = Speaker(tmp_path)
+    assert voice.build(store, ["/ɪ/"], now=RoleSettings("kokoro-v2", "h9"), speak=speak).kept == ["/ɪ/"]
+    assert speak.calls == []

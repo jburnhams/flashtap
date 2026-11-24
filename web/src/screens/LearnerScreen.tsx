@@ -17,7 +17,8 @@
 //
 // Speed is shown beside each skill (the typical time to a right first answer, and whether it is
 // getting quicker against their own earlier answers on the same kind of round) and never moves its
-// state: §10, speed is not mastery. A suspected mix-up (a misconception: wrong taps landing on the
+// state: §10, speed is not mastery. Under an Independent skill, how it has done in its transfer kind
+// (a second form of it, held out of practice): Generalised needs that check passed (§13). A suspected mix-up (a misconception: wrong taps landing on the
 // option it predicts more often than luck would) holds its skills at Emerging, and the State cell
 // says which. The Mix-ups tab lists every misconception a round has offered, each as a hypothesis
 // with what it rests on and the round that would tell it from a slip.
@@ -36,6 +37,7 @@ import { useNavigate, useParams } from 'react-router'
 import { AlertDialog, AsyncButton, Button, ButtonLink, ChoiceGroup, DataTable, DataView, Dialog, EmptyState, Field, format, Input, Metric, MetricStrip, PageHeader, RowAction, Skeleton, Status, TableSkeleton, Tabs, TextLink, UndoBar, useAsyncAction, useExpanded, useLoad, useUndoable, type Column, type Tone, type Undoable } from 'strata-react'
 import { api, exportUrl, keys, SKILL_STATES, type Engagement, type EvidenceRow, type Fluency, type KindRow, type MisconceptionReport, type MisconceptionStatus, type OverrideIn, type Profile, type SkillReport, type SkillState, type Told } from '../api'
 import { modeLabels } from './PlayScreen'
+import { transferNote } from '../transfer'
 
 export const stateWords: Record<SkillState, { word: string; tone: Tone }> = {
   unobserved: { word: 'Not seen yet', tone: 'neutral' },
@@ -192,6 +194,7 @@ const skillColumns: Column<SkillReport>[] = [
       <>
         <Status tone={stateWords[s.state].tone}>{stateWords[s.state].word}</Status>
         {s.suspected.length > 0 && <span className="block type-caption text-muted-foreground">Held back: {s.suspected.join(', ')}</span>}
+        {transferNote(s) && <span className="block type-caption text-muted-foreground">{transferNote(s)}</span>}
       </>
     ),
   },

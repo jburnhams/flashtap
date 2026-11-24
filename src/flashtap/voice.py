@@ -25,9 +25,7 @@ clips (strata-react's `speak(parts)`) and the browser says only what has no clip
 """
 
 import hashlib
-import os
 import re
-import tempfile
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -36,7 +34,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel
-from strata_python import oslib
+from strata_python import files, oslib
+from strata_python.clients.models import RoleSettings
 from strata_python.contracts import ApiModel
 from strata_python.wav import read_wav
 
@@ -222,10 +221,7 @@ class Store:
         with (self.root / ".lock").open("a+") as lock, oslib.file_lock(lock):
             m = self.read()
             change(m)
-            fd, tmp = tempfile.mkstemp(dir=self.root, suffix=".json")
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(m.model_dump_json(indent=1))
-            os.replace(tmp, self.manifest_path)
+            files.write_text_atomic(self.manifest_path, m.model_dump_json(indent=1))
 
     def put(
         self, line: str, wav: bytes, *, source: Source, voice: str, model: str = "", settings_hash: str = ""
@@ -238,10 +234,7 @@ class Store:
         target = self.root / name
         target.parent.mkdir(parents=True, exist_ok=True)
         if not target.exists():
-            fd, tmp = tempfile.mkstemp(dir=target.parent, suffix=".wav")
-            with os.fdopen(fd, "wb") as f:
-                f.write(wav)
-            os.replace(tmp, target)
+            files.write_bytes_atomic(target, wav)
         clip = Clip(
             file=name,
             source=source,
@@ -295,6 +288,16 @@ def _speak_default(text: str, **params: Any) -> tuple[dict[str, Any], Any]:
     return models.run_with_provenance("speak", {**params, "text": text}, APP)
 
 
+def _stale(c: Clip, now: RoleSettings | None) -> bool:
+    """Made by another model, or by the same one under other settings. A hash only one side knows (a clip from before
+    the service recorded it, or `--model` named, whose settings the registry does not report) compares the model alone."""
+    if now is None:
+        return False
+    if c.model != now.model:
+        return True
+    return bool(c.settings_hash and now.settings_hash and c.settings_hash != now.settings_hash)
+
+
 def build(
     store: Store,
     wanted: Iterable[str],
@@ -302,11 +305,14 @@ def build(
     voice: str = DEFAULT_VOICE,
     model: str | None = None,
     force: bool = False,
+    now: RoleSettings | None = None,
     speak: Speak = _speak_default,
     say: Callable[[str], None] = lambda _: None,
 ) -> Built:
-    """Make the missing clips of `wanted` with strata-models. A clip is remade when it is in another voice, from other
-    model settings, or `force`; a recording never is. Consonant sounds are listed to record, not made."""
+    """Make the missing clips of `wanted` with strata-models. A clip is remade when it is in another voice, from another
+    model or other model settings than `now` (the speak role's as the service reports them, `models.role_settings`), or
+    `force`; a recording never is. Without `now` (the service out of reach, or older) only the voice is compared.
+    Consonant sounds are listed to record, not made."""
     out = Built()
     have = store.read().clips
     for line in wanted:
@@ -318,7 +324,7 @@ def build(
         if ph is not None and not is_vowel(ph):
             out.to_record.append(line)
             continue
-        if old is not None and old.voice == voice and not force:
+        if old is not None and old.voice == voice and not force and not _stale(old, now):
             out.kept.append(line)
             continue
         params: dict[str, Any] = {"voice": voice, "language": LANGUAGE, "seed": 0}

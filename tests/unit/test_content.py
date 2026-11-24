@@ -330,7 +330,7 @@ def test_the_summary_flattens_the_registry():
     count = by_id["maths.counting.objects"]
     assert count.domain == "Mathematics"
     assert count.strand == "Counting objects"
-    assert count.modes == ["counting"]
+    assert count.modes == ["counting", "which_group"]  # its practice kind, then its transfer kind
     assert count.stages == ["eyfs"]
     assert {n.skill for n in count.needs} == {"Say the number names in order", "Touch or tag each thing once"}
     assert any(

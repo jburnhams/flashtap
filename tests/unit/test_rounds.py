@@ -224,9 +224,10 @@ def test_sort_by_sound_puts_each_picture_with_one_letter_of_its_first_sound(choi
     assert len(sounds) == 2
 
 
-def test_mixed_plays_every_kind():
-    played = {rounds.generate(Mode.MIXED, 4, s).mode for s in range(400)}
-    assert played == set(rounds.PLAYABLE)
+def test_mixed_plays_every_practice_kind_and_never_a_transfer_kind():
+    played = {rounds.generate(Mode.MIXED, 4, s).mode for s in range(600)}
+    assert played == set(rounds.PRACTICE)
+    assert not played & set(rounds.HELD_OUT)
 
 
 def test_an_unseeded_round_reports_the_seed_that_rebuilds_it():
@@ -446,3 +447,123 @@ def test_a_step_out_of_range_or_with_other_choices_is_refused():
         rounds.generate(Mode.MIXED, 4, 1, level=0)
     with pytest.raises(ValueError, match="not to Mixed"):
         rounds.at_level(Mode.MIXED, 0, 1)
+
+
+# Transfer kinds (0.13.0): a second form of every skill a practice kind assesses, held out of practice.
+def test_every_skill_a_practice_kind_assesses_has_one_transfer_kind_of_another_form():
+    practised = {s for t in TEMPLATES.values() if not t.held_out for s, r in t.skills if r is QRole.PRIMARY}
+    assert set(rounds.TRANSFER) == practised
+    for skill, mode in rounds.TRANSFER.items():
+        held = TEMPLATES[mode]
+        assert held.held_out
+        assert rounds.HELD_OUT[mode] == skill
+        homes = [t for t in TEMPLATES.values() if not t.held_out and (skill, QRole.PRIMARY) in t.skills]
+        # another mechanic, or the same mechanic with another prompt and picture (Quick dots, Hear and find)
+        assert all(t.description != held.description for t in homes)
+    assert set(rounds.PRACTICE) | set(rounds.HELD_OUT) == set(rounds.PLAYABLE)
+
+
+@pytest.mark.parametrize("seed", range(200))
+def test_hear_find_never_shows_or_prints_the_word(seed):
+    r = rounds.generate(Mode.HEAR_FIND, 4, seed)
+    right = next(o for o in r.options if o.correct)
+    assert right.word not in r.prompt
+    assert right.picture != r.show
+    assert right.word in r.say
+    categories = {t.category for t in lexicon.words().everything if t.id in {o.id for o in r.options}}
+    assert len(categories) == 1
+
+
+@pytest.mark.parametrize("mode", [Mode.COLOUR_BOX, Mode.SHAPE_BOX, Mode.LETTER_BOX])
+def test_a_box_takes_every_piece_that_fits_and_never_all_of_them(mode):
+    things = {t.id: t for t in lexicon.words().everything}
+    for seed in range(300):
+        r = rounds.generate(mode, 6, seed)
+        (box,) = r.places
+        assert 1 <= box.holds == len(box.takes) < len(r.pieces)
+        inside = [things[k] for k in box.takes]
+        outside = [things[p.id] for p in r.pieces if p.id not in box.takes]
+        if mode is Mode.COLOUR_BOX:
+            assert len({t.colour for t in inside}) == 1
+            assert all(t.colour != inside[0].colour for t in outside)
+        elif mode is Mode.SHAPE_BOX:
+            assert len({t.shape for t in inside}) == 1
+            assert all(t.shape != inside[0].shape for t in outside)
+        else:
+            onset = inside[0].onset
+            assert onset is not None
+            assert box.picture == onset.grapheme
+            assert all(t.onset == onset for t in inside)
+            assert all(t.onset is not None and t.onset.phoneme != onset.phoneme for t in outside)  # no kite for c
+
+
+def test_which_group_asks_for_a_number_and_offers_groups_to_count():
+    for seed in range(300):
+        r = rounds.at_level(Mode.WHICH_GROUP, 2, seed)
+        for o in r.options:
+            assert len(o.picture.split()) == int(o.word)
+        assert r.prompt == f"Which group has {_asked(r)}?"
+
+
+def test_quick_dots_shows_dots_for_a_moment():
+    r = rounds.generate(Mode.QUICK_DOTS, 4, 3)
+    assert set(r.show.split()) == {"\U0001f535"}
+    assert r.exposure_ms
+
+
+def test_one_more_asks_one_either_way_and_offers_the_number_itself():
+    ways = set()
+    for seed in range(300):
+        r = rounds.generate(Mode.ONE_MORE, 4, seed)
+        n, answer = int(r.show), _asked(r)
+        ways.add(answer - n)
+        assert ("more" in r.prompt) == (answer == n + 1)
+    assert ways == {-1, 1}
+    offered = [{int(o.word) for o in rounds.generate(Mode.ONE_MORE, 6, s).options} for s in range(50)]
+    assert sum(int(rounds.generate(Mode.ONE_MORE, 6, s).show) in o for s, o in enumerate(offered)) > 40
+
+
+def test_biggest_wants_one_end_of_the_numbers():
+    for seed in range(300):
+        r = rounds.generate(Mode.BIGGEST, 5, seed)
+        numbers = [int(o.word) for o in r.options]
+        assert _asked(r) == (max(numbers) if "biggest" in r.prompt else min(numbers))
+
+
+def test_number_card_shows_the_numeral_and_never_says_it():
+    for seed in range(100):
+        r = rounds.at_level(Mode.NUMBER_CARD, 3, seed)
+        assert int(r.show) == r.places[0].holds < len(r.pieces)
+        assert r.show not in r.say
+
+
+def test_small_letters_offers_look_alikes_first():
+    r = next(
+        rounds.generate(Mode.SMALL_LETTERS, 4, s)
+        for s in range(500)
+        if rounds.generate(Mode.SMALL_LETTERS, 4, s).show == "B"
+    )
+    assert {o.word for o in r.options if o.distractor == "confusable_grapheme"} <= {"d", "p", "q"}
+    assert r.answer == "l_b"
+
+
+def test_same_sound_has_one_picture_with_the_named_ones_first_sound():
+    things = {t.id: t for t in lexicon.words().everything}
+    for seed in range(300):
+        r = rounds.generate(Mode.SAME_SOUND, 4, seed)
+        cue = next(t for t in things.values() if t.picture == r.show)
+        assert cue.onset is not None
+        assert cue.word in r.prompt
+        same = [o for o in r.options if (t := things[o.id]).onset and t.onset.phoneme == cue.onset.phoneme]
+        assert [o.id for o in same] == [r.answer]
+        assert all(len(o.picture) <= 2 for o in r.options)  # pictures, never letters
+
+
+def test_first_sounds_always_has_a_two_letter_sound_and_tempts_with_its_first_letter():
+    lured = 0
+    for seed in range(300):
+        r = rounds.generate(Mode.FIRST_SOUNDS, 4, seed)
+        graphemes = [p.picture for p in r.places]
+        assert any(len(g) == 2 for g in graphemes)
+        lured += any(len(g) == 2 and g[0] in graphemes for g in graphemes)
+    assert lured > 200
