@@ -29,13 +29,14 @@ Without the web build, `flashtap serve` answers with a plain stand-in page that 
 | Endpoint | What it does |
 | --- | --- |
 | `GET /api/round?mode=&choices=&seed=&version=` | One checked round; each parameter defaults to the settings, and a fresh seed is picked (and returned) when none is sent; a template version other than the current one is refused (400) |
+| `GET /api/rounds?mode=&count=&choices=` | `count` (1 to 20, default 8) fresh checked rounds at once, which the browser keeps for when it cannot reach the server; answered, each is judged like any other |
 | `GET /api/modes` | The kinds of round, with a name, a sentence and the mechanic each |
 | `GET /api/content` | The content packs as rows: skills (with stage labels, rounds and edges), curriculum goals, phonics sets |
 | `GET`, `POST /api/learners`; `PATCH`, `DELETE /api/learners/{id}` | List and add learners (`{nickname}`), rename, delete with everything recorded |
 | `GET /api/learners/{id}/profile` | Every skill's estimates (`bkt@1`, `rule@1`), reporting state, counts and last seen |
 | `GET /api/learners/{id}/skills/{skill}/evidence` | The rounds that touched a skill, newest first: the first answer, whether it counted and why not |
 | `GET /api/learners/{id}/export` | Everything held about a learner, as a JSON download |
-| `POST /api/attempts` | One round answered (`event_id`, the round's kind, version, choices, seed and `content` (the pack versions it drew from), the first answer, tries, outcome, and the engine's `decision_id` when it chose the round); idempotent by `event_id` |
+| `POST /api/attempts` | One round answered (`event_id`, the round's kind, version, choices, seed and `content` (the pack versions it drew from), the first answer, tries, outcome, and the engine's `decision_id` when it chose the round, and `asked`: who chose the kind, the grown-up, the engine (`next`) or the device while the server was away (`offline`)); idempotent by `event_id`, so the browser's queue can send it again |
 | `POST /api/attempts/{event_id}/rating` | How that round was (`{value}`: 1, 0 or -1), once; never evidence of what they know |
 | `POST /api/attempts/{event_id}/strike` | Strike a round out of every estimate (`{reason}`); the round stays in the log |
 | `POST /api/v1/sessions` | Start a session the adaptive engine plans (`{learner_id}`), with a snapshot of its settings |

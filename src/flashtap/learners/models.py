@@ -95,7 +95,10 @@ class Attempt(Base):
     mechanic: Mapped[str] = mapped_column(String(32))
     options: Mapped[int]  # how many tiles a one-tap round offered (its chance of a lucky tap); 0 for a placing round
     skills: Mapped[list[dict[str, str]]]  # [{"skill": id, "role": primary|secondary|confound}] as played
-    asked: Mapped[str] = mapped_column(String(32))  # what the grown-up picked ("mixed", or the kind itself): the policy
+    asked: Mapped[str] = mapped_column(
+        String(32)
+    )  # who chose the kind: "mixed" or the kind (the grown-up), "next" (the
+    # engine) or "offline" (the device, from rounds it kept, while the server could not be reached)
     presented_at: Mapped[datetime]
     answered_at: Mapped[datetime]  # the first answer
     first_answer: Mapped[dict[str, Any]]  # {"option": id} or {"placement": {piece: place}}

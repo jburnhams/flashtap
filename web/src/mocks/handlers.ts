@@ -23,6 +23,8 @@ export const mock = {
   tries: null as number | null,
   /** Rounds asked for since the last reset: a test can see a round fetched afresh rather than replayed from the cache. */
   roundRequests: 0,
+  /** Requests for rounds to keep on the device (GET /api/rounds), and how many each asked for. */
+  keptRequests: [] as number[],
   learners: [...learners] as LearnerRow[],
   /** Attempts the app sent, in order: a test reads what Play reported. */
   attempts: [] as AttemptIn[],
@@ -50,6 +52,7 @@ export function resetMock() {
   mock.settings = { ...defaultSettings }
   mock.tries = null
   mock.roundRequests = 0
+  mock.keptRequests = []
   mock.learners = [...learners]
   mock.attempts = []
   mock.struck = []
@@ -142,6 +145,13 @@ export const handlers = [
     mock.roundRequests += 1
     return HttpResponse.json(roundFor(new URL(request.url).searchParams.get('mode')))
   }),
+  http.get(at(paths.rounds), ({ request }) => {
+    const q = new URL(request.url).searchParams
+    const count = Number(q.get('count') ?? 8)
+    mock.keptRequests.push(count)
+    // Kept rounds differ by seed, as the server's do, so a test can tell which one is on screen.
+    return HttpResponse.json(Array.from({ length: count }, (_, i) => ({ ...roundFor(q.get('mode')), seed: 9000 + i })))
+  }),
   http.get(at(paths.content), () => HttpResponse.json(content)),
   http.get(at(paths.learners), () => HttpResponse.json(mock.learners)),
   http.post(at(paths.learners), async ({ request }) => {
@@ -221,6 +231,13 @@ export const settingsError = http.get(at(paths.settings), down)
 export const saveSettingsFails = http.put(at(paths.settings), down)
 export const roundLoading = http.get(at(paths.round), async () => { await delay('infinite'); return HttpResponse.json(null) })
 export const roundError = http.get(at(paths.round), down)
+/** No connection at all: the request fails before any answer (a dropped wifi), as against a server that answers 503. */
+const unreachable = () => HttpResponse.error()
+export const roundUnreachable = http.get(at(paths.round), unreachable)
+export const attemptUnreachable = http.post(at(paths.attempts), unreachable)
+export const nextUnreachable = http.post(at(`${paths.sessions}/:id/next`), unreachable)
+/** The server refuses every answer (a pack changed since the round was made). */
+export const attemptRefused = http.post(at(paths.attempts), () => HttpResponse.json({ detail: 'counting was made from words@1; the packs are now words@2 and the earlier ones are not kept.' }, { status: 400 }))
 /** A server that describes only some kinds of round (an older one): the rest keep their plain names. */
 export const modesFew = http.get(at(paths.modes), () => HttpResponse.json(modes.filter(m => m.mode === 'matching' || m.mode === 'counting')))
 export const modesError = http.get(at(paths.modes), down)
@@ -265,6 +282,8 @@ export const nextChoice = planned(['pick:counting/listen', 'end'])
 export const nextRated = planned(['matching+rate', 'end'])
 export const pickFails = http.post(at(`${paths.sessions}/:id/decisions/:seq/pick`), down)
 export const ratingFails = http.post(at(`${paths.attempts}/:id/rating`), down)
+/** The server refuses a face for good (one already given differently): it is never sent again. */
+export const ratingRefused = http.post(at(`${paths.attempts}/:id/rating`), () => HttpResponse.json({ detail: 'This round is already rated 1; a rating is never rewritten.' }, { status: 409 }))
 export const tellFails = http.post(at(`${paths.overrides}/:id/overrides`), down)
 export const withdrawFails = http.post(at(`${paths.overrides}/:id/overrides/:override/withdraw`), down)
 /** Fox with nothing in how they play that stands out. */
