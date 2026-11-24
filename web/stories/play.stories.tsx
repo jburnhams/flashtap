@@ -46,7 +46,10 @@ export const KeptRound: Story = {
   render: () => <AppAt route={`/?mode=counting&learner=${FOX}`} />,
   beforeEach: ({ msw }) => {
     msw.use(roundUnreachable)
-    window.localStorage.setItem('flashtap:reserve:counting', JSON.stringify([{ ...roundFor('counting'), seed: 9000 }]))
+    // Two of the same: when the learners arrive after the first round was asked for, the change of who is playing
+    // asks again (PlayScreen's Game), and a second take must not find the reserve empty and fail the shot.
+    const kept = { ...roundFor('counting'), seed: 9000 }
+    window.localStorage.setItem('flashtap:reserve:counting', JSON.stringify([kept, kept]))
     return () => window.localStorage.removeItem('flashtap:reserve:counting')
   },
 }
