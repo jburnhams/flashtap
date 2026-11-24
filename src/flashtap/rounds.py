@@ -1,9 +1,9 @@
 """Rounds: the kinds of round, what each one is (its template), and how a round is built and checked.
 
 A template is a kind of round at a version: its mechanic, the skills it gives evidence on and in what role (the spec's
-Q-matrix, §8), and the function that builds its body (`flashtap.kinds`). A round is a pure function of (kind, version,
-choices, seed): the same four give the same round, so a round a learner saw can be rebuilt exactly and a test can walk
-thousands of seeds. Raise a template's `version` whenever its function would give a different round for a seed it
+Q-matrix, §8), the function that builds its body (`flashtap.kinds`) and its steps of difficulty (`levels`, below). A
+round is a pure function of (kind, version, choices, seed, level): the same five give the same round, so a round a
+learner saw can be rebuilt exactly and a test can walk thousands of seeds. Raise a template's `version` whenever its function would give a different round for a seed it
 gave before; only the current version of each is kept, and asking for another is refused rather than answered
 differently. The server picks a seed when the client sends none and returns it in the round.
 
@@ -12,6 +12,14 @@ phonics inventory, the skills it names). A round carries the versions of those p
 an attempt stores them, and a rebuild names them: a round made from packs since changed is refused, as a template
 version no longer kept is, rather than rebuilt from today's words and judged against the wrong round (spec §14,
 "record generator seed, source versions"; docs/content.md).
+
+**Steps of difficulty** (spec §6, "shared difficulty dimensions": content and distractors). Each template has a short
+ladder of `Level`s, easiest first: how many options or pieces a round lays out and, for the number kinds, the largest
+number in play (`top`, inside the skill's `number_range` in the packs). The adaptive engine chooses the step from the
+learner's answers (engine/model.py `Stair`); a round played by hand has no step (`level` None) and is built from the
+grown-up's number of choices and the kind's fixed range, exactly as before steps existed, so every round made before
+0.11.0 rebuilds unchanged and no template version was raised. A round with a step carries it, and its attempt records
+it, so it rebuilds from (kind, version, choices, seed, level); its `choices` must be its step's.
 
 `mechanics.check` refuses a round whose answer is not one and unmistakable, and `generate` runs it on every round
 served. The 0.1 generators broke this in several ways (two red shapes for "Which one is red?", Counting looping above
@@ -50,6 +58,7 @@ __all__ = [
     "SEED_LIMIT",
     "TEMPLATES",
     "InvalidRound",
+    "Level",
     "Mechanic",
     "Mode",
     "Option",
@@ -57,6 +66,7 @@ __all__ = [
     "Place",
     "Round",
     "Template",
+    "at_level",
     "check",
     "content_of",
     "generate",
@@ -70,6 +80,32 @@ P, S, C = QRole.PRIMARY, QRole.SECONDARY, QRole.CONFOUND
 
 
 @dataclass(frozen=True)
+class Level:
+    """One step of a template's difficulty: `choices` options or pieces and, for a number kind, numbers up to `top`.
+    `says` is the step in a grown-up's words, for the engine's reasons ("numbers to 10, 4 to pick from")."""
+
+    choices: int
+    says: str
+    top: int | None = None
+
+
+Build = Callable[[random.Random, int, int | None], Body]
+
+
+def _plain(f: Callable[[random.Random, int], Body]) -> Build:
+    """A kind with no number range: its steps change only how many options it lays out."""
+    return lambda rng, choices, _top: f(rng, choices)
+
+
+def _picks(*ns: int) -> tuple[Level, ...]:
+    return tuple(Level(n, f"{n} to pick from") for n in ns)
+
+
+def _numbers(*steps: tuple[int, int]) -> tuple[Level, ...]:
+    return tuple(Level(n, f"numbers to {top}, {n} to pick from", top) for n, top in steps)
+
+
+@dataclass(frozen=True)
 class Template:
     mode: Mode
     version: int
@@ -77,7 +113,8 @@ class Template:
     name: str
     description: str  # what the learner does, for the list a grown-up picks from
     skills: tuple[tuple[str, QRole], ...]
-    build: Callable[[random.Random, int], Body]
+    build: Build
+    levels: tuple[Level, ...]  # easiest first; the engine's steps (the grown-up's rounds have none)
 
 
 TEMPLATES: dict[Mode, Template] = {
@@ -85,59 +122,65 @@ TEMPLATES: dict[Mode, Template] = {
     for t in (
         Template(
             Mode.MATCHING, 1, Mechanic.SELECT_ONE, "Matching", "Find the animal, food or vehicle that was named",
-            (("language.vocabulary.receptive", P),), choose.matching,
+            (("language.vocabulary.receptive", P),), _plain(choose.matching), _picks(2, 3, 4, 6, 8),
         ),
         Template(
             Mode.COLOURS, 1, Mechanic.SELECT_ONE, "Colours", "Find the shape of the named colour",
-            (("language.vocabulary.colours", P),), choose.colours,
+            (("language.vocabulary.colours", P),), _plain(choose.colours), _picks(2, 3, 4, 6, 8),
         ),
         Template(
             Mode.SHAPES, 1, Mechanic.SELECT_ONE, "Shapes", "Find the named coloured shape",
-            (("maths.geometry.name_2d", P), ("language.vocabulary.colours", C)), choose.shapes,
+            (("maths.geometry.name_2d", P), ("language.vocabulary.colours", C)), _plain(choose.shapes),
+            _picks(2, 3, 4, 6, 8),
         ),
         Template(
             Mode.LETTERS, 1, Mechanic.SELECT_ONE, "Letters", "Find the picture whose word starts with the letter",
             (("literacy.gpc.initial_letter", P), ("literacy.phonemic.initial_sound", S), ("language.vocabulary.receptive", C)),
-            choose.letters,
+            _plain(choose.letters), _picks(2, 3, 4, 6),
         ),
         Template(
             Mode.COUNTING, 1, Mechanic.SELECT_ONE, "Counting", "Count the pictures and tap the number",
             (("maths.counting.objects", P), ("maths.cardinality.last_number", S), ("maths.numerals.recognise", C)),
-            choose.counting,
+            choose.counting, _numbers((3, 3), (4, 5), (4, 8), (6, 10)),
         ),
         Template(
             Mode.MISSING, 1, Mechanic.FILL_MISSING, "Missing number", "Find the number missing from a run",
             (("maths.verbal_count.one_more", P), ("maths.verbal_count.forwards", S), ("maths.numerals.recognise", C)),
-            choose.missing,
+            choose.missing, _numbers((3, 5), (4, 10), (4, 20), (6, 20)),
         ),
         Template(
             Mode.QUICK_LOOK, 1, Mechanic.BRIEF_EXPOSURE, "Quick look", "See a few pictures for a moment and say how many",
             (("maths.subitising.perceptual", P), ("maths.numerals.recognise", C)), choose.quick_look,
+            _numbers((3, 3), (4, 5), (6, 5)),
         ),
         Template(
             Mode.LISTEN, 1, Mechanic.AUDIO_RESPOND, "Listen", "Hear a word and tap the letter it starts with",
-            (("literacy.gpc.grapheme_from_sound", P), ("literacy.phonemic.initial_sound", S)), choose.listen,
+            (("literacy.gpc.grapheme_from_sound", P), ("literacy.phonemic.initial_sound", S)), _plain(choose.listen),
+            _picks(2, 3, 4, 6),
         ),
         Template(
             Mode.GIVE, 1, Mechanic.GIVE_N, "Give a number", "Put the asked-for number of pictures in the basket",
             (("maths.cardinality.give_n", P), ("maths.counting.one_to_one", C)), place.give,
+            (Level(3, "up to 3", 3), Level(5, "up to 5", 5), Level(6, "up to 8", 8), Level(8, "up to 10", 10)),
         ),
         Template(
             Mode.ORDER, 1, Mechanic.SEQUENCE, "Order", "Put numbers in order, smallest first",
             (("maths.comparison.order", P), ("maths.numerals.recognise", C)), place.order,
+            (Level(3, "3 numbers to 5", 5), Level(4, "4 numbers to 10", 10), Level(5, "5 numbers to 10", 10), Level(5, "5 numbers to 20", 20)),
         ),
         Template(
             Mode.CAPITALS, 1, Mechanic.MATCH_PAIRS, "Capitals", "Put each small letter on its capital",
-            (("literacy.letters.case_match", P), ("literacy.letters.identify", S)), place.capitals,
+            (("literacy.letters.case_match", P), ("literacy.letters.identify", S)), _plain(place.capitals),
+            tuple(Level(n, f"{n} pairs") for n in (2, 3, 4, 5)),
         ),
         Template(
             Mode.SORT_SOUNDS, 1, Mechanic.SORT, "Sort by sound", "Put pictures with the letter of their first sound",
             (("literacy.phonemic.initial_sound", P), ("literacy.gpc.sound_from_grapheme", S), ("language.vocabulary.receptive", C)),
-            place.sort_sounds,
+            _plain(place.sort_sounds), tuple(Level(n, f"{n} pictures") for n in (4, 5, 6)),
         ),
         Template(
             Mode.SOUNDS, 1, Mechanic.AUDIO_RESPOND, "Sounds", "Hear a sound on its own and tap the letters that make it",
-            (("literacy.gpc.grapheme_from_sound", P),), choose.sounds,
+            (("literacy.gpc.grapheme_from_sound", P),), _plain(choose.sounds), _picks(2, 3, 4, 6),
         ),
     )
 }  # fmt: skip
@@ -201,12 +244,17 @@ def generate(
     seed: int | None = None,
     version: int | None = None,
     content: Mapping[str, int] | None = None,
+    level: int | None = None,
 ) -> Round:
-    """One checked round. `seed` None picks one (returned in the round); the same mode, choices, seed, version and
-    content give the same round, and the round's own (mode, version, choices, seed, content) rebuild it. `version` and
-    `content` None are the current ones; any other is refused (only the current template and packs are kept)."""
+    """One checked round. `seed` None picks one (returned in the round); the same mode, choices, seed, version, content
+    and level give the same round, and the round's own (mode, version, choices, seed, content, level) rebuild it.
+    `version` and `content` None are the current ones; any other is refused (only the current template and packs are
+    kept). `level` None is a round with no step (the grown-up's choices, the kind's fixed range); a step must be one
+    of the kind's and `choices` its step's (`at_level` makes such a round)."""
     if not MIN_CHOICES <= choices <= MAX_CHOICES:
         raise ValueError(f"choices must be between {MIN_CHOICES} and {MAX_CHOICES}, not {choices}")
+    if level is not None and mode is Mode.MIXED:
+        raise ValueError("a step of difficulty belongs to one kind of round, not to Mixed")
     if seed is None:
         seed = random.randrange(SEED_LIMIT)
     played = mode
@@ -227,7 +275,14 @@ def generate(
             f"{played} was made from {_versions(content)}; the packs are now {_versions(now)} and the earlier ones are "
             "not kept"
         )
-    b = t.build(rng, choices)
+    top = None
+    if level is not None:
+        if not 0 <= level < len(t.levels):
+            raise ValueError(f"{played} has steps 0 to {len(t.levels) - 1}, not {level}")
+        if choices != t.levels[level].choices:
+            raise ValueError(f"{played} step {level} lays out {t.levels[level].choices}, not {choices}")
+        top = t.levels[level].top
+    b = t.build(rng, choices, top)
     return check(
         Round(
             mode=played,
@@ -235,6 +290,7 @@ def generate(
             content=now,
             choices=choices,
             seed=seed,
+            level=level,
             mechanic=t.mechanic,
             skills=[SkillRole(skill=s, role=r) for s, r in t.skills],
             prompt=b.prompt,
@@ -248,6 +304,22 @@ def generate(
             done_feedback=b.done_feedback,
         )
     )
+
+
+def at_level(
+    mode: Mode,
+    level: int,
+    seed: int | None = None,
+    version: int | None = None,
+    content: Mapping[str, int] | None = None,
+) -> Round:
+    """A round of `mode` at step `level`, with the step's number of choices."""
+    if mode is Mode.MIXED:
+        raise ValueError("a step of difficulty belongs to one kind of round, not to Mixed")
+    t = TEMPLATES[mode]
+    if not 0 <= level < len(t.levels):
+        raise ValueError(f"{mode} has steps 0 to {len(t.levels) - 1}, not {level}")
+    return generate(mode, t.levels[level].choices, seed, version, content, level)
 
 
 def tries_allowed(tries: int, r: Round) -> int | None:

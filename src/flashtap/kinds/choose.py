@@ -1,5 +1,8 @@
 """The one-tap kinds: a question, two to eight options, exactly one right.
 
+The number kinds (Counting, Quick look, Missing) also take `top`, the largest number a step of difficulty asks about
+(`rounds.Level`); None keeps the fixed ranges they had before steps, so older rounds rebuild unchanged.
+
 The first five are the original rounds (ported from the TypeScript library in 0.2.0), now with their wrong options
 chosen by named generators (`flashtap.distractors`). The last three are new with the mechanics (plan PR 3):
 
@@ -149,17 +152,27 @@ def _number_options(shown: list[tuple[int, str]], n: int, success: str) -> list[
 
 COUNT_MOST = 5  # up to five pictures in the row: enough to count, few enough to see at once
 NUMBERS = (1, 10)  # the numerals Counting and Quick look offer
+SMALL_NUMBERS = (1, 5)  # the numerals offered when the count is at most 4 (an easier step): no 9 to tap for a 3
 
 
-def counting(rng: random.Random, choices: int) -> Body:
+def _counted(top: int | None) -> tuple[int, tuple[int, int]]:
+    """The most pictures shown and the numerals offered: the 0.4 constants without a step (`top` None, so a round
+    made before steps rebuilds exactly), else up to `top` pictures, among numerals to 5 or to 10."""
+    if top is None:
+        return COUNT_MOST, NUMBERS
+    return top, (SMALL_NUMBERS if top < SMALL_NUMBERS[1] else NUMBERS)
+
+
+def counting(rng: random.Random, choices: int, top: int | None = None) -> Body:
+    most, numerals = _counted(top)
     thing = rng.choice(lexicon.words().countable)
-    n = rng.randint(1, COUNT_MOST)
+    n = rng.randint(1, most)
     many = thing.word if n == 1 else thing.many
     return Body(
         prompt=f"How many {thing.many} are there?",
         show=" ".join([thing.picture] * n),
         options=_number_options(
-            _numerals(rng, n, *NUMBERS, choices, 0.5), n, f"Yes! There {'is' if n == 1 else 'are'} {n} {many}."
+            _numerals(rng, n, *numerals, choices, 0.5), n, f"Yes! There {'is' if n == 1 else 'are'} {n} {many}."
         ),
         answer=f"n{n}",
     )
@@ -168,9 +181,10 @@ def counting(rng: random.Random, choices: int) -> Body:
 QUICK_LOOK_MS = 1500  # long enough to see up to five, too short to point and count them one by one
 
 
-def quick_look(rng: random.Random, choices: int) -> Body:
+def quick_look(rng: random.Random, choices: int, top: int | None = None) -> Body:
+    most, numerals = _counted(top)
     thing = rng.choice(lexicon.words().countable)
-    n = rng.randint(1, COUNT_MOST)
+    n = rng.randint(1, most)
     many = thing.word if n == 1 else thing.many
     return Body(
         prompt="How many did you see?",
@@ -178,7 +192,7 @@ def quick_look(rng: random.Random, choices: int) -> Body:
         show=" ".join([thing.picture] * n),
         exposure_ms=QUICK_LOOK_MS,
         options=_number_options(
-            _numerals(rng, n, *NUMBERS, choices, 0.5), n, f"Yes! There {'was' if n == 1 else 'were'} {n} {many}."
+            _numerals(rng, n, *numerals, choices, 0.5), n, f"Yes! There {'was' if n == 1 else 'were'} {n} {many}."
         ),
         answer=f"n{n}",
     )
@@ -188,8 +202,8 @@ MISSING_RANGE = (0, 10)  # numerals 0 to 10: the first pack's slice (maths.numer
 RUN = 5  # numbers shown in a run, the gap included
 
 
-def missing(rng: random.Random, choices: int) -> Body:
-    low, high = MISSING_RANGE
+def missing(rng: random.Random, choices: int, top: int | None = None) -> Body:
+    low, high = MISSING_RANGE if top is None else (0, top)
     start = rng.randint(low, high - RUN + 1)
     run = list(range(start, start + RUN))
     gap = rng.randrange(RUN)

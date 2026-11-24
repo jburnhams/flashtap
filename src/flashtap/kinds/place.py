@@ -1,7 +1,8 @@
 """The kinds answered by an arrangement: pieces put into places, checked when the learner says they are done.
 
 How the answer is written (`Place.takes` and `holds`) is in `flashtap.mechanics`. `choices` is how many pieces (or
-pairs) the round lays out, clamped to what each kind can use:
+pairs) the round lays out, clamped to what each kind can use; Give and Order also take `top`, the largest number of a
+step of difficulty (`rounds.Level`; None keeps the fixed range they had before steps):
 
 - **Give** (`give_n`): "Put 4 apples in the basket", from a pile with more than 4. The basket takes every apple and
   holds 4, so any 4 are right and 5 is not: stopping at the number is the skill (`maths.cardinality.give_n`).
@@ -23,10 +24,14 @@ GIVE_MOST = 5  # the asked-for number: up to five, the range `maths.cardinality.
 PILE_MOST = 10
 
 
-def give(rng: random.Random, choices: int) -> Body:
+def give(rng: random.Random, choices: int, top: int | None = None) -> Body:
+    """`top` is the most that may be asked for (`GIVE_MOST` without a step); the pile grows to two more than that."""
+    most = GIVE_MOST if top is None else top
     thing = rng.choice(lexicon.words().countable)
-    n = rng.randint(1, GIVE_MOST)
-    pile = min(PILE_MOST, max(n + 2, choices + 1))  # always more than asked for, so "all of them" is never the answer
+    n = rng.randint(1, most)
+    pile = min(
+        max(PILE_MOST, most + 2), max(n + 2, choices + 1)
+    )  # always more than asked for, so "all of them" is never the answer
     pieces = [Piece(id=f"{thing.id}{i + 1}", picture=thing.picture, word=thing.word) for i in range(pile)]
     many = thing.word if n == 1 else thing.many
     return Body(
@@ -41,9 +46,10 @@ ORDINALS = ("first", "second", "third", "fourth", "fifth")
 ORDER_RANGE = (0, 10)
 
 
-def order(rng: random.Random, choices: int) -> Body:
+def order(rng: random.Random, choices: int, top: int | None = None) -> Body:
+    low, high = ORDER_RANGE if top is None else (0, top)
     k = max(3, min(len(ORDINALS), choices))
-    numbers = sorted(rng.sample(range(ORDER_RANGE[0], ORDER_RANGE[1] + 1), k))
+    numbers = sorted(rng.sample(range(low, high + 1), k))
     pieces = [Piece(id=f"n{n}", picture=str(n), word=str(n)) for n in numbers]
     rng.shuffle(pieces)
     return Body(

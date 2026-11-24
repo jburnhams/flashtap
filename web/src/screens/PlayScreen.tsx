@@ -170,7 +170,7 @@ function Game({ mode, learner, session, rateEvery }: { mode: Mode; learner: Lear
   const [visit] = useState(newId)
   const round = useLoad({ queryKey: keys.round(mode, visit, n), queryFn: () => freshOrKept(mode), staleTime: Infinity })
   const record = (who: LearnerRow, r: Round, a: Answered) => {
-    last.current = keep(who, { session_id: session, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: mode, ...a }).id
+    last.current = keep(who, { session_id: session, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, level: r.level, asked: mode, ...a }).id
   }
   const asking = learner !== null && rateEvery > 0 && (n + 1) % rateEvery === 0
   return (
@@ -222,7 +222,7 @@ function Decisions({ session, learner }: { session: SessionInfo; learner: Learne
   const onward = () => { void Promise.allSettled(sending.current).then(() => setSeq(n => n + 1)) }
   const last = useRef('') // the last answer kept: a face is offered only after one
   const record = (d: Next, r: Round, a: Answered) => {
-    const kept = keep(learner, { session_id: session.id, decision_id: d.id, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: 'next', ...a })
+    const kept = keep(learner, { session_id: session.id, decision_id: d.id, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, level: r.level, asked: 'next', ...a })
     last.current = kept.id
     sending.current = [kept.delivered]
   }
@@ -291,7 +291,7 @@ function AwayRounds({ session, seq, learner, kinds, onBack }: { session: Session
       setRound(takeKept(kinds))
     })
   }
-  const record = (r: Round, a: Answered) => { keep(learner, { session_id: sitting, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, asked: 'offline', ...a }) }
+  const record = (r: Round, a: Answered) => { keep(learner, { session_id: sitting, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, level: r.level, asked: 'offline', ...a }) }
   if (!round)
     return (
       <EmptyState title="No rounds kept on this device" action={<Button variant="default" onClick={again} disabled={asking}>Try the server again</Button>}>

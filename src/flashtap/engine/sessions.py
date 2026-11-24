@@ -123,7 +123,7 @@ def _logged(db: Session, session_id: str) -> list[Logged]:
 
 
 def _round(o: Offer, config: Config) -> Round:
-    r = rounds.generate(o.mode, o.choices, o.seed, o.version, o.content)
+    r = rounds.generate(o.mode, o.choices, o.seed, o.version, o.content, o.level)
     r.tries = rounds.tries_allowed(config.tries, r)
     return r
 
@@ -132,7 +132,7 @@ def _out(d: Logged, earlier: list[Logged], config: Config, titles: dict[str, str
     played = sum(1 for x in earlier if x.played() is not None and x.seq < d.seq)
     r = None
     if d.action is Action.ROUND and d.mode is not None and d.choices is not None:
-        r = rounds.generate(d.mode, d.choices, d.seed, d.version, d.content)
+        r = rounds.generate(d.mode, d.choices, d.seed, d.version, d.content, d.level)
         r.tries = rounds.tries_allowed(config.tries, r)
     offers = None
     if d.action is Action.CHOICE and d.offers is not None:
@@ -214,6 +214,7 @@ def next_decision(
             version=c.version,
             choices=c.choices,
             seed=c.seed,
+            level=c.level,
             content=c.content,
             skill=c.skill,
             rationale=[w.value for w in c.rationale],

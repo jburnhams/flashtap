@@ -44,6 +44,7 @@ class Event(BaseModel):
     version: int
     choices: int
     seed: int
+    level: int | None = None  # the round's step of difficulty (rounds.Level); None: played by hand, or before 0.11.0
     # The content packs the round drew from, {pack: version} (rounds.content_of). Empty in an export from before
     # 0.7.0, when every pack was at version 1: a rebuild then takes the packs as they are.
     content: dict[str, int] = Field(default_factory=dict[str, int])

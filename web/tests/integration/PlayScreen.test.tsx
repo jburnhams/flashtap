@@ -255,7 +255,7 @@ describe('Play records rounds for the learner playing', () => {
     await user.click(screen.getByRole('row', { name: tile('cow') }))
     await vi.waitFor(() => expect(mock.attempts).toHaveLength(1))
     const [a] = mock.attempts
-    expect(a).toMatchObject({ learner_id: FOX, mode: 'matching', version: 1, content: rounds.matching.content, choices: 4, seed: 7, asked: 'mixed', first_answer: { option: 'duck' }, tries: 2, outcome: 'right' })
+    expect(a).toMatchObject({ learner_id: FOX, mode: 'matching', version: 1, content: rounds.matching.content, choices: 4, seed: 7, level: null, asked: 'mixed', first_answer: { option: 'duck' }, tries: 2, outcome: 'right' })
     expect(a.event_id).toMatch(/^[0-9a-f]{32}$/)
     expect(Date.parse(a.answered_at)).toBeGreaterThanOrEqual(Date.parse(a.presented_at))
     await user.click(screen.getByRole('button', { name: 'Next' }))
@@ -394,7 +394,7 @@ describe('Play, chosen for them', () => {
     expect(screen.getByRole('combobox', { name: 'Kind of round' })).toHaveValue('next')
     await user.click(screen.getByRole('row', { name: tile('3') }))
     await vi.waitFor(() => expect(mock.attempts).toHaveLength(1))
-    expect(mock.attempts[0]).toMatchObject({ learner_id: FOX, session_id: SESSION, decision_id: 'd0'.padEnd(32, '0'), mode: 'counting', seed: 5, asked: 'next', first_answer: { option: 'n3' }, tries: 1, outcome: 'right' })
+    expect(mock.attempts[0]).toMatchObject({ learner_id: FOX, session_id: SESSION, decision_id: 'd0'.padEnd(32, '0'), mode: 'counting', seed: 5, level: 1, asked: 'next', first_answer: { option: 'n3' }, tries: 1, outcome: 'right' })
     await user.click(screen.getByRole('button', { name: 'Next' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Put 3 ducks in the basket.' })).toBeInTheDocument()
     expect(mock.nextRequests).toEqual([0, 1])

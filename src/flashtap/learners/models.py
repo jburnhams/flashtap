@@ -84,7 +84,7 @@ class Attempt(Base):
     event_id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
     learner_id: Mapped[str] = mapped_column(ForeignKey("learners.id", ondelete="CASCADE"))
     session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), index=True)
-    # The round: (mode, version, choices, seed, content) rebuilds it exactly (rounds.generate). `content` is the
+    # The round: (mode, version, choices, seed, content, level) rebuilds it exactly (rounds.generate). `content` is the
     # content packs it drew from, {pack: version}: a word or sound changed in a pack changes the round a seed gives,
     # so without it a rebuild after a pack's version is raised would show, and judge, a round nobody saw.
     mode: Mapped[str] = mapped_column(String(32))
@@ -109,6 +109,8 @@ class Attempt(Base):
     # The engine's decision this round answered (None when the grown-up chose the kind). Not a foreign key: a
     # decision and its attempt are deleted together with their learner, and the store checks it matches on the way in.
     decision_id: Mapped[str | None] = mapped_column(String(ID_LENGTH), default=None, index=True)
+    # The step of difficulty the round was made at (rounds.Level), None for one played by hand or made before 0.11.0.
+    level: Mapped[int | None] = mapped_column(default=None)
 
 
 class Decision(Base):
@@ -142,6 +144,7 @@ class Decision(Base):
     picked: Mapped[int | None] = mapped_column(default=None)
     picked_at: Mapped[datetime | None] = mapped_column(default=None)
     rate: Mapped[bool] = mapped_column(default=False, server_default=false())  # ask how the round was, after it
+    level: Mapped[int | None] = mapped_column(default=None)  # a round's step of difficulty (policy utility@4 on)
 
 
 class Rating(Base):

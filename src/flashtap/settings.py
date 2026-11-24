@@ -1,7 +1,8 @@
 """User settings: one JSON file, `~/.flashtap/settings.json` (the folder can be moved with the FLASHTAP_HOME environment variable).
 
   mode      which kind of round to play by default: matching, colours, shapes, letters, counting or mixed (default: mixed).
-  choices   how many pictures or numbers a round offers, 2 to 8 (default: 4).
+  choices   how many pictures or numbers a round offers, 2 to 8 (default: 4). For rounds the grown-up picks: the engine
+            ("Chosen for them") sets each round's step of difficulty from the learner's answers (rounds.Level).
   tries     taps allowed before a round counts as missed, 0 for no limit (default: 0). Kept below the number of choices.
 
 Sessions the adaptive engine plans ("Chosen for them" on Play; snapshotted into each session when it starts, so a

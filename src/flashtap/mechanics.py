@@ -107,6 +107,9 @@ class Round(ApiModel):  # every field is always sent, so the schema (and the web
     content: dict[str, int]  # the content packs it drew from and their versions (rounds.content_of): the other half
     choices: int
     seed: int = Field(ge=0, lt=SEED_LIMIT)
+    # The template's step of difficulty the engine chose (rounds.Template.levels), None for a round played by hand:
+    # with the four above it rebuilds the round.
+    level: int | None = None
     mechanic: Mechanic
     skills: list[SkillRole]
     prompt: str  # shown as the heading: "Find the cow", "Listen, then tap the letter"

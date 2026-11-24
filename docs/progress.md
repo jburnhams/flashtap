@@ -1,5 +1,13 @@
 # Progress log
 
+## 2026-11-24: steps of difficulty (0.11.0)
+
+- Asked for: the next spec gap after P4, the engine setting difficulty within a kind of round (number of choices, number range) instead of the grown-up's settings. Fluency and misconceptions were considered for the same change and left for the next: they are reporting (what a learner's times and wrong taps suggest), while this changes what is played, and each is easier to review alone.
+- Shape: a step is part of how a round is built, so it joined (kind, version, choices, seed, packs) as the rebuild key. `level` None builds exactly as before (the builders keep their constants when no `top` is given), which is why no template version moved and no old attempt needed touching.
+- Why a staircase per kind and not BKT per step: the estimate stays one per skill (§4: "core capability + parameters", not every combination a skill), and the step is a control on the round, moved by the learner's run of first answers at it. 3-up/2-down drops faster than it climbs, which puts frustration first as §12 asks; the frustration guard eases a further step after two misses.
+- The policy version moved to `utility@4` because candidates' chances change with the step; `utility@3` decisions replay unchanged (the step is only chosen from version 4).
+- The simulation's learners now slip 6% more per step, so harder steps cost something there too; the exit criterion still holds.
+
 ## 2026-11-24: latest strata libraries (0.10.1)
 
 - strata-react 1.3.7 released the answer queue (#308); the copy in `web/src/outbox.tsx` went. strata-python 0.2.12 added nothing Flashtap was hand-writing. Not adopted yet: ChoiceGrid's neutral `picked` mark (#306) for the pick and face tiles, which changes how they look.

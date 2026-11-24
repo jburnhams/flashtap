@@ -40,17 +40,20 @@ def event(
     struck: str | None = None,
     received: datetime | None = None,
     struck_at: datetime | None = None,
+    level: int | None = None,
 ) -> Event:
     shape = model.SHAPE[mode]
+    choices = 4 if level is None else rounds.TEMPLATES[mode].levels[level].choices
     return Event(
         event_id=uuid.uuid4().hex,
         session_id=session,
         mode=mode.value,
         version=shape.version,
-        choices=4,
+        choices=choices,
         seed=1,
+        level=level,
         mechanic=shape.mechanic.value,
-        options=shape.options(4),
+        options=shape.options(choices),
         skills=[SkillUse(skill=s, role=r) for s, r in shape.roles],
         asked="next",
         presented_at=at,
@@ -191,7 +194,10 @@ def test_every_eligible_candidate_has_a_logged_chance_and_the_draw_is_seeded() -
     assert sum(x.probability for x in open_) == pytest.approx(1.0)
     assert min(x.probability for x in open_) >= POLICY.epsilon / len(open_)
     assert c.probability == next(x.probability for x in c.candidates if x.mode is c.mode)
-    assert (c.version, c.choices) == (1, 4)
+    # utility@4 sets the step: a learner with no evidence starts at each kind's easiest, not the grown-up's 4 choices
+    assert (c.version, c.level) == (1, 0)
+    assert c.mode is not None
+    assert c.choices == rounds.TEMPLATES[c.mode].levels[0].choices
     assert c.seed is not None
     assert decide(k, past(), CONFIG, "s:0", T0) == c
     picks = {decide(k, past(), CONFIG, f"s:{i}", T0).mode for i in range(60)}
@@ -388,6 +394,7 @@ def answer(db: Session, n: sessions.Next, learner: str, *, right: bool, at: date
             version=r.version,
             choices=r.choices,
             seed=r.seed,
+            level=r.level,
             asked="next",
             presented_at=shown,
             answered_at=shown + timedelta(seconds=4),
@@ -435,7 +442,10 @@ def test_a_session_plans_rounds_breaks_and_its_end(db_session: Session, fox: str
     assert [n.seq for n in made] == list(range(8))
     first = made[0]
     assert first.round is not None
-    assert (first.round.choices, first.round.tries) == (3, 2)  # the session's settings, not today's
+    # the session's settings, not today's: 2 tries, kept below the step's options (a 2-tile step allows 1)
+    assert first.round.tries == rounds.tries_allowed(2, first.round)
+    assert first.round.level == 0  # the engine's step: the easiest, with nothing known yet
+    assert first.round.choices == rounds.TEMPLATES[first.round.mode].levels[0].choices
     assert first.skill == model.SHAPE[first.round.mode].primary
     assert first.rationale[0] is Why.PLACEMENT
     assert first.why.startswith("Finding where to start")
@@ -494,7 +504,7 @@ def test_replay_remakes_every_logged_decision_even_after_a_strike(db_session: Se
     assert out.scores[0].attempts == len(store.events(db_session, fox)) - 1
 
     saved = store.export(db_session, fox, [])
-    assert saved.format == "flashtap-learner@4"
+    assert saved.format == "flashtap-learner@5"
     assert saved.sessions[0].config is not None
     starts = {x.id: (x.started_at, x.config) for x in saved.sessions}
     assert replay.replay(saved.events, saved.decisions, starts, G) == (out.decisions, [])
@@ -519,7 +529,7 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
     assert replay.replay(log, retired, {}, G) == (
         0,
         [
-            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3)"
+            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3, utility@4)"
         ],
     )
     assert replay.replay(log, old[:1], {}, G)[1] == [
@@ -636,6 +646,7 @@ def _kept(
             "version": r.version,
             "choices": r.choices,
             "seed": r.seed,
+            "level": r.level,
             "content": r.content,
             "asked": asked,
             "presented_at": shown,
@@ -864,7 +875,7 @@ def test_each_policy_version_weighs_the_kinds_it_had() -> None:
     assert Mode.SOUNDS not in {s.mode for s in policy.kept("utility@2").shapes}
     assert policy.kept("utility@1").shapes == policy.kept("utility@2").shapes
     assert {s.mode for s in POLICY.shapes} == set(rounds.TEMPLATES)
-    assert set(policy.REPLAYS) == {"utility@1", "utility@2", POLICY.id}
+    assert set(policy.REPLAYS) == {"utility@1", "utility@2", "utility@3", POLICY.id}
 
 
 def test_deleting_a_learner_deletes_their_ratings_and_overrides(db_session: Session, fox: str) -> None:
@@ -875,3 +886,123 @@ def test_deleting_a_learner_deletes_their_ratings_and_overrides(db_session: Sess
     store.delete_learner(db_session, fox)
     assert db_session.scalars(select(Rating)).all() == []
     assert db_session.scalars(select(Override)).all() == []
+
+
+# Steps of difficulty (utility@4)
+
+
+def steps(mode: Mode, *answers: tuple[int, bool]) -> Knowledge:
+    k = Knowledge(G)
+    for i, (level, right) in enumerate(answers):
+        k.observe(event(mode, right=right, level=level, at=T0 + timedelta(minutes=i)))
+    return k
+
+
+def test_a_stair_goes_up_after_three_right_and_down_after_two_missed() -> None:
+    assert Mode.COUNTING not in Knowledge(G).stairs  # no step played: no stair
+    up = steps(Mode.COUNTING, (0, True), (0, True))
+    assert (up.stairs[Mode.COUNTING].level, up.stairs[Mode.COUNTING].right) == (0, 2)
+    up = steps(Mode.COUNTING, (0, True), (0, True), (0, True))
+    assert (up.stairs[Mode.COUNTING].level, up.stairs[Mode.COUNTING].right) == (1, 0)
+    broken = steps(Mode.COUNTING, (0, True), (0, True), (0, False), (0, True), (0, True))
+    assert broken.stairs[Mode.COUNTING].level == 0  # three in a row, not three in all
+    down = steps(Mode.COUNTING, (2, False), (2, False))
+    assert down.stairs[Mode.COUNTING].level == 1
+    floor = steps(Mode.COUNTING, (0, False), (0, False), (0, False))
+    assert floor.stairs[Mode.COUNTING].level == 0
+    top = len(rounds.TEMPLATES[Mode.COUNTING].levels) - 1
+    ceiling = steps(Mode.COUNTING, *[(top, True)] * 4)
+    assert ceiling.stairs[Mode.COUNTING].level == top
+    # Kinds keep their own stairs, and a struck-out or hand-picked round (no step) moves none.
+    k = steps(Mode.COUNTING, (0, True), (0, True), (0, True))
+    k.observe(event(Mode.COUNTING, right=False, level=1, struck="tapped by a sibling", at=T0 + timedelta(minutes=5)))
+    k.observe(event(Mode.COUNTING, right=False, at=T0 + timedelta(hours=2)))
+    assert (k.stairs[Mode.COUNTING].level, k.stairs[Mode.COUNTING].wrong) == (1, 0)
+    assert Mode.MISSING not in k.stairs
+
+
+def test_a_round_at_another_step_moves_the_stair_only_when_it_says_more() -> None:
+    harder = steps(Mode.MISSING, (0, True), (2, True))  # right at a harder step: the stair goes there
+    assert (harder.stairs[Mode.MISSING].level, harder.stairs[Mode.MISSING].right) == (2, 1)
+    easier = steps(Mode.MISSING, (2, True), (0, False))  # missed at an easier step: there too
+    assert (easier.stairs[Mode.MISSING].level, easier.stairs[Mode.MISSING].wrong) == (0, 1)
+    eased = steps(Mode.MISSING, (2, True), (1, True))  # right at an easier step (eased after misses): says nothing new
+    assert (eased.stairs[Mode.MISSING].level, eased.stairs[Mode.MISSING].right, eased.stairs[Mode.MISSING].last) == (
+        2,
+        1,
+        1,
+    )
+    stretched = steps(Mode.MISSING, (1, True), (2, False))  # missed at a harder step: nor does that
+    assert (stretched.stairs[Mode.MISSING].level, stretched.stairs[Mode.MISSING].wrong) == (1, 0)
+
+
+def candidate(c: policy.Choice, mode: Mode) -> policy.Candidate:
+    return next(x for x in c.candidates if x.mode is mode)
+
+
+def test_the_engine_sets_each_round_at_its_kinds_step() -> None:
+    c = decide(Knowledge(G), past(), CONFIG, "s:0", T0)
+    assert {x.level for x in c.candidates} == {0}  # knowing nothing: the easiest step of every kind
+    assert all(x.stepped == 0 for x in c.candidates)
+    assert c.mode is not None
+    assert c.level == 0
+    assert c.choices == rounds.TEMPLATES[c.mode].levels[0].choices  # the step's choices, not the grown-up's 4
+
+    k = steps(Mode.COUNTING, (0, True), (0, True), (0, True))
+    c = decide(k, past(), CONFIG, "s:1", T0 + timedelta(minutes=5))
+    counting = candidate(c, Mode.COUNTING)
+    assert (counting.level, counting.stepped) == (1, 1)
+    # Fewer tiles at the easiest step make a lucky answer likelier: the prediction uses the step's options.
+    two = rounds.TEMPLATES[Mode.MATCHING].levels[0].choices
+    assert candidate(c, Mode.MATCHING).p_right == pytest.approx(
+        k.p_right(model.SHAPE[Mode.MATCHING].skills, two), abs=1e-6
+    )
+    lowered = steps(Mode.COUNTING, (2, False), (2, False))
+    assert candidate(decide(lowered, past(), CONFIG, "s:2", T0 + timedelta(minutes=5)), Mode.COUNTING).stepped == -1
+
+
+def test_a_known_skill_starts_halfway_up_and_misses_ease_it_one_step() -> None:
+    told = Told(id="t1", skill=COUNT, says="can", observer="parent", at=T0)
+    k = fold([], G, told=[told])
+    halfway = len(rounds.TEMPLATES[Mode.COUNTING].levels) // 2
+    assert candidate(decide(k, past(), CONFIG, "s:0", T0), Mode.COUNTING).level == halfway
+    missed = past(*[(Mode.MATCHING, False)] * policy.GUARDED)
+    eased = candidate(decide(k, missed, CONFIG, "s:1", T0), Mode.COUNTING)
+    assert eased.level == halfway - 1
+    assert candidate(decide(Knowledge(G), missed, CONFIG, "s:2", T0), Mode.COUNTING).level == 0  # never below 0
+
+
+def test_a_step_up_is_said_in_the_rationale_and_in_words() -> None:
+    k = steps(Mode.COUNTING, (0, True), (0, True), (0, True))
+    for i in range(400):
+        c = decide(k, past(), CONFIG, f"s:{i}", T0 + timedelta(minutes=5))
+        if c.mode is Mode.COUNTING:
+            break
+    else:
+        pytest.fail("counting never drawn")
+    assert Why.STEP_UP in c.rationale
+    assert "A step harder than last time: numbers to 5, 4 to pick from." in explain(c, {}, CONFIG, 3)
+    down = steps(Mode.ORDER, (1, False), (1, False))
+    for i in range(400):
+        c = decide(down, past(), CONFIG, f"t:{i}", T0 + timedelta(minutes=5))
+        if c.mode is Mode.ORDER:
+            break
+    else:
+        pytest.fail("order never drawn")
+    assert Why.STEP_DOWN in c.rationale
+    assert "A step easier than last time: 3 numbers to 5." in explain(c, {}, CONFIG, 3)
+    assert policy.step_says(None, None) == ""
+    assert policy.step_says(Mode.ORDER, 9) == ""
+
+
+def test_policies_before_steps_lay_out_the_grown_ups_choices() -> None:
+    """utility@3 and before had no steps: kept, they still decide with the grown-up's choices, so their logs replay."""
+    k = steps(Mode.COUNTING, (0, True), (0, True), (0, True))
+    old = policy.kept("utility@3")
+    c = decide(k, past(), CONFIG, "s:0", T0 + timedelta(minutes=5), old)
+    assert c.policy == "utility@3"
+    assert (c.choices, c.level) == (CONFIG.choices, None)
+    assert all(x.level is None and x.stepped == 0 for x in c.candidates)
+    chose = decide(k, past(), Config(choices=4, tries=0, choice_every=1), "s:1", T0, old)
+    assert chose.offers is not None
+    assert all((o.choices, o.level) == (4, None) for o in chose.offers)
