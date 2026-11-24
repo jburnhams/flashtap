@@ -70,6 +70,28 @@ def test_bad_round_queries_are_refused(client, params):
     assert client.get("/api/round", params=params).status_code == 422
 
 
+def test_rounds_to_keep_come_several_at_once_each_rebuildable(client):
+    assert client.put("/api/settings", json={"mode": "counting", "choices": "3", "tries": "2"}).status_code == 200
+    kept = client.get("/api/rounds", params={"count": 5}).json()
+    assert len(kept) == 5
+    assert {r["mode"] for r in kept} == {"counting"}
+    assert {(r["choices"], r["tries"]) for r in kept} == {(3, 2)}
+    assert len({r["seed"] for r in kept}) > 1  # fresh seeds, not one round five times
+    for r in kept:  # each is the round its (mode, version, choices, seed, content) rebuild, so it can be judged later
+        again = rounds.generate(Mode(r["mode"]), r["choices"], r["seed"], r["version"], r["content"]).model_dump(
+            mode="json"
+        )
+        assert {**again, "tries": r["tries"]} == r
+    mixed = client.get("/api/rounds", params={"mode": "mixed", "count": 3, "choices": 4}).json()
+    assert all(r["mode"] != "mixed" and r["choices"] == 4 for r in mixed)
+    assert len(client.get("/api/rounds").json()) == 8
+
+
+@pytest.mark.parametrize("params", [{"count": 0}, {"count": 21}, {"mode": "spelling"}, {"choices": 9}])
+def test_bad_queries_for_rounds_to_keep_are_refused(client, params):
+    assert client.get("/api/rounds", params=params).status_code == 422
+
+
 def test_a_place_round_and_a_template_version_no_longer_kept(client):
     r = client.get("/api/round", params={"mode": "give", "seed": 5, "version": 1}).json()
     assert r["mechanic"] == "give_n"

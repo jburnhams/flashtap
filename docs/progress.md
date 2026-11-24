@@ -1,5 +1,15 @@
 # Progress log
 
+## 2026-11-23: offline answers (0.9.0)
+
+- Asked for: the owner approved offline answer saving (spec §14): an answer the server did not receive was lost. It had to keep the append-only log, first-answer-only evidence, pack versions on each attempt and exact engine replay.
+- What made it small on the server: attempts were already idempotent by `event_id`, judged by rebuilding the round from (kind, version, choices, seed, packs), ordered by when they were shown, and decisions replay from what had been received by their time. So an answer that lands late is judged exactly as one that lands at once, a resend is acknowledged as a duplicate, and a decision made while it waited is remade without it. The test plays an engine session through an offline stretch (one decision made while answers waited, one after), sends one answer twice, and replays all three decisions exactly.
+- Rounds while offline: the server must still own the truth, so the browser never makes or judges a round; it keeps rounds the server made (`GET /api/rounds`, a batch so it is one request every few rounds) and shows the answer key the round already carries, as it does online. A kept round is played once. A fresh round whose template or pack versions differ shows the server moved on, and the kept rounds of that kind are dropped.
+- The engine cannot decide offline: each decision follows from the answer before it, and making several ahead would decide without those answers. So "Chosen for them" falls back on kept rounds of the kinds the engine chose that visit, recorded as the device's choice (`asked: "offline"`, a new value) in a sitting of their own, never against a decision, and asks the engine for the decision it was waiting for after each round. A round the device chose offline that names a decision is refused.
+- Refused or waiting: a 4xx is the server's answer for good (a pack changed, a conflicting resend) and is listed with its reason; anything else, including a login in front of the app answering 401/403, waits. A sign-in that expired must never drop answers.
+- Common code: the queue and its status line are what any app writing in the field needs, so they went to strata-react (PR #308, `createOutbox`, `OutboxStatus`); `web/src/outbox.tsx` is that code, copied until it is released. TanStack Query's paused mutations were considered: they keep no order between writes and have no refused/waiting split. Background Sync needs a secure context. strata-python needed nothing.
+- Not done: loading the page itself offline (a service worker; needs https); keeping old packs so a round from them can still be judged after a deploy.
+
 ## 2026-11-23: P4 light engagement (0.8.0)
 
 - Asked for: the plan's PR 6: a choice of two activities, the 3-face rating, session caps and breaks as the grown-up's settings, and (from a spec review) a grown-up's overrides of a skill's state (§13, §15). The hesitation and retry patterns the plan lists for P4 (§11) came with it, as an Engagement tab.

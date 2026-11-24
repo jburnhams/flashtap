@@ -209,6 +209,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Rounds */
+        get: operations["get_rounds_api_rounds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings": {
         parameters: {
             query?: never;
@@ -358,7 +375,7 @@ export interface components {
              */
             answered_at: string;
             /** Asked */
-            asked: components["schemas"]["Mode"] | "next";
+            asked: components["schemas"]["Mode"] | ("next" | "offline");
             /** Choices */
             choices: number;
             /** Content */
@@ -1840,6 +1857,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Round"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_rounds_api_rounds_get: {
+        parameters: {
+            query?: {
+                mode?: components["schemas"]["Mode"] | null;
+                count?: number;
+                choices?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Round"][];
                 };
             };
             /** @description Validation Error */

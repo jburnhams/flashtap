@@ -48,7 +48,10 @@
         "$ref": "#/components/schemas/Mode"
        },
        {
-        "const": "next",
+        "enum": [
+         "next",
+         "offline"
+        ],
         "type": "string"
        }
       ],
@@ -3387,6 +3390,86 @@
      }
     },
     "summary": "Get Round"
+   }
+  },
+  "/api/rounds": {
+   "get": {
+    "operationId": "get_rounds_api_rounds_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "mode",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/Mode"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Mode"
+      }
+     },
+     {
+      "in": "query",
+      "name": "count",
+      "required": false,
+      "schema": {
+       "default": 8,
+       "maximum": 20,
+       "minimum": 1,
+       "title": "Count",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "choices",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maximum": 8,
+         "minimum": 2,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Choices"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/Round"
+         },
+         "title": "Response Get Rounds Api Rounds Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Rounds"
    }
   },
   "/api/settings": {

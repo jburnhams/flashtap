@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flashtap"
-version = "0.8.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
+version = "0.9.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
 description = "Flashtap: learning games that progress by ability, a FastAPI + strata-react web app"
 readme = "README.md"
 requires-python = ">=3.11"

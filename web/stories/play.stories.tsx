@@ -1,7 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { nextBreak, nextChoice, nextEnd, nextError, quickLookGoes, quickLookStays, roundError, roundLoading } from '../src/mocks/handlers'
+import { nextBreak, nextChoice, nextEnd, nextError, quickLookGoes, quickLookStays, roundError, roundFor, roundLoading, roundUnreachable } from '../src/mocks/handlers'
 import { FOX } from '../src/mocks/learners'
 import { AppAt } from './app-at'
+
+/** Earlier stories in the same browser keep rounds (src/reserve.ts): a story of the server away starts with none. */
+const forgetKept = () => window.localStorage.clear()
 
 const meta = {
   title: 'Screens/Play',
@@ -36,7 +39,21 @@ export const ChoiceOfTwo: Story = { render: () => <AppAt route={`/?mode=next&lea
 export const ChoiceOfTwoPhone: Story = { render: () => <AppAt route={`/?mode=next&learner=${FOX}`} />, beforeEach: ({ msw }) => msw.use(nextChoice), tags: ['visual-phone'] }
 export const BreakOffered: Story = { render: () => <AppAt route={`/?mode=next&learner=${FOX}`} />, beforeEach: ({ msw }) => msw.use(nextBreak) }
 export const SessionOver: Story = { render: () => <AppAt route={`/?mode=next&learner=${FOX}`} />, beforeEach: ({ msw }) => msw.use(nextEnd) }
-export const ChosenServerError: Story = { render: () => <AppAt route={`/?mode=next&learner=${FOX}`} />, beforeEach: ({ msw }) => msw.use(nextError) }
+/** The engine cannot be reached and no round of the kinds it chose is kept on this device. */
+export const ChosenServerAway: Story = { render: () => <AppAt route={`/?mode=next&learner=${FOX}`} />, beforeEach: ({ msw }) => { forgetKept(); msw.use(nextError) } }
+/** The server cannot be reached: a round the device kept earlier is played, and the line under it says so. */
+export const KeptRound: Story = {
+  render: () => <AppAt route={`/?mode=counting&learner=${FOX}`} />,
+  beforeEach: ({ msw }) => {
+    msw.use(roundUnreachable)
+    // Two of the same: when the learners arrive after the first round was asked for, the change of who is playing
+    // asks again (PlayScreen's Game), and a second take must not find the reserve empty and fail the shot.
+    const kept = { ...roundFor('counting'), seed: 9000 }
+    window.localStorage.setItem('flashtap:reserve:counting', JSON.stringify([kept, kept]))
+    return () => window.localStorage.removeItem('flashtap:reserve:counting')
+  },
+}
 export const Loading: Story = { beforeEach: ({ msw }) => msw.use(roundLoading) }
-export const ServerError: Story = { beforeEach: ({ msw }) => msw.use(roundError) }
+/** The server answered 503 and no round is kept on this device. */
+export const ServerError: Story = { beforeEach: ({ msw }) => { forgetKept(); msw.use(roundError) } }
 export const Phone: Story = { tags: ['visual-phone'] }

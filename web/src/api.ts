@@ -3,6 +3,7 @@
 // screens never call fetch themselves. Every URL is built here, with the app's base in front, so the app
 // works at the server's root and behind a reverse proxy at /<prefix>/.
 import { createTypedApi, withBase } from 'strata-react'
+import { createOutbox, type Delivery } from './outbox'
 
 // The shapes are generated from the server's OpenAPI schema (`api.generated.ts`, by strata-react's
 // strata-api-types from `web/openapi.json`, which `flashtap openapi` writes), so they follow the Python
@@ -89,6 +90,7 @@ export const paths = {
   settings: '/api/settings',
   modes: '/api/modes',
   round: '/api/round',
+  rounds: '/api/rounds',
   content: '/api/content',
   learners: '/api/learners',
   attempts: '/api/attempts',
@@ -121,18 +123,18 @@ export const api = {
   modes: () => http.get('/api/modes'),
   // The server answers the kind actually played (never Mixed), which the schema's whole-enum `mode` cannot say.
   round: (mode: Mode, signal?: AbortSignal) => http.get('/api/round', { query: { mode }, signal }) as Promise<Round>,
+  /** Fresh rounds for the device to keep for when it cannot reach the server (src/reserve.ts). */
+  rounds: (mode: Mode, count: number) => http.get('/api/rounds', { query: { mode, count } }) as Promise<Round[]>,
   content: () => http.get('/api/content'),
   learners: () => http.get('/api/learners'),
   addLearner: (nickname: string) => http.post('/api/learners', { json: { nickname } }),
   deleteLearner: (id: string) => http.delete('/api/learners/{learner_id}', { path: { learner_id: id } }),
   profile: (id: string) => http.get('/api/learners/{learner_id}/profile', { path: { learner_id: id } }),
   evidence: (id: string, skill: string) => http.get('/api/learners/{learner_id}/skills/{skill}/evidence', { path: { learner_id: id, skill } }),
-  recordAttempt: (a: AttemptIn) => http.post('/api/attempts', { json: a }),
   startSession: (learnerId: string) => http.post('/api/v1/sessions', { json: { learner_id: learnerId } }),
   // The server answers a round's played kind (never Mixed), as for `round` above.
   next: (sessionId: string, seq: number) => http.post('/api/v1/sessions/{session_id}/next', { path: { session_id: sessionId }, json: { seq } }) as Promise<Next>,
   pick: (sessionId: string, seq: number, offer: number) => http.post('/api/v1/sessions/{session_id}/decisions/{seq}/pick', { path: { session_id: sessionId, seq }, json: { offer } }) as Promise<Next>,
-  rate: (eventId: string, value: Face) => http.post('/api/attempts/{event_id}/rating', { path: { event_id: eventId }, json: { value, scale: 'enjoyment' } }),
   tell: (learnerId: string, body: OverrideIn) => http.post('/api/v1/learners/{learner_id}/overrides', { path: { learner_id: learnerId }, json: body }),
   // No body: the typed client still asks for `json` on a POST without one, so it is given as undefined (fetchJson
   // then sends none). strata-react#305.
@@ -145,3 +147,20 @@ export const exportUrl = (id: string) => withBase(`${paths.learners}/${encodeURI
 
 // The server's own limits (src/flashtap/rounds.py), checked here too so the field says why before sending.
 export const limits = { minChoices: 2, maxChoices: 8 } as const
+
+// Answers and faces wait on the device until the server takes them (spec §14: "queue events offline; server
+// reconciles idempotently"). Every attempt carries its own event id, which the server dedupes on, so an answer sent
+// twice (its acknowledgement lost) is logged once; a face names the answer it follows, so it is sent after it and is
+// not sent at all if the answer was refused. The queue outlives the page: what a closed tab left is sent the next time
+// the app opens (Layout starts it). STAND-IN: src/outbox.tsx until strata-react's release.
+export const answers = createOutbox({ name: 'flashtap-answers' })
+
+/** Keeps an answered round to send; `delivered` says how its first try went, so Play goes on without the server. */
+export function keepAttempt(a: AttemptIn, label: string): Promise<Delivery> {
+  return answers.add({ method: 'POST', path: paths.attempts, json: a, id: a.event_id, label }).delivered
+}
+
+/** Keeps a face to send after the answer it rates. */
+export function keepRating(eventId: string, value: Face, label: string): Promise<Delivery> {
+  return answers.add({ method: 'POST', path: `${paths.attempts}/${encodeURIComponent(eventId)}/rating`, json: { value, scale: 'enjoyment' }, after: eventId, label }).delivered
+}

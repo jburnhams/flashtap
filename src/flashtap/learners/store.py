@@ -176,7 +176,9 @@ class AttemptIn(BaseModel):
     # round that was shown; None (a browser from before 0.7.0, or a queue it left) is judged against the packs as
     # they are now, which is what that browser was served unless a pack changed in between.
     content: dict[str, int] | None = None
-    asked: Mode | Literal["next"]  # the kind the grown-up picked: mixed, the kind itself, or next (the engine chose)
+    # Who chose the kind: the grown-up (mixed, or the kind itself), the engine (next), or the device (offline: the
+    # engine could not be reached, so the round came from those the device kept of the kinds it had chosen that visit).
+    asked: Mode | Literal["next", "offline"]
     presented_at: AwareDatetime
     answered_at: AwareDatetime
     first_answer: FirstAnswer
@@ -290,6 +292,8 @@ def record(db: Session, a: AttemptIn, at: datetime | None = None) -> Ack:
     get_learner(db, a.learner_id)
     if a.mode is Mode.MIXED:
         raise ValueError("mode is the kind played; a mixed round reports its own kind")
+    if a.asked == "offline" and a.decision_id is not None:
+        raise ValueError("a round the device chose offline answers no engine decision")
     hold(db, a.learner_id)
     # A duplicate first, before the round is rebuilt: the packs may have moved on since it was logged.
     old = db.get(Attempt, a.event_id)

@@ -2,11 +2,13 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AttemptIn } from '../../src/api'
 import { rounds } from '../../src/mocks/fixtures'
-import { attemptFails, decisionFor, learnersError, nextChoice, nextError, pickFails, quickLookGoes, ratingFails, roundError, SESSION, sessionError } from '../../src/mocks/handlers'
+import { attemptRefused, attemptUnreachable, decisionFor, handlers, learnersError, nextChoice, nextError, nextUnreachable, pickFails, quickLookGoes, ratingRefused, roundError, roundUnreachable, SESSION, sessionError } from '../../src/mocks/handlers'
 import { openApp, screen, within } from '../utils/render'
 import { mock, server } from '../utils/server'
 import { expectOneFilledButton, installFakeSpeech } from 'strata-react/testing'
 
+/** The list of answers the server refused (the nav is a list too). */
+const refusedList = () => screen.getByText(/^The server refused/).closest('div')?.querySelector('ul') as HTMLElement
 const tiles = () => within(screen.getByRole('grid', { name: 'Choices' })).getAllByRole('row')
 // A tile is named by what it shows, then its mark once it has one ("duck, not this one").
 const tile = (word: string) => new RegExp(`^${word}(,|$)`)
@@ -305,11 +307,65 @@ describe('Play records rounds for the learner playing', () => {
     expect(mock.attempts[0]).toMatchObject({ mode: 'order', first_answer: { placement: { n1: 'first', n9: 'second' } }, tries: 1, outcome: 'missed' })
   })
 
-  it('says quietly when the server did not take a round', async () => {
-    server.use(attemptFails)
+  it('keeps an answer the server cannot take, says so for the grown-up, and sends it once the server is back', async () => {
+    server.use(attemptUnreachable)
     const { user } = openApp(`/?learner=${FOX}`)
     await user.click(await screen.findByRole('row', { name: tile('cow') }))
-    expect(await screen.findByText('The last round was not saved for Fox: the server did not take it.')).toBeInTheDocument()
+    expect(await screen.findByText(/^1\sanswer kept on this device\. The server could not be reached\./)).toBeInTheDocument()
+    expect(mock.attempts).toEqual([])
+    await user.click(screen.getByRole('button', { name: 'Next' })) // play goes on without it
+    expect(await screen.findByRole('heading', { level: 1, name: 'Find the cow.' })).toBeInTheDocument()
+    server.resetHandlers(...handlers)
+    // Sent late, the answer still refreshes the learners' records, as one sent at once does.
+    let reads = 0
+    server.use(http.get('*/api/learners', () => { reads += 1 }))
+    await user.click(screen.getByRole('button', { name: 'Send now' }))
+    await vi.waitFor(() => expect(mock.attempts).toHaveLength(1))
+    expect(mock.attempts[0]).toMatchObject({ learner_id: FOX, first_answer: { option: 'cow' }, asked: 'mixed' })
+    await vi.waitFor(() => expect(screen.queryByText(/kept on this device/)).not.toBeInTheDocument())
+    await vi.waitFor(() => expect(reads).toBeGreaterThan(0))
+  })
+
+  it('lists an answer the server refused, with its reason, until dismissed', async () => {
+    server.use(attemptRefused)
+    const { user } = openApp(`/?learner=${FOX}`)
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    expect(await screen.findByText('The server refused 1 answer; it will not be sent.')).toBeInTheDocument()
+    expect(within(refusedList()).getByRole('listitem')).toHaveTextContent('Fox, Matching: counting was made from words@1; the packs are now words@2')
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }))
+    expect(screen.queryByText(/The server refused/)).not.toBeInTheDocument()
+  })
+
+  it('keeps rounds from the server, plays one when the server cannot be reached, and sends its answer later', async () => {
+    const { user } = openApp(`/?learner=${FOX}&mode=counting`)
+    await screen.findByRole('heading', { level: 1, name: 'How many apples are there?' })
+    await vi.waitFor(() => expect(mock.keptRequests).toEqual([8])) // one request keeps eight
+    expect(screen.queryByText(/kept on this device/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('row', { name: tile('3') }))
+    server.use(roundUnreachable, attemptUnreachable)
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByText('The server can’t be reached, so this round is one kept on this device. Answers are sent when it is back.')).toBeInTheDocument()
+    await user.click(screen.getByRole('row', { name: tile('3') }))
+    expect(await screen.findByText(/^1\sanswer kept on this device/)).toBeInTheDocument()
+    server.resetHandlers(...handlers)
+    await user.click(screen.getByRole('button', { name: 'Send now' }))
+    await vi.waitFor(() => expect(mock.attempts).toHaveLength(2))
+    expect(mock.attempts.map(a => [a.seed, a.asked])).toEqual([[5, 'counting'], [9000, 'counting']]) // judged by the server like any other
+  })
+
+  it('shows a refusal for a round, rather than a kept one: the server answered', async () => {
+    const { user } = openApp('/?mode=counting')
+    await user.click(await screen.findByRole('row', { name: tile('3') }))
+    await vi.waitFor(() => expect(mock.keptRequests).toEqual([8]))
+    server.use(http.get('*/api/round', () => HttpResponse.json({ detail: 'counting is at version 2; version 1 is not kept' }, { status: 400 })))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('version 1 is not kept')
+  })
+
+  it('says when no round is kept and the server cannot be reached', async () => {
+    server.use(roundUnreachable)
+    openApp('/')
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
   })
 
   it('lets the child play when the learners cannot be loaded', async () => {
@@ -389,11 +445,37 @@ describe('Play, chosen for them', () => {
     expect(mock.nextRequests).toEqual([0, 1])
   })
 
-  it('says quietly when the server did not take a chosen round', async () => {
-    server.use(attemptFails)
+  it('keeps playing kept rounds of the kinds chosen while the engine cannot be reached, then goes back to it', async () => {
     const { user } = openApp(`/?mode=next&learner=${FOX}`)
+    await screen.findByRole('heading', { level: 1, name: 'How many apples are there?' })
+    await vi.waitFor(() => expect(mock.keptRequests).toEqual([8]))
+    server.use(nextUnreachable, attemptUnreachable)
+    await user.click(screen.getByRole('row', { name: tile('3') }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByText(/one kept on this device/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'How many apples are there?' })).toBeInTheDocument()
+    await user.click(screen.getByRole('row', { name: tile('3') }))
+    await user.click(screen.getByRole('button', { name: 'Next' })) // the engine is asked again, and still away: another kept round
+    expect(await screen.findByText(/one kept on this device/)).toBeInTheDocument()
+    server.resetHandlers(...handlers)
     await user.click(await screen.findByRole('row', { name: tile('3') }))
-    expect(await screen.findByRole('status')).toHaveTextContent('The last round was not saved for Fox')
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Put 3 ducks in the basket.' })).toBeInTheDocument()
+    await vi.waitFor(() => expect(mock.attempts).toHaveLength(3)) // the last answer, kept with the server back, took the rest along
+    const [chosen, ...away] = mock.attempts
+    expect(chosen).toMatchObject({ session_id: SESSION, decision_id: 'd0'.padEnd(32, '0'), asked: 'next' })
+    expect(away.map(a => [a.asked, a.decision_id ?? null, a.seed])).toEqual([['offline', null, 9000], ['offline', null, 9001]])
+    expect(new Set(away.map(a => a.session_id)).size).toBe(1) // a sitting of their own, not the engine's
+    expect(away[0].session_id).not.toBe(SESSION)
+  })
+
+  it('says when no round of the chosen kinds is kept, and asks the engine again on request', async () => {
+    server.use(nextUnreachable)
+    const { user } = openApp(`/?mode=next&learner=${FOX}`)
+    expect(await screen.findByText('No rounds kept on this device')).toBeInTheDocument()
+    server.resetHandlers(...handlers)
+    await user.click(screen.getByRole('button', { name: 'Try the server again' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'How many apples are there?' })).toBeInTheDocument()
   })
 
   it('says the server could not start a session or choose a round', async () => {
@@ -403,6 +485,36 @@ describe('Play, chosen for them', () => {
     server.resetHandlers(nextError)
     openApp(`/?mode=next&learner=${FOX}`)
     await vi.waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(0))
+  })
+
+  it('says so when the engine refuses a decision, rather than playing kept rounds', async () => {
+    server.use(http.post('*/api/v1/sessions/:id/next', () => HttpResponse.json({ detail: 'No engine session eeee.' }, { status: 404 })))
+    openApp(`/?mode=next&learner=${FOX}`)
+    expect(await screen.findByRole('alert')).toHaveTextContent('No engine session eeee.')
+  })
+
+  it('falls back on an older kind the engine chose when none of the latest is kept', async () => {
+    mock.plan = ['counting', 'give', 'end']
+    server.use(http.get('*/api/rounds', ({ request }) => {
+      const mode = new URL(request.url).searchParams.get('mode')
+      if (mode === 'give') return HttpResponse.error()
+      mock.keptRequests.push(8)
+      return HttpResponse.json(Array.from({ length: 8 }, (_, i) => ({ ...decisionFor(0).round, seed: 9000 + i })))
+    }))
+    const { user } = openApp(`/?mode=next&learner=${FOX}`)
+    await user.click(await screen.findByRole('row', { name: tile('3') }))
+    await vi.waitFor(() => expect(mock.keptRequests).toEqual([8]))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await screen.findByRole('heading', { level: 1, name: 'Put 3 ducks in the basket.' })
+    server.use(nextUnreachable)
+    for (let i = 0; i < 3; i++) {
+      await user.click(within(screen.getByRole('group', { name: 'Pictures to place' })).getAllByRole('button')[0])
+      await user.click(screen.getByRole('button', { name: 'Put duck in the basket' }))
+    }
+    await user.click(screen.getByRole('button', { name: 'Check' }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByText(/one kept on this device/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'How many apples are there?' })).toBeInTheDocument() // counting: no give was kept
   })
 
   describe('engagement', () => {
@@ -441,7 +553,7 @@ describe('Play, chosen for them', () => {
       server.use(http.post('*/api/v1/sessions/:id/decisions/:seq/pick', async ({ params, request }) => {
         mock.picks[Number(params.seq)] = ((await request.json()) as { offer: number }).offer
         return HttpResponse.json(decisionFor(Number(params.seq)))
-      }), ratingFails)
+      }), ratingRefused)
       await user.click(screen.getByRole('row', { name: 'Counting' }))
       await user.click(await screen.findByRole('row', { name: tile('3') }))
       await user.click(screen.getByRole('row', { name: 'Did not like it' }))
@@ -478,14 +590,32 @@ describe('Play, chosen for them', () => {
       await vi.waitFor(() => expect(mock.ratings).toHaveLength(1))
     })
 
-    it('rates a round only once it is saved: a round the server did not take is not rated', async () => {
+    it('sends a face after the answer it rates, kept with it while the server is away', async () => {
       mock.settings = { ...mock.settings, rate_every: 1 }
-      server.use(attemptFails)
+      server.use(attemptUnreachable)
+      const { user } = openApp(`/?learner=${FOX}`)
+      await user.click(await screen.findByRole('row', { name: tile('cow') }))
+      await user.click(screen.getByRole('row', { name: 'Liked it' }))
+      expect(await screen.findByText('Thank you.')).toBeInTheDocument()
+      expect(await screen.findByText(/^2\sanswers kept on this device/)).toBeInTheDocument()
+      server.resetHandlers(...handlers)
+      await user.click(screen.getByRole('button', { name: 'Send now' }))
+      await vi.waitFor(() => expect(mock.ratings).toHaveLength(1))
+      expect(mock.ratings).toEqual([{ event_id: mock.attempts[0].event_id, value: 1 }])
+    })
+
+    it('does not send a face for an answer the server refused', async () => {
+      mock.settings = { ...mock.settings, rate_every: 1 }
+      server.use(attemptRefused)
       const { user } = openApp(`/?learner=${FOX}`)
       await user.click(await screen.findByRole('row', { name: tile('cow') }))
       await user.click(screen.getByRole('row', { name: 'Liked it' }))
       expect(await screen.findByText('That face was not saved.')).toBeInTheDocument()
       expect(mock.ratings).toEqual([])
+      expect(within(refusedList()).getAllByRole('listitem').map(li => li.textContent)).toEqual([
+        expect.stringMatching(/^Fox, Matching: counting was made/),
+        expect.stringMatching(/^Fox, a face: Not sent, as what it follows was refused/),
+      ])
     })
   })
 })

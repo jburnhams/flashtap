@@ -5,7 +5,8 @@
 API (JSON): GET /api/health; GET and PUT /api/settings {mode?, choices?, tries?} (both from strata_python.web);
 GET /api/modes (each kind of round with its mechanic); GET /api/round?mode=&choices=&seed=&version= (each defaults to the
 settings; a fresh seed when none is given; a version other than the template's current one is refused with 400);
-GET /api/content (the content packs as rows: skills, curriculum objectives, phonics sets).
+GET /api/rounds?mode=&count=&choices= (count fresh rounds at once, 1 to 20, for a device to keep for when it cannot reach
+the server; web/src/reserve.ts); GET /api/content (the content packs as rows: skills, curriculum objectives, phonics sets).
 Learner records (src/flashtap/learners/): GET and POST /api/learners {nickname}; PATCH and DELETE /api/learners/{id};
 GET /api/learners/{id}/profile (every skill's estimates and state); GET /api/learners/{id}/skills/{skill}/evidence
 (the attempts behind it, newest first); GET /api/learners/{id}/export (everything held, as a JSON download);
@@ -43,6 +44,7 @@ from flashtap.rounds import MAX_CHOICES, MIN_CHOICES, SEED_LIMIT, Mechanic, Mode
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 LANDING = os.path.join(os.path.dirname(os.path.abspath(__file__)), "landing.html")
+RESERVE_MOST = 20  # rounds a device may ask to keep at once (GET /api/rounds)
 PORT = 8361  # python-app-template's 8360 plus one, so both can run on one machine
 
 
@@ -83,6 +85,22 @@ def create_app() -> FastAPI:
         r = rounds.generate(mode or settings.mode(), choices or settings.choices(), seed, version)
         r.tries = rounds.tries_allowed(settings.tries(), r)
         return r
+
+    @app.get("/api/rounds", response_model=list[Round])
+    def get_rounds(  # pyright: ignore[reportUnusedFunction]
+        mode: Mode | None = None,
+        count: Annotated[int, Query(ge=1, le=RESERVE_MOST)] = 8,
+        choices: Annotated[int | None, Query(ge=MIN_CHOICES, le=MAX_CHOICES)] = None,
+    ) -> list[Round]:
+        # Rounds a device keeps for when it cannot reach the server (web/src/reserve.ts): each made and checked here,
+        # fresh seeds, judged here like any other once answered. One request for the lot, so keeping a reserve costs
+        # one request every few rounds rather than one per round.
+        played = mode or settings.mode()
+        n = choices or settings.choices()
+        out = [rounds.generate(played, n) for _ in range(count)]
+        for r in out:
+            r.tries = rounds.tries_allowed(settings.tries(), r)
+        return out
 
     registry = content.load()
     summary = content.summarise(registry, {m.value: ids for m, ids in rounds.MODE_SKILLS.items()})
