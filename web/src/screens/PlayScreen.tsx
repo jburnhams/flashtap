@@ -45,7 +45,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, ButtonLink, isRefusal, ChoiceGrid, ChoiceGridSkeleton, DataView, Done, EmptyState, format, Field, NativeSelect, PageHeader, PlaceBoard, SayAgain, Skeleton, useLoad, useSearchParam, type ChoiceState, type Delivery, type Load, type PlaceState } from 'strata-react'
-import { api, isPlayChoice, keepAttempt, keepRating, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type Face, type LearnerRow, type Mode, type Next, type OfferOut, type Option, type PlayChoice, type Round, type SessionInfo, type Settings } from '../api'
+import { api, isMode, isPlayChoice, keepAttempt, keepRating, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type Face, type LearnerRow, type Mode, type Next, type OfferOut, type Option, type PlayChoice, type Round, type SessionInfo, type Settings } from '../api'
 import { LANG, useVoice } from '../voice'
 import { refresh, take } from '../reserve'
 import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRight, solution, type Placement, type Turn } from '../play'
@@ -272,6 +272,9 @@ function Chosen({ round, onChosen }: { round: Round; onChosen: (m: Mode) => void
   const latest = useRef(onChosen)
   useEffect(() => { latest.current = onChosen })
   useEffect(() => {
+    // A transfer kind (held out of practice, so not among the kinds a grown-up picks) is never kept or played away:
+    // rounds of it played offline would be practice, and their answers would pass the check the engine is making.
+    if (!isMode(round.mode)) return
     latest.current(round.mode)
     void refresh(round.mode, round)
   }, [round])

@@ -207,6 +207,7 @@ def event(
     mechanic: str = "select_one",
     struck: str | None = None,
     mode: str = "counting",
+    asked: str | None = None,
 ) -> Event:
     return Event(
         event_id=uuid.uuid4().hex,
@@ -226,7 +227,7 @@ def event(
                 ("maths.cardinality.last_number", "secondary"),
             ]
         ],
-        asked="mixed",
+        asked=asked or ("next" if mode in {m.value for m in rounds.HELD_OUT} else "mixed"),  # the engine plays those
         presented_at=at,
         answered_at=at,
         first_answer={"option": "n1"},
@@ -337,6 +338,19 @@ def test_rebuilding_from_the_log_reproduces_identical_estimates(db_session: Sess
     saved = store.export(db_session, fox, SKILLS)
     assert store.rebuild(saved) == []
     assert store.rebuild(store.Export.model_validate_json(saved.model_dump_json())) == []  # through the file format
+    # An export from before a field was recorded reads it as its default; the rebuild leaves that field out, and
+    # still compares what the format did record.
+    old = saved.model_dump(mode="json")
+    old["format"] = "flashtap-learner@6"
+    for s in old["skills"]:
+        del s["transfer"]
+    older = store.Export.model_validate(old)
+    assert store.rebuild(older) == []
+    assert store.rebuild(older.model_copy(update={"format": "flashtap-learner@7"}))  # @7 recorded it: a difference
+    older.skills[0].counted += 1
+    assert store.rebuild(older) == [
+        f"{older.skills[0].skill}: counted was {older.skills[0].counted}, rebuilt {older.skills[0].counted - 1}"
+    ]
     # The same attempts arriving in another order (a queue replayed) give the same estimates.
     owl = store.add_learner(db_session, "Owl", at=T0).id
     shuffled = sent[:]
@@ -519,3 +533,19 @@ def test_transfer_evidence_needs_the_transfer_kind_as_primary_and_a_practice_kin
     assert is_practice(event(right=True, mode="a_retired_kind"))
     assert not is_practice(event(right=True, mode="which_group"))
     assert [passed(r) for r in ([True], [False, True, True], [True, True, False])] == [False, True, False]
+
+
+def test_a_transfer_round_the_engine_did_not_choose_is_practice_not_a_check() -> None:
+    """Kept rounds played while the server was away, or one asked for by hand, are answers like any other but not
+    the check: the engine chose none of them."""
+    skill = [(COUNT, "primary")]
+    taps = [event(right=True, at=T0 + timedelta(minutes=i), skills=skill) for i in range(5)]
+    away = [
+        event(right=True, at=T0 + timedelta(minutes=10 + i), skills=skill, mode="which_group", asked="offline")
+        for i in range(3)
+    ]
+    r = skill_reports([*taps, *away], SKILLS[:1])[0]
+    assert r.state is State.INDEPENDENT
+    assert r.transfer is not None
+    assert r.transfer.tried == 0
+    assert r.counted == 8  # still counted as answers

@@ -695,6 +695,13 @@ def export(db: Session, learner_id: str, skills: list[SkillInfo], at: datetime |
     )
 
 
+# The export format each per-skill field was first recorded in: an older export read today gets the field's default,
+# which is not what the log rebuilds to, so a rebuild leaves it out rather than calling it a difference. The rules of
+# a field it did record are compared as they are now: a state read by a rule since changed (Generalised, 0.13.0) is
+# reported, as it is a real difference.
+ADDED: dict[str, int] = {"told": 4, "fluency": 6, "suspected": 6, "transfer": 7}
+
+
 def rebuild(saved: Export, skills: list[SkillInfo] | None = None) -> list[str]:
     """Rebuild the estimates from an export's events and say where they differ from the ones it carries (none: the
     log reproduces them exactly). `skills` defaults to the skills the export reported on, so an export from an older
@@ -704,4 +711,6 @@ def rebuild(saved: Export, skills: list[SkillInfo] | None = None) -> list[str]:
         if skills is not None
         else [SkillInfo(id=s.skill, title=s.title, domain=s.domain, strand=s.strand) for s in saved.skills]
     )
-    return differences(saved.skills, skill_reports(saved.events, known, saved.overrides))
+    at = int(saved.format.rsplit("@", 1)[1])
+    absent = frozenset(f for f, since in ADDED.items() if at < since)
+    return differences(saved.skills, skill_reports(saved.events, known, saved.overrides), absent)

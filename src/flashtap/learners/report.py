@@ -275,13 +275,16 @@ def evidence_rows(events: Iterable[Event], skill: str, titles: Mapping[str, str]
     return rows[::-1]
 
 
-def differences(saved: Sequence[SkillReport], rebuilt: Sequence[SkillReport]) -> list[str]:
-    """Where a rebuilt report differs from a saved one, as sentences; empty when they agree exactly."""
+def differences(
+    saved: Sequence[SkillReport], rebuilt: Sequence[SkillReport], absent: frozenset[str] = frozenset()
+) -> list[str]:
+    """Where a rebuilt report differs from a saved one, as sentences; empty when they agree exactly. `absent`: fields
+    the saved report's format did not record (`store.ADDED`), which are not compared."""
     a = {r.skill: r for r in saved}
     b = {r.skill: r for r in rebuilt}
     out = [f"{k}: only in the saved report" for k in sorted(a.keys() - b.keys())]
     out += [f"{k}: only in the rebuilt report" for k in sorted(b.keys() - a.keys())]
     for k in sorted(a.keys() & b.keys()):
         x, y = a[k].model_dump(mode="json"), b[k].model_dump(mode="json")
-        out += [f"{k}: {f} was {x[f]!r}, rebuilt {y[f]!r}" for f in x if x[f] != y[f]]
+        out += [f"{k}: {f} was {x[f]!r}, rebuilt {y[f]!r}" for f in x if f not in absent and x[f] != y[f]]
     return out

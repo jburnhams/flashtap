@@ -11,7 +11,9 @@ So a right answer there is not the same game remembered.
 The rules, applied to the attempts `evidence.judge` already counts (so struck-out answers and answers held back for an
 unshown confound play no part):
 
-- A skill's **transfer answers** are its counted first answers, as the primary skill, in rounds of its transfer kind.
+- A skill's **transfer answers** are its counted first answers, as the primary skill, in rounds of its transfer kind
+  that the engine chose (`asked` "next"). A round of it got any other way (the API asked for by hand, a device
+  playing kept rounds while the server was away) would be practice, so it counts for the estimates and not here.
 - It **passes** when its latest `PASS` transfer answers are all right (two in a row: a lucky pair among four tiles is
   1 in 16), and stops passing if a later one is missed: like every reporting state, it follows the latest evidence.
 - It is **generalised** (`report.state_of`) only when it is independent, has passed, and has a right primary answer in
@@ -44,7 +46,8 @@ class Transfer(BaseModel):
 
 def is_transfer(e: Event, skill: str, role: str) -> bool:
     """Whether an attempt, as it bears on `skill` in `role`, is a transfer answer for that skill."""
-    return role == "primary" and rounds.TRANSFER.get(skill) is not None and e.mode == rounds.TRANSFER[skill].value
+    mode = rounds.TRANSFER.get(skill)
+    return role == "primary" and mode is not None and e.mode == mode.value and e.asked == "next"
 
 
 def is_practice(e: Event) -> bool:

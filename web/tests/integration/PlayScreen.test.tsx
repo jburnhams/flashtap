@@ -439,6 +439,7 @@ describe('Play, chosen for them', () => {
     }
     await user.click(screen.getByRole('button', { name: 'Check' }))
     expect(screen.getByText('That’s right.')).toBeInTheDocument()
+    expect(mock.keptRequests).toEqual([]) // never kept for playing away: offline it would be practice, not a check
   })
 
   it('asks for the next decision only once the answer is saved, so the engine knows it', async () => {
