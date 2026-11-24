@@ -4,6 +4,14 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-24
 
+**Latest strata-python and strata-react; the answer queue from strata-react (0.10.1, branch `claude/project-thread-rx0f3j`)**
+
+Asked for: use the latest strata-python and strata-react. strata-react 1.3.7 carries the answer queue Flashtap had copied (#308), so the copy went.
+
+- `web/src/outbox.tsx` and `web/tests/integration/outbox.test.tsx` removed: `createOutbox`, `OutboxStatus`, `useOutboxStarted`, `isRefusal` and `Delivery` now come from strata-react (`web/src/api.ts`, `screens/Layout.tsx`, `screens/PlayScreen.tsx`). The stored queue's key is the same (`strata:outbox:flashtap-answers`), so answers kept by the copy are sent by the library.
+- `web/package.json`, `web/package-lock.json`: strata-react `^1.3.7`. `pyproject.toml`, `uv.lock`: strata-python `>=0.2.12` (nothing in 0.2.7-0.2.12 replaces Flashtap code); version 0.10.1.
+- `docs/implementation-plan.md`, `docs/progress.md`, `web/tests/README.md`: the stand-ins are gone.
+
 **Voice clips: one UK voice made by strata-models, consonant sounds recorded, and a Sounds round (0.10.0, branch `claude/project-thread-8d9l62`, PR #50)**
 The owner agreed to the plan's Voice decision: pre-generated UK English clips from strata-models with browser speech as the fallback, including isolated phonics sounds so the spec's "hear /sh/, tap sh" round can be played. Measured first: Kokoro, strata-models' `speak` model, says a vowel on its own well but wraps a lone consonant in a vowel (lone /ʃ/ is about 20 ms of hiss and then a vowel, with 87% of its energy under 1 kHz), which is the habit phonics teaching works to undo. So vowels are made from their IPA and consonants are recorded once by a grown-up on a new Sounds screen; until a sound has a clip the browser describes it ("the first sound in ship"), never by its letters.
 - `src/flashtap/voice.py`: **new**. `segments` cuts a sentence into lines (each `/IPA/` sound alone, the rest into sentences, a list of numbers into its numbers, so 1,384 sentences cover every round rather than every list); `lines()` sweeps every template over 1,200 seeds (the sweep converges well before; a test checks 150 seeds beyond it add nothing) plus the web app's own sentences (`APP_LINES`) and the 45 phonics sounds; `describe`; `Store` (a manifest and content-named WAVs in `~/.flashtap/voice/`, edited under a file lock, refusing anything but a PCM WAV and a recording over 10 s); `build` (strata-python's `run_with_provenance("speak")`, voice `bf_emma`, seed 0, IPA for a vowel; keeps what it has, remakes on another voice or `--force`, never touches a recording, lists the consonants to record, and goes on past a failed line); `voice_out`.

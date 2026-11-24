@@ -2,8 +2,7 @@
 // strata-react's useLoad with the typed client below, which throws HttpError on a non-2xx answer; the
 // screens never call fetch themselves. Every URL is built here, with the app's base in front, so the app
 // works at the server's root and behind a reverse proxy at /<prefix>/.
-import { createTypedApi, fetchJson, withBase } from 'strata-react'
-import { createOutbox, type Delivery } from './outbox'
+import { createOutbox, createTypedApi, fetchJson, withBase, type Delivery } from 'strata-react'
 
 // The shapes are generated from the server's OpenAPI schema (`api.generated.ts`, by strata-react's
 // strata-api-types from `web/openapi.json`, which `flashtap openapi` writes), so they follow the Python

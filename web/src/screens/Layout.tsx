@@ -9,9 +9,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { AudioLines, Gamepad2, Library, Settings, Users } from 'lucide-react'
 import { useEffect } from 'react'
 import { Outlet } from 'react-router'
-import { AppShell, type NavItem } from 'strata-react'
+import { AppShell, OutboxStatus, useOutboxStarted, type NavItem } from 'strata-react'
 import { answers } from '../api'
-import { OutboxStatus, useOutboxStarted } from '../outbox'
 import { VoiceProvider } from '../voice'
 
 export const nav: NavItem[] = [

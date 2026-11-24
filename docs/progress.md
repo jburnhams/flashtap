@@ -1,5 +1,9 @@
 # Progress log
 
+## 2026-11-24: latest strata libraries (0.10.1)
+
+- strata-react 1.3.7 released the answer queue (#308); the copy in `web/src/outbox.tsx` went. strata-python 0.2.12 added nothing Flashtap was hand-writing. Not adopted yet: ChoiceGrid's neutral `picked` mark (#306) for the pick and face tiles, which changes how they look.
+
 ## 2026-11-23: voice clips and the Sounds round (0.10.0)
 
 - Asked for: replace browser speech with pre-made UK English clips from strata-models, browser speech kept as the fallback, with sounds on their own (/m/, /sh/) for a "hear /sh/, tap sh" round.
