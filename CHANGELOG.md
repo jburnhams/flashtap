@@ -17,6 +17,7 @@ Asked for: the next work on Flashtap. The spec check's next gap after steps of d
 - `web/tests/visual/baselines/`: 4 **new** (the Mix-ups stories); the 30 Learner baselines changed by the new tab, Speed column and footnote. Looked at before updating (written with the container's Chromium 158.0.8127.36; the recorded browser left as CI's).
 - Tests: `tests/unit/test_mistakes.py` **new**; `test_engine.py`, `test_learners.py`, `test_server.py` (policy and export versions).
 - `pyproject.toml`, `uv.lock`: 0.12.0. `README.md`, `AGENTS.md`, `docs/implementation-plan.md` (item 9), `docs/overview.md`, `docs/content.md`, `docs/progress.md`, `tests/unit/README.md`.
+- Review fix (Codex on #53): `learners/store.py` `rebuild` leaves fluency out of the comparison for an export from before `flashtap-learner@6`, which never carried it, so an unchanged older export still rebuilds exactly; `tests/unit/test_learners.py` checks both ways (and replays the shuffled log in sessions of the same shape, since fluency reads session starts).
 
 **Steps of difficulty: the engine sets how many choices and how big the numbers (0.11.0, branch `claude/project-thread-v04dav`)**
 

@@ -702,4 +702,12 @@ def rebuild(saved: Export, skills: list[SkillInfo] | None = None) -> list[str]:
         if skills is not None
         else [SkillInfo(id=s.skill, title=s.title, domain=s.domain, strand=s.strand) for s in saved.skills]
     )
-    return differences(saved.skills, skill_reports(saved.events, known, saved.overrides))
+    rebuilt = skill_reports(saved.events, known, saved.overrides)
+    if saved.format in BEFORE_FLUENCY:
+        # Fluency is worked out from times every export has, but a report from before 0.12.0 never carried it: compare
+        # what it did carry. (`suspected` needs no such care: older attempts stored no traps, so it rebuilds empty.)
+        rebuilt = [r.model_copy(update={"fluency": None}) for r in rebuilt]
+    return differences(saved.skills, rebuilt)
+
+
+BEFORE_FLUENCY = frozenset(f"flashtap-learner@{n}" for n in range(1, 6))  # export formats with no `fluency` field
