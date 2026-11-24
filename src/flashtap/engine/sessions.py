@@ -215,6 +215,7 @@ def next_decision(
             choices=c.choices,
             seed=c.seed,
             level=c.level,
+            probe=c.probe,
             content=c.content,
             skill=c.skill,
             rationale=[w.value for w in c.rationale],

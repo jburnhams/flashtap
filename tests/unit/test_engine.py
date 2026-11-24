@@ -504,7 +504,7 @@ def test_replay_remakes_every_logged_decision_even_after_a_strike(db_session: Se
     assert out.scores[0].attempts == len(store.events(db_session, fox)) - 1
 
     saved = store.export(db_session, fox, [])
-    assert saved.format == "flashtap-learner@5"
+    assert saved.format == "flashtap-learner@6"
     assert saved.sessions[0].config is not None
     starts = {x.id: (x.started_at, x.config) for x in saved.sessions}
     assert replay.replay(saved.events, saved.decisions, starts, G) == (out.decisions, [])
@@ -529,7 +529,7 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
     assert replay.replay(log, retired, {}, G) == (
         0,
         [
-            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3, utility@4)"
+            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3, utility@4, utility@5)"
         ],
     )
     assert replay.replay(log, old[:1], {}, G)[1] == [
@@ -875,7 +875,7 @@ def test_each_policy_version_weighs_the_kinds_it_had() -> None:
     assert Mode.SOUNDS not in {s.mode for s in policy.kept("utility@2").shapes}
     assert policy.kept("utility@1").shapes == policy.kept("utility@2").shapes
     assert {s.mode for s in POLICY.shapes} == set(rounds.TEMPLATES)
-    assert set(policy.REPLAYS) == {"utility@1", "utility@2", "utility@3", POLICY.id}
+    assert set(policy.REPLAYS) == {"utility@1", "utility@2", "utility@3", "utility@4", POLICY.id}
 
 
 def test_deleting_a_learner_deletes_their_ratings_and_overrides(db_session: Session, fox: str) -> None:

@@ -19,11 +19,12 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 from strata_python.tasks.flight import Conflict as FlightConflict
 
-from flashtap import __version__, rounds
+from flashtap import __version__, mistakes, rounds
 from flashtap.engine.policy import Action, Candidate, Config, Logged, Offer, Why
-from flashtap.learners import engagement
+from flashtap.learners import engagement, misconceptions
 from flashtap.learners.engagement import Engagement, Offered, Rated
 from flashtap.learners.evidence import Event, Observer, Says, SkillUse, Told
+from flashtap.learners.misconceptions import MisconceptionReport
 from flashtap.learners.models import (
     ID_LENGTH,
     NICKNAME_LENGTH,
@@ -36,7 +37,15 @@ from flashtap.learners.models import (
     Tombstone,
     utc,
 )
-from flashtap.learners.report import MODELS, ModelInfo, SkillInfo, SkillReport, differences, skill_reports
+from flashtap.learners.report import (
+    MODELS,
+    ModelInfo,
+    SkillInfo,
+    SkillReport,
+    differences,
+    known_misconceptions,
+    skill_reports,
+)
 from flashtap.mechanics import PLACE, SEED_LIMIT, Mode, arranged_right
 
 IdText = Field(pattern=rf"^[0-9a-fA-F-]{{8,{ID_LENGTH}}}$")  # a UUID, with or without its dashes
@@ -219,6 +228,7 @@ def _judge(a: AttemptIn) -> tuple[rounds.Round, bool]:
 
 
 def _row(a: AttemptIn, r: rounds.Round, right: bool, received: datetime) -> Attempt:
+    tapped = next((o for o in r.options if o.id == a.first_answer.option), None)  # None for a placing round
     return Attempt(
         event_id=a.event_id,
         learner_id=a.learner_id,
@@ -241,6 +251,8 @@ def _row(a: AttemptIn, r: rounds.Round, right: bool, received: datetime) -> Atte
         outcome=a.outcome,
         received_at=received,
         decision_id=a.decision_id,
+        distractor=tapped.distractor if tapped is not None else None,
+        traps=mistakes.traps(r) if tapped is not None else None,
     )
 
 
@@ -509,6 +521,8 @@ def events(db: Session, learner_id: str) -> list[Event]:
             received_at=utc(x.received_at),
             struck_at=utc(at) if (at := cast("datetime | None", struck_at)) is not None else None,  # None: not struck
             decision_id=x.decision_id,
+            distractor=x.distractor,
+            traps=x.traps,
         )
         for x, reason, struck_at in db.execute(q).all()
     ]
@@ -525,6 +539,7 @@ class Profile(BaseModel):
     struck: int
     models: list[ModelInfo]
     skills: list[SkillReport]
+    misconceptions: list[MisconceptionReport]  # every one a round has offered them, suspected first
     engagement: Engagement
 
 
@@ -565,6 +580,7 @@ def profile(
         struck=sum(e.struck is not None for e in log),
         models=MODELS,
         skills=skill_reports(log, skills, said),
+        misconceptions=misconceptions.report(log, known_misconceptions()),
         engagement=engagement.report(log, rated, offered(made), names),
     )
 
@@ -582,10 +598,16 @@ class Export(BaseModel):
 
     # @2 (0.6.0) adds the engine's decisions and each session's policy; @3 (0.7.0) each attempt's and decision's
     # content packs; @4 (0.8.0) ratings, a grown-up's overrides, and choices with their picks; @5 (0.11.0) each
-    # attempt's and decision's step of difficulty. Older files still read, with none of what they lack.
+    # attempt's and decision's step of difficulty; @6 (0.12.0) each attempt's distractor and traps, each decision's
+    # probe, and each skill's fluency and suspected misconceptions. Older files still read, with none of what they lack.
     format: Literal[
-        "flashtap-learner@1", "flashtap-learner@2", "flashtap-learner@3", "flashtap-learner@4", "flashtap-learner@5"
-    ] = "flashtap-learner@5"
+        "flashtap-learner@1",
+        "flashtap-learner@2",
+        "flashtap-learner@3",
+        "flashtap-learner@4",
+        "flashtap-learner@5",
+        "flashtap-learner@6",
+    ] = "flashtap-learner@6"
     exported_at: datetime
     app_version: str
     learner: LearnerRow
@@ -625,6 +647,7 @@ def logged(x: Decision) -> Logged:
         choices=x.choices,
         seed=x.seed,
         level=x.level,
+        probe=x.probe,
         content=x.content,
         skill=x.skill,
         rationale=[Why(w) for w in x.rationale],

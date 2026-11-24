@@ -16,6 +16,14 @@ Reporting states (spec §13) are derived labels, not the model's state: the mode
 - `retained`: generalised, right again at least `RETAINED_AFTER` after its first counted right answer, and the latest
   counted answer right.
 
+A **suspected misconception** (`misconceptions.py`: wrong taps landing on the option it predicts more often than luck
+would) holds every skill it bears on at `emerging`, whatever the estimates say: a learner who mostly reads numerals but
+keeps taking 9 for 6 is not yet independent at reading them. It lifts as soon as the misconception is cleared (answered
+right, with the trap on offer, a few times running). It moves no estimate: BKT already counted those answers as wrong.
+
+**Fluency** (`fluency.py`), how quickly right first answers come, is reported beside the state and never moves it or
+an estimate (§10: speed is not mastery).
+
 A grown-up's override (`evidence.Told`) is shown beside the state (`told`) and folded into BKT's estimate at its time,
 but it is not an answer: it adds no counted answers, so it cannot make a state on its own. A skill with an override and
 no rounds stays `unobserved` by Flashtap, with the grown-up's word beside it.
@@ -29,11 +37,16 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Literal, cast
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from strata_python.contracts import ApiModel
 
-from flashtap import rounds
+from flashtap import content, rounds
+from flashtap import distractors as dx
+from flashtap.content.model import Misconception
+from flashtap.learners import misconceptions
 from flashtap.learners.estimators import BAYES, ESTIMATORS, RULE, Estimate, model_id
 from flashtap.learners.evidence import TOLD_P, Event, Told, Use, observations, standing, uses
+from flashtap.learners.fluency import Fluency, fluency, starts
 from flashtap.mechanics import Mode, QRole
 
 ENOUGH = 3
@@ -60,7 +73,7 @@ class SkillInfo(BaseModel):
     strand: str
 
 
-class SkillReport(BaseModel):
+class SkillReport(ApiModel):  # every field always sent: the web app's type has no `?`
     skill: str
     title: str
     domain: str
@@ -74,6 +87,10 @@ class SkillReport(BaseModel):
     mechanics: list[str]  # the mechanics of its counted right answers
     last_seen: datetime | None  # the latest attempt that touched it
     told: Told | None = None  # the latest grown-up's override standing, if any (absent from exports before 0.8.0)
+    # How quickly right first answers come (0.12.0; never part of the state), and the misconceptions suspected on it,
+    # by title, which hold it at emerging. Both absent from exports before 0.12.0, whose attempts recorded no traps.
+    fluency: Fluency | None = None
+    suspected: list[str] = Field(default_factory=list[str])
 
 
 class ModelInfo(BaseModel):
@@ -102,10 +119,28 @@ def state_of(counted: Sequence[Use], estimates: Mapping[str, Estimate], touched:
     return State.GENERALISED
 
 
-def skill_reports(events: Iterable[Event], skills: Sequence[SkillInfo], told: Iterable[Told] = ()) -> list[SkillReport]:
+HELD = (State.INDEPENDENT, State.GENERALISED, State.RETAINED)  # the states a suspected misconception holds back
+
+
+def known_misconceptions() -> Mapping[str, Misconception]:
+    return content.load().misconceptions
+
+
+def skill_reports(
+    events: Iterable[Event],
+    skills: Sequence[SkillInfo],
+    told: Iterable[Told] = (),
+    catalogue: Mapping[str, Misconception] | None = None,
+) -> list[SkillReport]:
     """One report per skill in `skills`, then any skill the log names that the packs no longer do (by its id).
-    `told`: the learner's overrides, withdrawn ones included (they are left out here)."""
+    `told`: the learner's overrides, withdrawn ones included (they are left out here). `catalogue`: the packs'
+    misconceptions (all of them by default)."""
+    events = list(events)
     info = {s.id: s for s in skills}
+    started = starts(events)
+    held_by = misconceptions.suspected(
+        misconceptions.report(events, catalogue if catalogue is not None else known_misconceptions())
+    )
     by_skill = uses(events, {s.id: s.title for s in skills})
     known = [*skills, *(SkillInfo(id=k, title=k, domain="", strand="") for k in sorted(by_skill) if k not in info)]
     said: dict[str, list[Told]] = {}
@@ -122,13 +157,17 @@ def skill_reports(events: Iterable[Event], skills: Sequence[SkillInfo], told: It
             estimates = [e.estimate(obs, points) for e in ESTIMATORS]
         else:
             estimates = [BAYES.estimate(obs, points)] if points else []
+        state = state_of(counted, {e.model: e for e in estimates}, bool(live))
+        held_back = held_by.get(s.id, [])
+        if held_back and state in HELD:
+            state = State.EMERGING
         out.append(
             SkillReport(
                 skill=s.id,
                 title=s.title,
                 domain=s.domain,
                 strand=s.strand,
-                state=state_of(counted, {e.model: e for e in estimates}, bool(live)),
+                state=state,
                 estimates=estimates,
                 counted=len(counted),
                 right=sum(u.event.first_correct for u in counted),
@@ -136,6 +175,8 @@ def skill_reports(events: Iterable[Event], skills: Sequence[SkillInfo], told: It
                 mechanics=sorted({u.event.mechanic for u in counted if u.event.first_correct}),
                 last_seen=max((u.event.presented_at for u in live), default=None),
                 told=said[s.id][-1] if s.id in said else None,
+                fluency=fluency(live, started),
+                suspected=held_back,
             )
         )
     return out
@@ -158,6 +199,29 @@ class EvidenceRow(BaseModel):
     struck: bool
     tries: int
     outcome: Literal["right", "missed", "left"]
+    seconds: float  # from showing the round to the first answer
+    mistake: str  # what a wrong first answer was, in words: a misconception's title, or the kind of option it was
+
+
+# A wrong option in words, by the generator that chose it (distractors.py); a random one says nothing.
+DISTRACTOR_WORDS: dict[str, str] = {
+    dx.NEAR_NUMBER: "a number close to it",
+    dx.REVERSAL: "the digits turned round",
+    dx.CONFUSABLE_GRAPHEME: "a letter that looks like it",
+    dx.PHONOLOGICAL_NEIGHBOUR: "a sound close to it",
+    dx.SAME_CATEGORY: "another of the same kind",
+}
+
+
+def mistake(e: Event, titles: Mapping[str, str]) -> str:
+    """A wrong first answer in words: the misconception it showed (by title), else the kind of wrong option; empty for
+    a right one, a random one, an arrangement, or an attempt from before 0.12.0."""
+    if e.first_correct:
+        return ""
+    m = e.showed()
+    if m is not None:
+        return titles.get(m, m)
+    return DISTRACTOR_WORDS.get(e.distractor or "", "")
 
 
 def describe(e: Event) -> str:
@@ -175,6 +239,7 @@ def describe(e: Event) -> str:
 
 def evidence_rows(events: Iterable[Event], skill: str, titles: Mapping[str, str]) -> list[EvidenceRow]:
     """The attempts that touched `skill`, newest first."""
+    named = {k: m.title for k, m in known_misconceptions().items()}
     rows = [
         EvidenceRow(
             event_id=u.event.event_id,
@@ -191,6 +256,8 @@ def evidence_rows(events: Iterable[Event], skill: str, titles: Mapping[str, str]
             struck=u.event.struck is not None,
             tries=u.event.tries,
             outcome=cast("Literal['right', 'missed', 'left']", u.event.outcome),  # as AttemptIn took it
+            seconds=round(u.event.seconds, 1),
+            mistake=mistake(u.event, named),
         )
         for u in uses(events, titles).get(skill, [])
     ]

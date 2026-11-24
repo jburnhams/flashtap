@@ -45,6 +45,7 @@ class Base(MappedAsDataclass, DeclarativeBase):  # written out, not make_base():
         datetime: DateTime(timezone=True),
         dict[str, Any]: JSON,
         dict[str, int]: JSON,
+        dict[str, list[str]]: JSON,
         list[dict[str, str]]: JSON,
         list[dict[str, Any]]: JSON,
         list[str]: JSON,
@@ -111,6 +112,12 @@ class Attempt(Base):
     decision_id: Mapped[str | None] = mapped_column(String(ID_LENGTH), default=None, index=True)
     # The step of difficulty the round was made at (rounds.Level), None for one played by hand or made before 0.11.0.
     level: Mapped[int | None] = mapped_column(default=None)
+    # What the first answer's option was (0.12.0, `mistakes.py`), stored when the round is judged so a later change to
+    # a pack or to the rules cannot rewrite it: `distractor`, the generator that chose the option tapped ("" when it
+    # was right); `traps`, each misconception a wrong option of the round could show, with those options' ids. Both
+    # None for a placing round and for an attempt from before 0.12.0, which then gives no evidence of a misconception.
+    distractor: Mapped[str | None] = mapped_column(String(32), default=None)
+    traps: Mapped[dict[str, list[str]] | None] = mapped_column(default=None)
 
 
 class Decision(Base):
@@ -145,6 +152,7 @@ class Decision(Base):
     picked_at: Mapped[datetime | None] = mapped_column(default=None)
     rate: Mapped[bool] = mapped_column(default=False, server_default=false())  # ask how the round was, after it
     level: Mapped[int | None] = mapped_column(default=None)  # a round's step of difficulty (policy utility@4 on)
+    probe: Mapped[str | None] = mapped_column(String(80), default=None)  # a misconception its round checks (utility@5)
 
 
 class Rating(Base):

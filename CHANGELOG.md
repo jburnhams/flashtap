@@ -4,6 +4,20 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-24
 
+**Fluency and misconceptions: how quickly right answers come, and which wrong answers are a mix-up (0.12.0, branch `claude/project-thread-azpq19`)**
+
+Asked for: the next work on Flashtap. The spec check's next gap after steps of difficulty was the learner state's fluency and active misconceptions (§10, §16). Speed is reported and kept out of mastery and the engine (§10: never speed as mastery); misconceptions hold a skill's reporting state back and the engine checks them.
+
+- `src/flashtap/mistakes.py` **new**: which misconception a wrong option shows (`shows`, `traps`): a reversed 6 or 9, two digits turned round, b d p q for each other, a count one or two out in Counting; `PROBES`, the kinds and lowest steps that can offer each.
+- `src/flashtap/learners/models.py`: `attempts.distractor` and `attempts.traps`, `decisions.probe`; `src/flashtap/migrations/20261124_937000175eca_first_answers_distractor_and_traps_.py` **new** (nullable, no backfill: older attempts give no misconception evidence). `learners/store.py` stores them when it judges an attempt; profile carries `misconceptions`; export `flashtap-learner@6`. `learners/evidence.py`: `Event.distractor`, `traps`, `seconds`, `showed()`.
+- `src/flashtap/learners/misconceptions.py` **new**: the tally per misconception (offered, wrong, shown, what luck gives, a Poisson binomial tail), its status (not seen, unclear, suspected, cleared) and the report. `learners/fluency.py` **new**: the typical time to a right first answer per skill, its spread and its trend against the learner's own earlier answers on the same kind and step, from fresh, unpaused rounds.
+- `src/flashtap/learners/report.py`: `SkillReport.fluency` and `suspected` (now an `ApiModel`, so every field is sent and typed); a suspected misconception holds a skill at emerging; `EvidenceRow.seconds` and `mistake` (a wrong answer in words).
+- `src/flashtap/engine/model.py`: `Knowledge.mistakes`, folded with the attempts. `engine/policy.py`: `utility@5` (a probe bonus for rounds that can offer an open misconception's trap, a seed from a generator of its own whose round offers it, `misconception_probe` and its sentence); `utility@4` and before ignore it and replay. `engine/sessions.py` stores the probe.
+- `web/openapi.json`, `web/src/api.generated.ts` regenerated; `web/src/api.ts` (`Fluency`, `MisconceptionReport`); `web/src/screens/LearnerScreen.tsx`: a Speed column, "Held back" under a state, each wrong answer in words and every answer's time in the evidence, a Mix-ups tab. `web/src/mocks/learners.ts`, `handlers.ts` (`profileUnchecked`); `web/stories/learner.stories.tsx` (Mixups, MixupsNothingYet); `web/tests/integration/LearnerScreen.test.tsx`.
+- `web/tests/visual/baselines/`: 4 **new** (the Mix-ups stories); the 30 Learner baselines changed by the new tab, Speed column and footnote. Looked at before updating (written with the container's Chromium 158.0.8127.36; the recorded browser left as CI's).
+- Tests: `tests/unit/test_mistakes.py` **new**; `test_engine.py`, `test_learners.py`, `test_server.py` (policy and export versions).
+- `pyproject.toml`, `uv.lock`: 0.12.0. `README.md`, `AGENTS.md`, `docs/implementation-plan.md` (item 9), `docs/overview.md`, `docs/content.md`, `docs/progress.md`, `tests/unit/README.md`.
+
 **Steps of difficulty: the engine sets how many choices and how big the numbers (0.11.0, branch `claude/project-thread-v04dav`)**
 
 Asked for: what is next after the plan's PRs. The spec check's first gap was that the engine chose the kind of round but the number of choices and the number range stayed the grown-up's settings (§6, §13). Fluency and misconceptions were left for the next PR (they report on answers; this changes what is played).

@@ -1,5 +1,14 @@
 # Progress log
 
+## 2026-11-24: fluency and misconceptions (0.12.0)
+
+- Asked for: the next spec gap, answer speed (fluency) and misconceptions read from wrong answers.
+- Fluency feeds nothing: §10 says never to treat speed as mastery without controlling for modality, motor ability, device and fatigue. It is reported per skill with those controls (same kind and step, the learner against themself, early in a session, pauses left out), and no state, estimate or engine choice reads it. Speed was already used beside accuracy in the engagement patterns (0.8.0), which is where the spec's §11 table puts it.
+- Misconceptions are stored, not recomputed: the round is rebuilt to judge an attempt anyway, so its traps are recorded then. A later change to a pack (which makes the round unrebuildable) or to the rules cannot rewrite what a tap showed, and the engine's replay reads exactly what the decision saw.
+- Chance, not counts: a wrong tap has to land somewhere, and in a two-tile round it always lands on the one wrong option. So a misconception is suspected only when its taps beat what a random wrong tap would give (a Poisson binomial tail under 0.05), which a two-tile round can never do alone.
+- Mastery: a suspected misconception caps its skills at Emerging (a reporting state, derived), and moves no BKT estimate, since its answers were already counted wrong. It lifts when cleared.
+- Engine: `utility@5` adds a probe bonus and searches seeds from a generator of its own for a round offering the trap, so the main draw (which kind, the second offer's seed) is the same as without it and a replay finds the same seed.
+
 ## 2026-11-24: steps of difficulty (0.11.0)
 
 - Asked for: the next spec gap after P4, the engine setting difficulty within a kind of round (number of choices, number range) instead of the grown-up's settings. Fluency and misconceptions were considered for the same change and left for the next: they are reporting (what a learner's times and wrong taps suggest), while this changes what is played, and each is easier to review alone.

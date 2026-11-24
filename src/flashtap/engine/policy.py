@@ -41,6 +41,15 @@ one decision: a round, a choice between two rounds for the learner to pick, an o
    The grown-up's number of choices (`Config.choices`) is for the rounds they pick by hand and for decisions of
    `utility@3` and before, which replay with it.
 
+9. **Checking a misconception** (§16 "misconception discrimination", from `utility@5`): a misconception the learner's
+   wrong taps have shown and not since cleared (`Knowledge.mistakes`, `learners/misconceptions.py`) gives a bonus to
+   each kind of round that can offer its trap at the step it would be played at (`mistakes.PROBES`): more while
+   suspected, half while it could still be luck. A candidate checks one at a time, the suspected first. Picked, its
+   round's seed is the first of `PROBE_TRIES` drawn from a generator of its own (the decision's key and the kind) whose
+   round does offer the trap, so the draw that picked it and the seeds after it are the same as without a probe, and a
+   replay finds the same seed. If none does, the round is played without one and the rationale does not claim it. The
+   frustration guard still comes first: a probe is a round that could go wrong.
+
 **Diagnostic contrasts** (§12): after a missed round, a candidate that shares a skill with it but leaves out another
 (Missing number after Counting: the numerals without the counting) isolates a cause; it gets a bonus for how uncertain
 the shared skills still are, and the rationale says so. A frustrated learner gets a break first, never more diagnosis.
@@ -59,8 +68,9 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from flashtap import rounds
+from flashtap import content, mistakes, rounds
 from flashtap.engine.model import SHAPES, Knowledge, RoundShape
+from flashtap.learners.misconceptions import MisconceptionStatus as Status
 from flashtap.mechanics import SEED_LIMIT, Mode
 
 MASTERED = 0.85  # BKT's estimate at which practice turns to review; the Learner screen's "independent" threshold
@@ -68,6 +78,7 @@ DUE = 0.5  # recall below which a mastered skill is brought back
 PLACING = 12  # counted answers, over every skill, before placement probes give way to teaching
 FRUSTRATED = 3  # first answers missed in a row that end in an offered break
 GUARDED = 2  # misses in a row after which only rounds likely to go right are offered
+PROBE_TRIES = 100  # seeds tried for a round that offers a misconception's trap (the rarest, in Sounds, is 1 in 14)
 
 
 class Action(StrEnum):
@@ -96,6 +107,7 @@ class Why(StrEnum):
     LIKED = "liked"  # what they said they like moved it up
     STEP_UP = "step_up"  # a step harder than their last round of this kind
     STEP_DOWN = "step_down"  # a step easier than their last round of this kind
+    PROBE = "misconception_probe"  # it offers the tap a misconception they may have predicts (utility@5 on)
 
 
 class SetAside(StrEnum):
@@ -133,6 +145,8 @@ class Candidate(BaseModel):
     liked: float = 0.0  # the kind's preference, -1 to 1 (absent from decisions before 0.8.0, which had none)
     level: int | None = None  # the step it would be played at (None before utility@4: the grown-up's choices)
     stepped: int = 0  # 1 a step harder than their last round of this kind, -1 easier, 0 the same or none before
+    probe: str | None = None  # the misconception it would check (utility@5 on); None: none, or before
+    misconception: float = 0.0  # the bonus for checking it: 1 suspected, 0.5 unclear
     utility: float
     probability: float  # of being picked; 0 when set aside
     set_aside: SetAside | None
@@ -149,6 +163,7 @@ class Offer(BaseModel):
     skill: str
     rationale: list[Why]
     level: int | None = None  # the step of difficulty (utility@4 on); with the five above it rebuilds the round
+    probe: str | None = None  # the misconception its round offers the trap of, when picked to check it (utility@5)
 
 
 class Choice(BaseModel):
@@ -162,6 +177,7 @@ class Choice(BaseModel):
     choices: int | None = None
     seed: int | None = None
     level: int | None = None  # the round's step of difficulty (utility@4 on)
+    probe: str | None = None  # the misconception the round checks (utility@5 on)
     skill: str | None = None
     rationale: list[Why]
     probability: float  # of this pick: 1 for a break or an end, which are rules, not draws
@@ -244,6 +260,7 @@ class Weights:
     repetition: float = 0.8
     diagnostic: float = 0.6
     liked: float = 0.3  # inside enjoyment's scale: a kind liked as much as can be is worth a change of mechanic
+    misconception: float = 0.6  # as much as a diagnostic contrast: both are there to tell a cause from a slip
 
 
 @dataclass(frozen=True)
@@ -253,7 +270,8 @@ class Policy:
     # rating cadence, and a log with no ratings, picks or overrides) it decides exactly as 1 did, so `REPLAYS` keeps 1.
     # 3 (0.9.0): the Sounds round. Otherwise 2: each version weighs the kinds it had (`OFFERS`), so 1 and 2 are kept.
     # 4 (0.11.0): steps of difficulty. 3 and before lay out the grown-up's number of choices at no step, so they replay.
-    version: int = 4
+    # 5 (0.12.0): checking misconceptions. 4 and before give no probe bonus and draw no probe seed, so they replay.
+    version: int = 5
     weights: Weights = field(default_factory=Weights)
     tau: float = 0.15  # softmax temperature: lower picks the best more often
     epsilon: float = 0.1  # share of every pick that is uniform over the eligible candidates
@@ -277,8 +295,10 @@ OFFERS: dict[str, frozenset[Mode]] = {
     "utility@2": _BEFORE_SOUNDS,
     "utility@3": _ALL,
     "utility@4": _ALL,
+    "utility@5": _ALL,
 }
 STEPS_FROM = 4  # the first version that chooses a step of difficulty
+PROBES_FROM = 5  # the first version that checks misconceptions
 
 POLICY = Policy()
 REPLAYS = frozenset(OFFERS)  # logged policies the current code remakes exactly
@@ -347,8 +367,8 @@ def decide(
     if second is not None:
         # The second is put forward as the best of the rest, not by chance, so it never says "exploration".
         offers = [
-            _offer(pick, config, seed, misses, top),
-            _offer(second, config, rng.randrange(SEED_LIMIT), misses, second.utility),
+            _offer(pick, config, seed, misses, top, key),
+            _offer(second, config, rng.randrange(SEED_LIMIT), misses, second.utility, key),
         ]
         return Choice(
             policy=policy.id,
@@ -359,7 +379,7 @@ def decide(
             offers=offers,
             rate=rate,
         )
-    o = _offer(pick, config, seed, misses, top)
+    o = _offer(pick, config, seed, misses, top, key)
     return Choice(
         policy=policy.id,
         action=Action.ROUND,
@@ -369,6 +389,7 @@ def decide(
         choices=o.choices,
         seed=o.seed,
         level=o.level,
+        probe=o.probe,
         skill=o.skill,
         rationale=o.rationale,
         probability=pick.probability,
@@ -377,8 +398,10 @@ def decide(
     )
 
 
-def _why(c: Candidate, misses: int, top: float) -> list[Why]:
+def _why(c: Candidate, misses: int, top: float, probed: bool = False) -> list[Why]:
     why = [c.action]
+    if probed:
+        why.append(Why.PROBE)
     if c.contrast:
         why.append(Why.CONTRAST)
     if misses >= GUARDED:
@@ -394,18 +417,30 @@ def _why(c: Candidate, misses: int, top: float) -> list[Why]:
     return why
 
 
-def _offer(c: Candidate, config: Config, seed: int, misses: int, top: float) -> Offer:
+def _offer(c: Candidate, config: Config, seed: int, misses: int, top: float, key: str) -> Offer:
     shape = next(s for s in SHAPES if s.mode is c.mode)
+    found = _probe_seed(c.mode, c.level, c.probe, key) if c.probe is not None and c.level is not None else None
     return Offer(
         mode=c.mode,
         version=shape.version,
         content=rounds.content_of(c.mode),
         choices=config.choices if c.level is None else rounds.TEMPLATES[c.mode].levels[c.level].choices,
-        seed=seed,
+        seed=seed if found is None else found,
         level=c.level,
+        probe=None if found is None else c.probe,
         skill=c.skill,
-        rationale=_why(c, misses, top),
+        rationale=_why(c, misses, top, found is not None),
     )
+
+
+def _probe_seed(mode: Mode, level: int, probe: str, key: str) -> int | None:
+    """The first of `PROBE_TRIES` seeds, drawn from a generator of its own, whose round offers `probe`'s trap."""
+    rng = random.Random(f"{key}:probe:{mode.value}")
+    for _ in range(PROBE_TRIES):
+        seed = rng.randrange(SEED_LIMIT)
+        if probe in mistakes.traps(rounds.at_level(mode, level, seed)):
+            return seed
+    return None
 
 
 def _second(first: Candidate, pool: Sequence[Candidate]) -> Candidate | None:
@@ -465,6 +500,8 @@ def _candidate(
             contrast = True
             diagnostic = sum(entropy(k.p(s)) for s in shared) / len(shared)
 
+    probe, misconception = _probe(k, shape.mode, level) if policy.version >= PROBES_FROM else (None, 0.0)
+
     set_aside: SetAside | None = None
     if any((k.state(q).own >= 2 or k.state(q).told) and k.p(q) < 0.3 for q in before):
         set_aside = SetAside.PREREQUISITE
@@ -481,6 +518,7 @@ def _candidate(
         - w.frustration * frustration
         - w.repetition * repetition
         + w.diagnostic * diagnostic
+        + w.misconception * misconception
     )
     return Candidate(
         mode=shape.mode,
@@ -498,10 +536,27 @@ def _candidate(
         liked=round(liked, 6),
         level=level,
         stepped=stepped,
+        probe=probe,
+        misconception=misconception,
         utility=round(utility, 6),
         probability=0.0,
         set_aside=set_aside,
     )
+
+
+def _probe(k: Knowledge, mode: Mode, level: int | None) -> tuple[str | None, float]:
+    """The misconception a round of `mode` at `level` would check, and its bonus: the suspected first, then by id."""
+    if level is None:
+        return None, 0.0
+    able = [
+        (m, t)
+        for m, t in k.mistakes.items()
+        if t.open and mode in mistakes.PROBES.get(m, {}) and level >= mistakes.PROBES[m][mode]
+    ]
+    if not able:
+        return None, 0.0
+    m, t = min(able, key=lambda x: (x[1].status is not Status.SUSPECTED, x[0]))
+    return m, 1.0 if t.status is Status.SUSPECTED else 0.5
 
 
 def _step(k: Knowledge, shape: RoundShape, misses: int) -> tuple[int, int]:
@@ -535,6 +590,7 @@ _SAY: dict[Why, str] = {
     Why.LIKED: "They have liked this kind of round.",
     Why.STEP_UP: "A step harder than last time: {step}.",
     Why.STEP_DOWN: "A step easier than last time: {step}.",
+    Why.PROBE: "It offers a likely mix-up ({probe}), to tell a mix-up from a slip.",
 }
 
 
@@ -555,4 +611,9 @@ def explain(c: Choice, titles: Mapping[str, str], config: Config, rounds_played:
     skill = titles.get(skill_id, skill_id)
     played = f"{rounds_played} round" + ("" if rounds_played == 1 else "s")
     codes = [*c.rationale, *(o.rationale if o is not None else [])]
-    return " ".join(_SAY[w].format(skill=skill, rounds=played, minutes=config.max_minutes, step=step) for w in codes)
+    probe_id = (o.probe if o is not None else c.probe) or ""
+    known = content.load().misconceptions.get(probe_id)
+    probe = known.title.lower() if known is not None else probe_id
+    return " ".join(
+        _SAY[w].format(skill=skill, rounds=played, minutes=config.max_minutes, step=step, probe=probe) for w in codes
+    )
