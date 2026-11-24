@@ -61,6 +61,18 @@ def test_rounds_beyond_the_sweep_say_nothing_new():
     assert voice.sweep(range(10**6, 10**6 + 150)) <= set(voice.lines())
 
 
+def test_every_step_of_difficulty_is_in_the_lines():
+    """The engine's steps ask about numbers rounds by hand never do (up to 10 for Give, to 20 for Missing and Order),
+    so the sweep walks every step too; rounds at a step from seeds outside the sweep add nothing either."""
+    said = set(voice.lines())
+    assert any(re.fullmatch(r"Put 10 \w+ in the basket\.", line) for line in said)
+    assert {"19", "20"} <= said  # a number in a list of numbers is a line of its own
+    for mode in rounds.PLAYABLE:
+        for level in range(len(rounds.TEMPLATES[mode].levels)):
+            for seed in range(10**6, 10**6 + 40):
+                assert set(voice.segments(rounds.at_level(mode, level, seed).say)) <= said
+
+
 def test_the_app_lines_are_the_web_apps_own_wording():
     web = (ROOT / "web/src/play.ts").read_text(encoding="utf-8") + (ROOT / "web/src/screens/PlayScreen.tsx").read_text(
         encoding="utf-8"

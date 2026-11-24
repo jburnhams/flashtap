@@ -9,7 +9,7 @@ clips (strata-react's `speak(parts)`) and the browser says only what has no clip
   (`kinds.choose.sound_token`), everything else is cut into sentences, and a list of numbers ("0, 1, 8 and 10.") into
   its numbers, since every list would be a line of its own. The web app splits the same way (`web/src/voice.ts`;
   both are tested against `web/tests/fixtures/voice-segments.json`), so a clip is found by the sentence's own text.
-- **Which lines** (`lines()`): what every template says and answers over a sweep of seeds and choices, the sentences the
+- **Which lines** (`lines()`): what every template says and answers over a sweep of seeds, choices and steps of difficulty, the sentences the
   web app builds around them (`web/src/play.ts`, `PlayScreen.tsx`; kept in step by hand, see `APP_LINES`), and each
   sound of the phonics inventory. tests/unit/test_voice.py checks that rounds from seeds outside the sweep say nothing
   new, so a line is never silently left to the browser.
@@ -122,6 +122,9 @@ APP_LINES = (
 SWEEP_SEEDS = (
     1200  # seeds per template and number of choices: at 1,000 the rounds already said everything (test_voice.py)
 )
+# Seeds per step of difficulty. A step is one number of choices, not seven, and the higher steps pair every countable
+# picture with every number to 10, so they need more seeds each to say everything (at 1,200, "Put 10 peppers" was missed).
+STEP_SEEDS = 6000
 
 
 def _round_lines(r: rounds.Round) -> Iterable[str]:
@@ -139,20 +142,26 @@ def _round_lines(r: rounds.Round) -> Iterable[str]:
             yield f"You put {n} in {basket.word}."
 
 
-def sweep(seeds: Iterable[int]) -> set[str]:
-    """Every line the rounds of these seeds say, over every template and number of choices."""
+def sweep(seeds: Iterable[int], step_seeds: Iterable[int] | None = None) -> set[str]:
+    """Every line the rounds of these seeds say, over every template and number of choices, and every step of
+    difficulty (the engine's steps reach numbers the rounds by hand never ask about: "Put 8 ducks in the basket.")."""
     seen: set[str] = set()
+    every = list(seeds)
+    stepped = every if step_seeds is None else list(step_seeds)
     for mode in rounds.PLAYABLE:
         for choices in range(rounds.MIN_CHOICES, rounds.MAX_CHOICES + 1):
-            for seed in seeds:
+            for seed in every:
                 seen.update(_round_lines(rounds.generate(mode, choices, seed)))
+        for level in range(len(rounds.TEMPLATES[mode].levels)):
+            for seed in stepped:
+                seen.update(_round_lines(rounds.at_level(mode, level, seed)))
     return seen
 
 
 @cache
 def lines() -> list[str]:
     """Every line Flashtap says, sentences first (sorted), then the phonics sounds in the inventory's order."""
-    said = sweep(range(SWEEP_SEEDS)) | set(APP_LINES)
+    said = sweep(range(SWEEP_SEEDS), range(STEP_SEEDS)) | set(APP_LINES)
     titles = [rounds.TEMPLATES[m].name for m in rounds.PLAYABLE]
     said.update(f"{a} or {b}?" for a in titles for b in titles if a != b)  # a choice of two (PlayScreen PickOne)
     sounds: list[str] = []

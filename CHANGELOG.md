@@ -17,6 +17,7 @@ Asked for: what is next after the plan's PRs. The spec check's first gap was tha
 - `web/openapi.json`, `web/src/api.generated.ts` regenerated; `web/src/screens/PlayScreen.tsx` sends each round's `level` with its answer; `web/src/mocks/fixtures.ts` and `handlers.ts` (rounds by hand have no step, the engine's do; `utility@4`); `web/tests/integration/PlayScreen.test.tsx`.
 - Tests: `tests/unit/test_rounds.py` (every step of every template over 300 seeds, numbers within the step, refusals), `test_engine.py` (the stair, steps in decisions and words, `utility@3` unchanged), `test_server.py` (a round and an attempt at a step), `test_learners.py`; `tests/integration/test_server_api.py`.
 - `pyproject.toml`, `uv.lock`: 0.11.0. `README.md`, `docs/implementation-plan.md` (item 8), `docs/progress.md`.
+- Review fix (Codex on #52): `src/flashtap/voice.py` `sweep` walks every step of every template too (`STEP_SEEDS`, 6,000 per step: the higher steps pair each countable picture with every number to 10), so `flashtap voice build` makes the clips for lines only the engine's steps say ("Put 10 peppers in the basket."); `tests/unit/test_voice.py` checks steps from seeds outside the sweep add nothing.
 
 **Latest strata-python and strata-react; the answer queue from strata-react (0.10.1, branch `claude/project-thread-rx0f3j`)**
 
