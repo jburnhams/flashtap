@@ -15,6 +15,13 @@
 // counts as an answer, so it cannot make a state alone. Withdrawing it is reversible until the Undo
 // bar goes, like a strike.
 //
+// Speed is shown beside each skill (the typical time to a right first answer, and whether it is
+// getting quicker against their own earlier answers on the same kind of round) and never moves its
+// state: §10, speed is not mastery. A suspected mix-up (a misconception: wrong taps landing on the
+// option it predicts more often than luck would) holds its skills at Emerging, and the State cell
+// says which. The Mix-ups tab lists every misconception a round has offered, each as a hypothesis
+// with what it rests on and the round that would tell it from a slip.
+//
 // The Engagement tab is how they play, kept apart from what they know (§11): each kind of round
 // with how it went, the faces and the picks, and the patterns worth a look, each worded as what it
 // could be and what to try, never as a label about the learner.
@@ -27,7 +34,7 @@ import { Download, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { AlertDialog, AsyncButton, Button, ButtonLink, ChoiceGroup, DataTable, DataView, Dialog, EmptyState, Field, format, Input, Metric, MetricStrip, PageHeader, RowAction, Skeleton, Status, TableSkeleton, Tabs, TextLink, UndoBar, useAsyncAction, useExpanded, useLoad, useUndoable, type Column, type Tone, type Undoable } from 'strata-react'
-import { api, exportUrl, keys, SKILL_STATES, type Engagement, type EvidenceRow, type KindRow, type OverrideIn, type Profile, type SkillReport, type SkillState, type Told } from '../api'
+import { api, exportUrl, keys, SKILL_STATES, type Engagement, type EvidenceRow, type Fluency, type KindRow, type MisconceptionReport, type MisconceptionStatus, type OverrideIn, type Profile, type SkillReport, type SkillState, type Told } from '../api'
 import { modeLabels } from './PlayScreen'
 
 export const stateWords: Record<SkillState, { word: string; tone: Tone }> = {
@@ -42,8 +49,18 @@ export const stateWords: Record<SkillState, { word: string; tone: Tone }> = {
 const tabs = [
   { value: 'seen', label: 'Seen' },
   { value: 'all', label: 'All skills' },
+  { value: 'mixups', label: 'Mix-ups' },
   { value: 'engagement', label: 'Engagement' },
 ]
+
+export const mixupWords: Record<MisconceptionStatus, { word: string; tone: Tone }> = {
+  suspected: { word: 'Suspected', tone: 'warning' },
+  unclear: { word: 'Could be chance', tone: 'info' },
+  cleared: { word: 'Cleared', tone: 'success' },
+  not_seen: { word: 'Not seen', tone: 'neutral' },
+}
+
+const trendWords: Record<NonNullable<Fluency['trend']>, string> = { quicker: 'getting quicker', steady: 'about the same', slower: 'getting slower' }
 
 export const saysWords: Record<Told['says'], string> = { can: 'Can do it', not_yet: 'Not yet' }
 const observerWords: Record<Told['observer'], string> = { parent: 'a parent', teacher: 'a teacher' }
@@ -118,6 +135,8 @@ function Learner({ p }: { p: Profile }) {
         {tab =>
           tab === 'engagement' ? (
             <EngagementView e={p.engagement} name={name} />
+          ) : tab === 'mixups' ? (
+            <Mixups rows={p.misconceptions} name={name} />
           ) : (
             <Skills learner={p.learner.id} name={name} undoable={undoable} onTell={setTelling} rows={tab === 'all' ? p.skills : p.skills.filter(s => s.state !== 'unobserved' || s.told)} />
           )
@@ -130,6 +149,7 @@ function Learner({ p }: { p: Profile }) {
         {p.models.map(m => <p key={m.model}>{m.model}: {m.description}.</p>)}
         <p>Only a first answer counts. The states are labels drawn from those numbers; their thresholds are first guesses, to be fitted once there are real rounds to fit them to.</p>
         <p>What a grown-up says sets BKT's estimate when it is said, and the rounds after it move it on; it is never counted as an answer.</p>
+        <p>Speed is the typical time to a right first answer, from rounds early in a session, against their own earlier rounds of the same kind and step. It never changes a state: a slow right answer is still right.</p>
       </section>
     </>
   )
@@ -151,9 +171,30 @@ function ToldCell({ t }: { t: Told }) {
   )
 }
 
+/** The typical time, its spread and, once there are enough, how it is moving. */
+function SpeedCell({ f }: { f: Fluency }) {
+  const spread = f.used > 1 ? `${format.decimal(f.low)}–${format.decimal(f.high)}\u00a0s` : format.count(f.used, 'answer')
+  return (
+    <>
+      <span>{format.withUnit(f.seconds, 's', format.decimal)}</span>
+      <span className="block type-caption text-muted-foreground">{f.trend ? `${spread}, ${trendWords[f.trend]}` : spread}</span>
+    </>
+  )
+}
+
 const skillColumns: Column<SkillReport>[] = [
   { key: 'title', header: 'Skill', value: s => s.title, cell: s => <><span>{s.title}</span><span className="block type-caption text-muted-foreground">{s.strand}</span></> },
-  { key: 'state', header: 'State', value: s => rank(s.state), cell: s => <Status tone={stateWords[s.state].tone}>{stateWords[s.state].word}</Status> },
+  {
+    key: 'state',
+    header: 'State',
+    value: s => rank(s.state),
+    cell: s => (
+      <>
+        <Status tone={stateWords[s.state].tone}>{stateWords[s.state].word}</Status>
+        {s.suspected.length > 0 && <span className="block type-caption text-muted-foreground">Held back: {s.suspected.join(', ')}</span>}
+      </>
+    ),
+  },
   { key: 'known', header: 'Known (BKT)', numeric: true, value: s => estimate(s, 'bkt@1')?.p ?? null, cell: s => format.share(estimate(s, 'bkt@1')?.p) },
   {
     key: 'recent',
@@ -164,6 +205,15 @@ const skillColumns: Column<SkillReport>[] = [
     cell: s => s.estimates.filter(e => e.model === 'rule@1').map(r => `${Math.round(r.p * r.used)} of ${r.used}`),
   },
   { key: 'counted', header: 'Counted', numeric: true, value: s => s.counted, cell: s => (s.held ? `${format.integer(s.counted)} (+${format.integer(s.held)} not)` : format.integer(s.counted)) },
+  {
+    key: 'speed',
+    header: 'Speed',
+    numeric: true,
+    value: s => s.fluency?.seconds ?? null,
+    // Drawn only for a row with a value, so the fluency is there.
+    cell: s => <SpeedCell f={s.fluency as Fluency} />,
+    missing: 'Not timed yet',
+  },
   { key: 'last_seen', header: 'Last seen', value: s => (s.last_seen ? new Date(s.last_seen) : null), cell: s => format.dateTime(s.last_seen), missing: 'Never' },
 ]
 
@@ -236,7 +286,18 @@ function Evidence({ learner, skill, undoable }: { learner: string; skill: SkillR
     { key: 'at', header: 'When', sort: false, cell: r => format.dateTime(r.at) },
     { key: 'round', header: 'Round', sort: false, cell: r => <><span>{modeLabels[r.mode]}</span><span className="block type-caption text-muted-foreground">v{r.version}, {r.choices} choices, seed {r.seed}</span></> },
     { key: 'role', header: 'Role', sort: false, cell: r => roleWords[r.role] },
-    { key: 'answer', header: 'First answer', sort: false, cell: r => <>{r.answer} <span className="text-muted-foreground">({r.correct ? 'right' : 'not right'})</span></> },
+    {
+      key: 'answer',
+      header: 'First answer',
+      sort: false,
+      cell: r => (
+        <>
+          {r.answer} <span className="text-muted-foreground">({r.correct ? 'right' : 'not right'})</span>
+          {r.mistake && <span className="block type-caption text-muted-foreground">{r.mistake}</span>}
+        </>
+      ),
+    },
+    { key: 'seconds', header: 'Time', numeric: true, sort: false, cell: r => format.withUnit(r.seconds, 's', format.decimal) },
     {
       key: 'counted',
       header: 'Counted',
@@ -291,6 +352,35 @@ function Tell({ learner, name, skill, onClose }: { learner: string; name: string
       </form>
     </Dialog>
   )
+}
+
+/** What the wrong taps say, misconception by misconception, each as a hypothesis with the round that would check it. */
+function Mixups({ rows, name }: { rows: MisconceptionReport[]; name: string }) {
+  if (rows.length === 0) return <EmptyState title="No mix-ups to look for yet">Some rounds offer the answer a common mix-up would give (a 9 for six, a d for b). Once {name} has played some, what their wrong answers say shows here.</EmptyState>
+  return (
+    <ul className="grid gap-3" aria-label="Mix-ups">
+      {rows.map(m => (
+        <li key={m.id} className="grid gap-1 rounded-surface border border-border p-4">
+          <p className="flex flex-wrap items-center gap-2 type-body">
+            <span>{m.title}</span>
+            <Status tone={mixupWords[m.status].tone}>{mixupWords[m.status].word}</Status>
+          </p>
+          <p className="type-body-sm text-muted-foreground">{mixupText(m)}</p>
+          {open(m) && m.probe && <p className="type-body-sm text-muted-foreground">To check by hand: {m.probe}</p>}
+          {open(m) && m.checks && <p className="type-body-sm text-muted-foreground">Rounds Flashtap chooses for {name} offer this mix-up among the choices, to tell it from a slip.</p>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+const open = (m: MisconceptionReport) => m.status === 'suspected' || m.status === 'unclear'
+
+function mixupText(m: MisconceptionReport) {
+  const offered = `Offered in ${format.count(m.offered, 'round')}`
+  if (m.shown === 0) return `${offered}, never chosen.`
+  const shown = `${offered}; ${format.integer(m.shown)} of ${format.integer(m.wrong)} wrong answers were this one, where luck would give about ${format.decimal(m.expected)}`
+  return m.status === 'cleared' ? `${shown}. Right every time since, with it on offer.` : `${shown}. Last ${format.dateTime(m.last_shown)}.`
 }
 
 const facesText = (k: KindRow) => `${k.liked} \u{1F600} · ${k.okay} \u{1F610} · ${k.disliked} \u{1F641}`

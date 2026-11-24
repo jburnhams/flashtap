@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { expectOneFilledButton } from 'strata-react/testing'
-import { deleteFails, profileError, profileQuiet, strikeFails, tellFails, withdrawFails } from '../../src/mocks/handlers'
+import { deleteFails, profileError, profileQuiet, profileUnchecked, strikeFails, tellFails, withdrawFails } from '../../src/mocks/handlers'
 import { act, openApp, screen, waitFor, within } from '../utils/render'
 import { mock, server } from '../utils/server'
 
@@ -185,6 +185,54 @@ describe('A learner', () => {
     expect(within(kinds).getByRole('row', { name: /Listen/ })).toHaveTextContent('0 of 2') // offered, never played
     expect(screen.getByText('Letters: rated with the sad face 2 of 3 times.')).toBeInTheDocument()
     expect(screen.getAllByText(/^Could be:/)).toHaveLength(2)
+  })
+
+  it('shows how quick each skill is, and a skill held back by a suspected mix-up, without moving either estimate', async () => {
+    openApp(`/learners/${FOX}`)
+    const table = await screen.findByRole('grid', { name: 'Skills' })
+    const counting = within(table).getByRole('row', { name: /Count a set of things/ })
+    expect(within(counting).getByText(/^3\.4\ss$/)).toBeInTheDocument()
+    expect(within(counting).getByText(/2\.9–4\.2\ss, getting quicker/)).toBeInTheDocument()
+    const numerals = within(table).getByRole('row', { name: /Find the numeral for a spoken number/ })
+    expect(within(numerals).getByText('Emerging')).toBeInTheDocument()
+    expect(within(numerals).getByText('Held back: Confuses 6 and 9')).toBeInTheDocument()
+    expect(within(table).getByRole('row', { name: /See how many without counting/ })).toHaveTextContent(/4\.8\ss1\sanswer/)
+    expect(within(table).getAllByText('Not timed yet').length).toBeGreaterThan(0)
+  })
+
+  it('says what each wrong answer was and how long each took', async () => {
+    openApp(`/learners/${FOX}?open=maths.counting.objects`)
+    const rounds = await screen.findByRole('grid', { name: /Rounds that touched/ })
+    expect(within(rounds).getByText('a number close to it')).toBeInTheDocument()
+    expect(within(rounds).getByText(/^7\.4\ss$/)).toBeInTheDocument()
+  })
+
+  it('lists the mix-ups as hypotheses, each with what it rests on and how to check it', async () => {
+    const { user, router } = openApp(`/learners/${FOX}`)
+    await user.click(await screen.findByRole('tab', { name: 'Mix-ups' }))
+    expect(router.state.location.search).toBe('?show=mixups')
+    const list = screen.getByRole('list', { name: 'Mix-ups' })
+    const items = within(list).getAllByRole('listitem')
+    expect(items.map(i => within(i).getByText(/^(Suspected|Could be chance|Cleared|Not seen)$/).textContent)).toEqual(['Suspected', 'Could be chance', 'Cleared', 'Not seen'])
+    expect(items[0]).toHaveTextContent(/Offered in 6\srounds; 4 of 4 wrong answers were this one, where luck would give about 1\.3\. Last /)
+    expect(items[0]).toHaveTextContent(/To check by hand: 6 and 9 both offered/)
+    expect(items[0]).toHaveTextContent(/Rounds Flashtap chooses for Fox offer this mix-up among the choices/)
+    expect(items[2]).toHaveTextContent(/Right every time since, with it on offer\./)
+    expect(items[2]).not.toHaveTextContent(/To check/)
+    expect(items[3]).toHaveTextContent(/Offered in 2\srounds, never chosen\./)
+  })
+
+  it('does not claim the rounds check a mix-up no kind of round can offer', async () => {
+    server.use(profileUnchecked)
+    openApp(`/learners/${FOX}?show=mixups`)
+    const items = within(await screen.findByRole('list', { name: 'Mix-ups' })).getAllByRole('listitem')
+    expect(items[1]).toHaveTextContent(/To check by hand:/)
+    expect(items[1]).not.toHaveTextContent(/Rounds Flashtap chooses/)
+  })
+
+  it('says there is nothing to look for yet on the Mix-ups tab of a new learner', async () => {
+    openApp(`/learners/${OWL}?show=mixups`)
+    expect(await screen.findByText('No mix-ups to look for yet')).toBeInTheDocument()
   })
 
   it('says nothing has been played yet on the Engagement tab of a new learner', async () => {

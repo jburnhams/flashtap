@@ -101,7 +101,7 @@ def test_an_attempt_at_a_step_is_judged_on_the_round_at_that_step(client):
     assert client.post("/api/attempts", json=attempt).json()["first_correct"] is True
     assert client.post("/api/attempts", json={**attempt, "level": 1}).status_code == 409  # the same event, changed
     log = client.get(f"/api/learners/{fox}/export").json()
-    assert log["format"] == "flashtap-learner@5"
+    assert log["format"] == "flashtap-learner@6"
     assert [e["level"] for e in log["events"]] == [2]
 
 
@@ -251,7 +251,7 @@ def test_engine_sessions_next_and_replay(client):
     r = client.post("/api/v1/sessions", json={"learner_id": fox})
     assert r.status_code == 201
     s = r.json()
-    assert s["policy"] == "utility@4"
+    assert s["policy"] == "utility@5"
     assert s["config"] == {
         "choices": 3,
         "tries": 1,
@@ -349,7 +349,7 @@ def test_choices_picks_ratings_and_overrides_over_http(client):
     out = client.post("/api/v1/evaluations/replay", json={"learner_id": fox}).json()
     assert (out["reproduced"], out["differences"]) == (out["decisions"], [])
     export = client.get(f"/api/learners/{fox}/export").json()
-    assert export["format"] == "flashtap-learner@5"
+    assert export["format"] == "flashtap-learner@6"
     assert len(export["ratings"]) == 1
     assert len(export["overrides"]) == 1
 

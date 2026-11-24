@@ -357,7 +357,7 @@ def test_profile_export_and_evidence_rows(db_session: Session, fox: str) -> None
     assert p.struck == 0
     assert [m.model for m in p.models] == ["bkt@1", "rule@1"]
     out = store.export(db_session, fox, SKILLS, at=T0)
-    assert out.format == "flashtap-learner@5"
+    assert out.format == "flashtap-learner@6"
     assert out.decisions == []
     assert out.sessions[0].policy is None
     assert len(out.events) == 2

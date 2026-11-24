@@ -290,3 +290,7 @@ export const tellFails = http.post(at(`${paths.overrides}/:id/overrides`), down)
 export const withdrawFails = http.post(at(`${paths.overrides}/:id/overrides/:override/withdraw`), down)
 /** Fox with nothing in how they play that stands out. */
 export const profileQuiet = http.get(at(`${paths.learners}/:id/profile`), () => HttpResponse.json({ ...foxProfile, engagement: { ...foxProfile.engagement, hypotheses: [] } }))
+/** Fox with a mix-up that could be luck and that no kind of round can offer yet, so nothing checks it but a grown-up. */
+export const profileUnchecked = http.get(at(`${paths.learners}/:id/profile`), () =>
+  HttpResponse.json({ ...foxProfile, misconceptions: foxProfile.misconceptions.map(m => (m.status === 'unclear' ? { ...m, checks: false } : m)) }),
+)

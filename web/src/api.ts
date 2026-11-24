@@ -52,6 +52,11 @@ export type Estimate = Schema<'Estimate'>
 export type SkillReport = Schema<'SkillReport'>
 /** `GET /api/learners/{id}/profile`. */
 export type Profile = Schema<'Profile'>
+/** How quickly right first answers come on a skill (src/flashtap/learners/fluency.py); never part of its state. */
+export type Fluency = Schema<'Fluency'>
+/** A misconception as the learner's wrong taps stand (src/flashtap/learners/misconceptions.py): a hypothesis. */
+export type MisconceptionReport = Schema<'MisconceptionReport'>
+export type MisconceptionStatus = Schema<'MisconceptionStatus'>
 /** `GET /api/learners/{id}/skills/{skill}/evidence`: one attempt as it bears on one skill, newest first. */
 export type EvidenceRow = Schema<'EvidenceRow'>
 /** `POST /api/attempts`: one round answered. The server rebuilds the round and judges `first_answer` itself. */

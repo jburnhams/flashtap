@@ -65,6 +65,20 @@ class Event(BaseModel):
     received_at: AwareDatetime | None = None
     struck_at: AwareDatetime | None = None
     decision_id: str | None = None  # the engine's choice this round answered (POST /api/v1/sessions/{id}/next)
+    # What the first answer showed (0.12.0, mistakes.py): the generator of the option tapped ("" when right) and each
+    # misconception the round's wrong options could show, with their ids. None for a placing round or an older attempt.
+    distractor: str | None = None
+    traps: dict[str, list[str]] | None = None
+
+    @property
+    def seconds(self) -> float:
+        """From showing the round to the first answer, by the device's clock (both times come from it)."""
+        return (self.answered_at - self.presented_at).total_seconds()
+
+    def showed(self) -> str | None:
+        """The misconception the first answer showed, if the round recorded one under it."""
+        option = self.first_answer.get("option")
+        return next((m for m, ids in sorted((self.traps or {}).items()) if option in ids), None)
 
 
 Says = Literal["can", "not_yet"]

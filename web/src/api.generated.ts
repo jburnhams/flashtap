@@ -485,11 +485,18 @@ export interface components {
              * @default 0
              */
             liked: number;
+            /**
+             * Misconception
+             * @default 0
+             */
+            misconception: number;
             mode: components["schemas"]["Mode"];
             /** P Right */
             p_right: number;
             /** Probability */
             probability: number;
+            /** Probe */
+            probe?: string | null;
             /** Repetition */
             repetition: number;
             /** Retention */
@@ -606,6 +613,8 @@ export interface components {
             };
             /** Decision Id */
             decision_id?: string | null;
+            /** Distractor */
+            distractor?: string | null;
             /** Event Id */
             event_id: string;
             /** First Answer */
@@ -641,6 +650,10 @@ export interface components {
             struck?: string | null;
             /** Struck At */
             struck_at?: string | null;
+            /** Traps */
+            traps?: {
+                [key: string]: string[];
+            } | null;
             /** Tries */
             tries: number;
             /** Version */
@@ -666,6 +679,8 @@ export interface components {
             counted: boolean;
             /** Event Id */
             event_id: string;
+            /** Mistake */
+            mistake: string;
             mode: components["schemas"]["Mode"];
             /**
              * Outcome
@@ -673,6 +688,8 @@ export interface components {
              */
             outcome: "right" | "missed" | "left";
             role: components["schemas"]["QRole"];
+            /** Seconds */
+            seconds: number;
             /** Seed */
             seed: number;
             /** Struck */
@@ -702,10 +719,10 @@ export interface components {
             exported_at: string;
             /**
              * Format
-             * @default flashtap-learner@5
+             * @default flashtap-learner@6
              * @enum {string}
              */
-            format: "flashtap-learner@1" | "flashtap-learner@2" | "flashtap-learner@3" | "flashtap-learner@4" | "flashtap-learner@5";
+            format: "flashtap-learner@1" | "flashtap-learner@2" | "flashtap-learner@3" | "flashtap-learner@4" | "flashtap-learner@5" | "flashtap-learner@6";
             learner: components["schemas"]["LearnerRow"];
             /** Models */
             models: components["schemas"]["ModelInfo"][];
@@ -751,6 +768,19 @@ export interface components {
             session_rounds: number;
             /** Tries */
             tries: number;
+        };
+        /** Fluency */
+        Fluency: {
+            /** High */
+            high: number;
+            /** Low */
+            low: number;
+            /** Seconds */
+            seconds: number;
+            /** Trend */
+            trend: ("quicker" | "steady" | "slower") | null;
+            /** Used */
+            used: number;
         };
         /** GPCRow */
         GPCRow: {
@@ -876,6 +906,8 @@ export interface components {
             policy: string;
             /** Probability */
             probability: number;
+            /** Probe */
+            probe?: string | null;
             /**
              * Rate
              * @default false
@@ -899,6 +931,40 @@ export interface components {
          * @enum {string}
          */
         Mechanic: "select_one" | "fill_missing" | "brief_exposure" | "audio_respond" | "give_n" | "sequence" | "match_pairs" | "sort";
+        /**
+         * MisconceptionReport
+         * @description One misconception as the evidence stands, for a grown-up: a hypothesis with what it rests on.
+         */
+        MisconceptionReport: {
+            /** Checks */
+            checks: boolean;
+            /** Expected */
+            expected: number;
+            /** Id */
+            id: string;
+            /** Last Shown */
+            last_shown: string | null;
+            /** Offered */
+            offered: number;
+            /** Probe */
+            probe: string;
+            /** Shown */
+            shown: number;
+            /** Signs */
+            signs: string;
+            /** Skills */
+            skills: string[];
+            status: components["schemas"]["MisconceptionStatus"];
+            /** Title */
+            title: string;
+            /** Wrong */
+            wrong: number;
+        };
+        /**
+         * MisconceptionStatus
+         * @enum {string}
+         */
+        MisconceptionStatus: "not_seen" | "unclear" | "suspected" | "cleared";
         /**
          * Mode
          * @description A kind of round: one template each, plus Mixed. The first five are the original rounds (their ids are kept, so
@@ -1012,6 +1078,8 @@ export interface components {
             /** Level */
             level?: number | null;
             mode: components["schemas"]["Mode"];
+            /** Probe */
+            probe?: string | null;
             /** Rationale */
             rationale: components["schemas"]["Why"][];
             /** Seed */
@@ -1148,6 +1216,8 @@ export interface components {
         Profile: {
             engagement: components["schemas"]["Engagement"];
             learner: components["schemas"]["LearnerRow"];
+            /** Misconceptions */
+            misconceptions: components["schemas"]["MisconceptionReport"][];
             /** Models */
             models: components["schemas"]["ModelInfo"][];
             /** Sessions */
@@ -1228,7 +1298,7 @@ export interface components {
             learner_id?: string | null;
             /**
              * Policy
-             * @default utility@4
+             * @default utility@5
              */
             policy: string;
             simulated?: components["schemas"]["SimulatedIn"] | null;
@@ -1405,6 +1475,7 @@ export interface components {
             domain: string;
             /** Estimates */
             estimates: components["schemas"]["Estimate"][];
+            fluency: components["schemas"]["Fluency"] | null;
             /** Held */
             held: number;
             /** Last Seen */
@@ -1418,9 +1489,11 @@ export interface components {
             state: components["schemas"]["State"];
             /** Strand */
             strand: string;
+            /** Suspected */
+            suspected: string[];
             /** Title */
             title: string;
-            told?: components["schemas"]["Told"] | null;
+            told: components["schemas"]["Told"] | null;
         };
         /** SkillRole */
         SkillRole: {
@@ -1549,7 +1622,7 @@ export interface components {
          * @description Rationale codes (§15 "validated item + rationale codes"): what a decision is for.
          * @enum {string}
          */
-        Why: "placement_probe" | "introduce" | "practise" | "spaced_review" | "consolidate" | "diagnostic_contrast" | "easier_after_misses" | "exploration" | "break_due" | "frustration_break" | "session_cap_rounds" | "session_cap_minutes" | "offered_choice" | "liked" | "step_up" | "step_down";
+        Why: "placement_probe" | "introduce" | "practise" | "spaced_review" | "consolidate" | "diagnostic_contrast" | "easier_after_misses" | "exploration" | "break_due" | "frustration_break" | "session_cap_rounds" | "session_cap_minutes" | "offered_choice" | "liked" | "step_up" | "step_down" | "misconception_probe";
     };
     responses: never;
     parameters: never;

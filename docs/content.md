@@ -56,7 +56,7 @@ edges = [
 ]
 ```
 
-Relations (spec §3): `prerequisite_strong` (normally necessary first; no cycles), `facilitates`, `part_of` (taxonomy; no cycles), `related_to`, `confounded_by` (the other skill can explain errors on this one, such as numeral recognition in a count-and-tap round). Curriculum mapping is an objective's `skills`; a misconception names its `skills`; mechanic relations (`teaches`, `assesses_*`) arrive with the mechanics (plan PR 3).
+Relations (spec §3): `prerequisite_strong` (normally necessary first; no cycles), `facilitates`, `part_of` (taxonomy; no cycles), `related_to`, `confounded_by` (the other skill can explain errors on this one, such as numeral recognition in a count-and-tap round). Curriculum mapping is an objective's `skills`; a misconception names its `skills` (a misconception's id is also named in `src/flashtap/mistakes.py` when a round's wrong option can show it: renaming one there means keeping the old id for the attempts that stored it); mechanic relations (`teaches`, `assesses_*`) arrive with the mechanics (plan PR 3).
 
 Words: `segments` splits the spelling into graphemes from the GPC inventory (`"oo:uː"` where a grapheme has two sounds); `onset` gives only the first grapheme when a later one is outside the inventory (horse); neither when the first sound is outside it too (aeroplane), which keeps the word out of sound rounds. Decodability after each set is computed from the segments. Split digraphs (`a_e`) need a field of their own when Phase 5 arrives.
 

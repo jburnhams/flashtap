@@ -217,6 +217,11 @@
       "title": "Liked",
       "type": "number"
      },
+     "misconception": {
+      "default": 0.0,
+      "title": "Misconception",
+      "type": "number"
+     },
      "mode": {
       "$ref": "#/components/schemas/Mode"
      },
@@ -227,6 +232,17 @@
      "probability": {
       "title": "Probability",
       "type": "number"
+     },
+     "probe": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Probe"
      },
      "repetition": {
       "title": "Repetition",
@@ -491,6 +507,17 @@
       ],
       "title": "Decision Id"
      },
+     "distractor": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Distractor"
+     },
      "event_id": {
       "title": "Event Id",
       "type": "string"
@@ -586,6 +613,23 @@
       ],
       "title": "Struck At"
      },
+     "traps": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Traps"
+     },
      "tries": {
       "title": "Tries",
       "type": "integer"
@@ -644,6 +688,10 @@
       "title": "Event Id",
       "type": "string"
      },
+     "mistake": {
+      "title": "Mistake",
+      "type": "string"
+     },
      "mode": {
       "$ref": "#/components/schemas/Mode"
      },
@@ -658,6 +706,10 @@
      },
      "role": {
       "$ref": "#/components/schemas/QRole"
+     },
+     "seconds": {
+      "title": "Seconds",
+      "type": "number"
      },
      "seed": {
       "title": "Seed",
@@ -694,7 +746,9 @@
      "why",
      "struck",
      "tries",
-     "outcome"
+     "outcome",
+     "seconds",
+     "mistake"
     ],
     "title": "EvidenceRow",
     "type": "object"
@@ -726,13 +780,14 @@
       "type": "string"
      },
      "format": {
-      "default": "flashtap-learner@5",
+      "default": "flashtap-learner@6",
       "enum": [
        "flashtap-learner@1",
        "flashtap-learner@2",
        "flashtap-learner@3",
        "flashtap-learner@4",
-       "flashtap-learner@5"
+       "flashtap-learner@5",
+       "flashtap-learner@6"
       ],
       "title": "Format",
       "type": "string"
@@ -896,6 +951,51 @@
      "rate_every"
     ],
     "title": "FlashtapSettings",
+    "type": "object"
+   },
+   "Fluency": {
+    "properties": {
+     "high": {
+      "title": "High",
+      "type": "number"
+     },
+     "low": {
+      "title": "Low",
+      "type": "number"
+     },
+     "seconds": {
+      "title": "Seconds",
+      "type": "number"
+     },
+     "trend": {
+      "anyOf": [
+       {
+        "enum": [
+         "quicker",
+         "steady",
+         "slower"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Trend"
+     },
+     "used": {
+      "title": "Used",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "seconds",
+     "low",
+     "high",
+     "used",
+     "trend"
+    ],
+    "title": "Fluency",
     "type": "object"
    },
    "GPCRow": {
@@ -1248,6 +1348,17 @@
       "title": "Probability",
       "type": "number"
      },
+     "probe": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Probe"
+     },
      "rate": {
       "default": false,
       "title": "Rate",
@@ -1327,6 +1438,95 @@
      "sort"
     ],
     "title": "Mechanic",
+    "type": "string"
+   },
+   "MisconceptionReport": {
+    "description": "One misconception as the evidence stands, for a grown-up: a hypothesis with what it rests on.",
+    "properties": {
+     "checks": {
+      "title": "Checks",
+      "type": "boolean"
+     },
+     "expected": {
+      "title": "Expected",
+      "type": "number"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "last_shown": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Shown"
+     },
+     "offered": {
+      "title": "Offered",
+      "type": "integer"
+     },
+     "probe": {
+      "title": "Probe",
+      "type": "string"
+     },
+     "shown": {
+      "title": "Shown",
+      "type": "integer"
+     },
+     "signs": {
+      "title": "Signs",
+      "type": "string"
+     },
+     "skills": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Skills",
+      "type": "array"
+     },
+     "status": {
+      "$ref": "#/components/schemas/MisconceptionStatus"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     },
+     "wrong": {
+      "title": "Wrong",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "id",
+     "title",
+     "signs",
+     "probe",
+     "checks",
+     "skills",
+     "status",
+     "offered",
+     "wrong",
+     "shown",
+     "expected",
+     "last_shown"
+    ],
+    "title": "MisconceptionReport",
+    "type": "object"
+   },
+   "MisconceptionStatus": {
+    "enum": [
+     "not_seen",
+     "unclear",
+     "suspected",
+     "cleared"
+    ],
+    "title": "MisconceptionStatus",
     "type": "string"
    },
    "Mode": {
@@ -1647,6 +1847,17 @@
      },
      "mode": {
       "$ref": "#/components/schemas/Mode"
+     },
+     "probe": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Probe"
      },
      "rationale": {
       "items": {
@@ -1977,6 +2188,13 @@
      "learner": {
       "$ref": "#/components/schemas/LearnerRow"
      },
+     "misconceptions": {
+      "items": {
+       "$ref": "#/components/schemas/MisconceptionReport"
+      },
+      "title": "Misconceptions",
+      "type": "array"
+     },
      "models": {
       "items": {
        "$ref": "#/components/schemas/ModelInfo"
@@ -2006,6 +2224,7 @@
      "struck",
      "models",
      "skills",
+     "misconceptions",
      "engagement"
     ],
     "title": "Profile",
@@ -2130,7 +2349,7 @@
       "title": "Learner Id"
      },
      "policy": {
-      "default": "utility@4",
+      "default": "utility@5",
       "title": "Policy",
       "type": "string"
      },
@@ -2584,6 +2803,16 @@
       "title": "Estimates",
       "type": "array"
      },
+     "fluency": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Fluency"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "held": {
       "title": "Held",
       "type": "integer"
@@ -2622,6 +2851,13 @@
       "title": "Strand",
       "type": "string"
      },
+     "suspected": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Suspected",
+      "type": "array"
+     },
      "title": {
       "title": "Title",
       "type": "string"
@@ -2648,7 +2884,10 @@
      "right",
      "held",
      "mechanics",
-     "last_seen"
+     "last_seen",
+     "told",
+     "fluency",
+     "suspected"
     ],
     "title": "SkillReport",
     "type": "object"
@@ -2995,7 +3234,8 @@
      "offered_choice",
      "liked",
      "step_up",
-     "step_down"
+     "step_down",
+     "misconception_probe"
     ],
     "title": "Why",
     "type": "string"

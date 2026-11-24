@@ -18,6 +18,10 @@ export const AllSkills: Story = { render: () => <AppAt route={`/learners/${FOX}?
 /** A skill opened to the rounds behind it: counted or not, and why. */
 export const EvidenceOpen: Story = { render: () => <AppAt route={`/learners/${FOX}?open=maths.counting.objects`} /> }
 export const EvidenceLoading: Story = { render: () => <AppAt route={`/learners/${FOX}?open=maths.counting.objects`} />, beforeEach: ({ msw }) => msw.use(evidenceLoading) }
+/** What the wrong taps say: each misconception a round has offered, as a hypothesis with how to check it. */
+export const Mixups: Story = { render: () => <AppAt route={`/learners/${FOX}?show=mixups`} /> }
+/** Nothing played yet, so no mix-up to look for. */
+export const MixupsNothingYet: Story = { render: () => <AppAt route={`/learners/${OWL}?show=mixups`} /> }
 /** How they play: each kind with its numbers, the faces and the picks, and the patterns worth a look as hypotheses. */
 export const Engagement: Story = { render: () => <AppAt route={`/learners/${FOX}?show=engagement`} /> }
 /** Nothing played yet, so nothing to say about how. */

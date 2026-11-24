@@ -2,7 +2,8 @@
 // seeded rounds into a scratch database, one was struck out, and `store.profile` and `evidence_rows`
 // were printed (cut to the skills seen plus three not seen). Regenerate by hand when the shapes
 // change. A grown-up's word on rhyming and the engagement block (kinds, faces, picks, patterns) were
-// written by hand in the server's shapes (0.8.0). Learners are invented (AGENTS.md rule 8).
+// written by hand in the server's shapes (0.8.0), as were the speeds, the mix-ups and what each wrong answer
+// was (0.12.0). Learners are invented (AGENTS.md rule 8).
 import type { EvidenceRow, LearnerRow, Profile } from '../api'
 
 export const FOX = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
@@ -48,7 +49,9 @@ export const foxProfile: Profile = {
       "held": 4,
       "mechanics": [],
       "last_seen": "2026-11-11T09:21:00Z",
-      "told": null
+      "told": null,
+      "fluency": null,
+      "suspected": []
     },
     {
       "skill": "literacy.phonemic.initial_sound",
@@ -62,7 +65,9 @@ export const foxProfile: Profile = {
       "held": 4,
       "mechanics": [],
       "last_seen": "2026-11-11T09:21:00Z",
-      "told": null
+      "told": null,
+      "fluency": null,
+      "suspected": []
     },
     {
       "skill": "literacy.gpc.initial_letter",
@@ -76,7 +81,9 @@ export const foxProfile: Profile = {
       "held": 4,
       "mechanics": [],
       "last_seen": "2026-11-11T09:21:00Z",
-      "told": null
+      "told": null,
+      "fluency": null,
+      "suspected": []
     },
     {
       "skill": "maths.counting.one_to_one",
@@ -105,7 +112,9 @@ export const foxProfile: Profile = {
         "give_n"
       ],
       "last_seen": "2026-11-08T09:12:00Z",
-      "told": { "id": "f0000000000000000000000000000002", "skill": "maths.counting.one_to_one", "says": "not_yet", "observer": "teacher", "note": "", "at": "2026-11-09T15:30:00Z", "withdrawn_at": null }
+      "told": { "id": "f0000000000000000000000000000002", "skill": "maths.counting.one_to_one", "says": "not_yet", "observer": "teacher", "note": "", "at": "2026-11-09T15:30:00Z", "withdrawn_at": null },
+      "fluency": null,
+      "suspected": []
     },
     {
       "skill": "maths.counting.objects",
@@ -134,7 +143,9 @@ export const foxProfile: Profile = {
         "select_one"
       ],
       "last_seen": "2026-11-05T09:09:00Z",
-      "told": null
+      "told": null,
+      "fluency": { "seconds": 3.4, "low": 2.9, "high": 4.2, "used": 8, "trend": "quicker" },
+      "suspected": []
     },
     {
       "skill": "maths.cardinality.last_number",
@@ -163,7 +174,9 @@ export const foxProfile: Profile = {
         "select_one"
       ],
       "last_seen": "2026-11-05T09:09:00Z",
-      "told": null
+      "told": null,
+      "fluency": null,
+      "suspected": []
     },
     {
       "skill": "maths.cardinality.give_n",
@@ -192,7 +205,9 @@ export const foxProfile: Profile = {
         "give_n"
       ],
       "last_seen": "2026-11-08T09:12:00Z",
-      "told": null
+      "told": null,
+      "fluency": null,
+      "suspected": []
     },
     {
       "skill": "maths.subitising.perceptual",
@@ -221,7 +236,9 @@ export const foxProfile: Profile = {
         "brief_exposure"
       ],
       "last_seen": "2026-11-08T09:17:00Z",
-      "told": null
+      "told": null,
+      "fluency": { "seconds": 4.8, "low": 4.8, "high": 4.8, "used": 1, "trend": null },
+      "suspected": []
     },
     {
       "skill": "maths.numerals.recognise",
@@ -252,7 +269,9 @@ export const foxProfile: Profile = {
         "sequence"
       ],
       "last_seen": "2026-11-11T09:23:00Z",
-      "told": null
+      "told": null,
+      "fluency": { "seconds": 2.6, "low": 2.1, "high": 3.5, "used": 8, "trend": "steady" },
+      "suspected": ["Confuses 6 and 9"]
     },
     {
       "skill": "maths.comparison.order",
@@ -281,7 +300,9 @@ export const foxProfile: Profile = {
         "sequence"
       ],
       "last_seen": "2026-11-11T09:23:00Z",
-      "told": null
+      "told": null,
+      "fluency": null,
+      "suspected": []
     },
     {
       "skill": "language.vocabulary.colours",
@@ -295,7 +316,9 @@ export const foxProfile: Profile = {
       "held": 0,
       "mechanics": [],
       "last_seen": null,
-      "told": null
+      "told": null,
+      "fluency": null,
+      "suspected": []
     },
     {
       "skill": "language.listening.story",
@@ -309,7 +332,9 @@ export const foxProfile: Profile = {
       "held": 0,
       "mechanics": [],
       "last_seen": null,
-      "told": null
+      "told": null,
+      "fluency": null,
+      "suspected": []
     },
     {
       "skill": "literacy.phonological.rhyme",
@@ -330,7 +355,67 @@ export const foxProfile: Profile = {
       "held": 0,
       "mechanics": [],
       "last_seen": null,
-      "told": { "id": "f0000000000000000000000000000001", "skill": "literacy.phonological.rhyme", "says": "can", "observer": "parent", "note": "Rhymes in songs at bath time", "at": "2026-11-10T18:00:00Z", "withdrawn_at": null }
+      "told": { "id": "f0000000000000000000000000000001", "skill": "literacy.phonological.rhyme", "says": "can", "observer": "parent", "note": "Rhymes in songs at bath time", "at": "2026-11-10T18:00:00Z", "withdrawn_at": null },
+      "fluency": null,
+      "suspected": []
+    }
+  ],
+  "misconceptions": [
+    {
+      "id": "maths.misconception.reversal_6_9",
+      "title": "Confuses 6 and 9",
+      "signs": "Taps 9 for six or 6 for nine, more than other numerals.",
+      "probe": "6 and 9 both offered, with other numerals as well.",
+      "checks": true,
+      "skills": ["maths.numerals.recognise", "maths.counting.objects"],
+      "status": "suspected",
+      "offered": 6,
+      "wrong": 4,
+      "shown": 4,
+      "expected": 1.33,
+      "last_shown": "2026-11-10T09:14:00Z"
+    },
+    {
+      "id": "maths.misconception.one_to_one_slip",
+      "title": "Skips or double-counts objects",
+      "signs": "The count is off by one or two, more often in scattered sets than in lines.",
+      "probe": "The same number in a line and scattered: right in the line, wrong when scattered.",
+      "checks": true,
+      "skills": ["maths.counting.one_to_one", "maths.counting.objects"],
+      "status": "unclear",
+      "offered": 12,
+      "wrong": 3,
+      "shown": 1,
+      "expected": 1.5,
+      "last_shown": "2026-11-02T09:00:00Z"
+    },
+    {
+      "id": "literacy.misconception.mirror_letters",
+      "title": "Confuses b, d, p and q",
+      "signs": "Errors cluster among letters that are rotations or reflections of each other.",
+      "probe": "b with d, p and q as the other choices, against b with unrelated letters.",
+      "checks": true,
+      "skills": ["literacy.letters.identify", "literacy.gpc.sound_from_grapheme"],
+      "status": "cleared",
+      "offered": 7,
+      "wrong": 2,
+      "shown": 2,
+      "expected": 0.67,
+      "last_shown": "2026-11-04T09:05:00Z"
+    },
+    {
+      "id": "maths.misconception.teen_reversal",
+      "title": "Reverses teen numerals (12 and 21)",
+      "signs": "Taps 21 for twelve: 'twelve' is heard ones first, but written tens first.",
+      "probe": "12 and 21 both offered.",
+      "checks": false,
+      "skills": ["maths.numerals.recognise"],
+      "status": "not_seen",
+      "offered": 2,
+      "wrong": 0,
+      "shown": 0,
+      "expected": 0,
+      "last_shown": null
     }
   ],
   "engagement": {
@@ -354,7 +439,8 @@ export const owlProfile: Profile = {
   learner: learners[1],
   sessions: 0,
   struck: 0,
-  skills: foxProfile.skills.map(s => ({ ...s, state: 'unobserved', estimates: [], counted: 0, right: 0, held: 0, mechanics: [], last_seen: null, told: null })),
+  skills: foxProfile.skills.map(s => ({ ...s, state: 'unobserved', estimates: [], counted: 0, right: 0, held: 0, mechanics: [], last_seen: null, told: null, fluency: null, suspected: [] })),
+  misconceptions: [],
   engagement: { kinds: [], hypotheses: [] },
 }
 
@@ -374,7 +460,9 @@ export const countingEvidence: EvidenceRow[] = [
     "why": "",
     "struck": false,
     "tries": 1,
-    "outcome": "right"
+    "outcome": "right",
+    "seconds": 3.1,
+    "mistake": ""
   },
   {
     "event_id": "00000000000000000000000000000009",
@@ -390,7 +478,9 @@ export const countingEvidence: EvidenceRow[] = [
     "why": "",
     "struck": false,
     "tries": 1,
-    "outcome": "right"
+    "outcome": "right",
+    "seconds": 2.8,
+    "mistake": ""
   },
   {
     "event_id": "00000000000000000000000000000008",
@@ -406,7 +496,9 @@ export const countingEvidence: EvidenceRow[] = [
     "why": "",
     "struck": false,
     "tries": 1,
-    "outcome": "right"
+    "outcome": "right",
+    "seconds": 4.2,
+    "mistake": ""
   },
   {
     "event_id": "00000000000000000000000000000007",
@@ -422,7 +514,9 @@ export const countingEvidence: EvidenceRow[] = [
     "why": "",
     "struck": false,
     "tries": 1,
-    "outcome": "right"
+    "outcome": "right",
+    "seconds": 3.5,
+    "mistake": ""
   },
   {
     "event_id": "00000000000000000000000000000006",
@@ -438,7 +532,9 @@ export const countingEvidence: EvidenceRow[] = [
     "why": "",
     "struck": false,
     "tries": 1,
-    "outcome": "right"
+    "outcome": "right",
+    "seconds": 3.0,
+    "mistake": ""
   },
   {
     "event_id": "00000000000000000000000000000005",
@@ -454,7 +550,9 @@ export const countingEvidence: EvidenceRow[] = [
     "why": "struck out: someone else was playing",
     "struck": true,
     "tries": 1,
-    "outcome": "right"
+    "outcome": "right",
+    "seconds": 3.3,
+    "mistake": ""
   },
   {
     "event_id": "00000000000000000000000000000004",
@@ -470,7 +568,9 @@ export const countingEvidence: EvidenceRow[] = [
     "why": "",
     "struck": false,
     "tries": 1,
-    "outcome": "right"
+    "outcome": "right",
+    "seconds": 4.6,
+    "mistake": ""
   },
   {
     "event_id": "00000000000000000000000000000003",
@@ -486,7 +586,9 @@ export const countingEvidence: EvidenceRow[] = [
     "why": "",
     "struck": false,
     "tries": 1,
-    "outcome": "right"
+    "outcome": "right",
+    "seconds": 5.2,
+    "mistake": ""
   },
   {
     "event_id": "00000000000000000000000000000002",
@@ -502,7 +604,9 @@ export const countingEvidence: EvidenceRow[] = [
     "why": "",
     "struck": false,
     "tries": 1,
-    "outcome": "right"
+    "outcome": "right",
+    "seconds": 6.1,
+    "mistake": ""
   },
   {
     "event_id": "00000000000000000000000000000001",
@@ -518,6 +622,8 @@ export const countingEvidence: EvidenceRow[] = [
     "why": "could be Find the numeral for a spoken number, not yet shown",
     "struck": false,
     "tries": 2,
-    "outcome": "right"
+    "outcome": "right",
+    "seconds": 7.4,
+    "mistake": "a number close to it"
   }
 ]

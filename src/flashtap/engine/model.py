@@ -30,6 +30,11 @@ A grown-up's override (`evidence.Told`) sets a skill's estimate when it was made
 its own, so the graph no longer fills it in; "can do it" lifts its unseen prerequisites as a right answer would, and
 "not yet" caps its unseen dependents as a miss would (§13: "rapid acceleration, regression and manual overrides").
 
+**Misconceptions** (`learners/misconceptions.py`): each attempt's traps are folded into one tally per misconception
+(`mistakes`), the same fold the Learner screen uses, so the scheduler can check a suspected one with a round that
+offers its trap. They move no estimate: the answers were already counted as wrong. Nor does speed: how quickly a
+learner answers is reported (`learners/fluency.py`) and never read here (§10).
+
 Which answers count, and for which skill, is `evidence.judge`, shared with the Learner screen, so the engine and the
 grown-up's report never count differently. The fold is incremental and ordered (`evidence.ordered`), so the same log
 always gives the same knowledge, which a replay of the engine's decisions relies on (`replay.py`).
@@ -45,6 +50,8 @@ from flashtap.content import Registry
 from flashtap.content.model import Relation
 from flashtap.learners.estimators import PLACE_GUESS
 from flashtap.learners.evidence import TOLD_P, Event, Told, judge, ordered
+from flashtap.learners.misconceptions import Tally
+from flashtap.learners.misconceptions import observe as tally
 from flashtap.mechanics import PLACE, Mechanic, Mode
 
 DAY = 86400.0
@@ -168,6 +175,7 @@ class Knowledge:
     shown: set[str] = field(default_factory=set[str])
     counted: int = 0  # counted answers over every skill
     stairs: dict[Mode, Stair] = field(default_factory=dict[Mode, Stair])  # per kind, once played at a step
+    mistakes: dict[str, Tally] = field(default_factory=dict[str, Tally])  # per misconception a round has offered
 
     def state(self, skill: str) -> SkillState:
         s = self.skills.get(skill)
@@ -184,6 +192,7 @@ class Knowledge:
         return known * (1 - self.params.slip) + (1 - known) * guess(options)
 
     def observe(self, e: Event) -> None:
+        tally(self.mistakes, e)
         if e.level is not None and e.struck is None:
             mode = Mode(e.mode)
             steps = len(rounds.TEMPLATES[mode].levels)
