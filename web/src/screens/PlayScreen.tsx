@@ -67,6 +67,18 @@ export const modeLabels: Record<Mode, string> = {
   capitals: 'Capitals',
   sort_sounds: 'Sort by sound',
   sounds: 'Sounds',
+  hear_find: 'Hear and find',
+  colour_box: 'Colour box',
+  shape_box: 'Shape box',
+  which_group: 'Which group',
+  quick_dots: 'Quick dots',
+  one_more: 'One more, one less',
+  biggest: 'Biggest number',
+  number_card: 'Number card',
+  small_letters: 'Small letters',
+  letter_box: 'Letter box',
+  same_sound: 'Same first sound',
+  first_sounds: 'First sounds',
   mixed: 'Mixed',
 }
 
@@ -538,6 +550,7 @@ function Arrange({ round, onNext, onAnswered, onRated }: { round: Round; onNext:
   return (
     <section aria-labelledby="prompt" className="grid gap-6">
       <RoundHeader round={round} over={done ? state : null} onNext={onNext} />
+      {round.show && <Show round={round} />}
       <PlaceBoard
         label="Pictures and places"
         pieces={round.pieces}

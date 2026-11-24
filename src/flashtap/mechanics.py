@@ -49,6 +49,19 @@ class Mode(StrEnum):
     CAPITALS = "capitals"
     SORT_SOUNDS = "sort_sounds"
     SOUNDS = "sounds"
+    # Transfer kinds (0.13.0): held out of practice, each a second form of a skill another kind practises
+    HEAR_FIND = "hear_find"
+    COLOUR_BOX = "colour_box"
+    SHAPE_BOX = "shape_box"
+    WHICH_GROUP = "which_group"
+    QUICK_DOTS = "quick_dots"
+    ONE_MORE = "one_more"
+    BIGGEST = "biggest"
+    NUMBER_CARD = "number_card"
+    SMALL_LETTERS = "small_letters"
+    LETTER_BOX = "letter_box"
+    SAME_SOUND = "same_sound"
+    FIRST_SOUNDS = "first_sounds"
     MIXED = "mixed"
 
 

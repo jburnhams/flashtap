@@ -599,7 +599,8 @@ class Export(BaseModel):
     # @2 (0.6.0) adds the engine's decisions and each session's policy; @3 (0.7.0) each attempt's and decision's
     # content packs; @4 (0.8.0) ratings, a grown-up's overrides, and choices with their picks; @5 (0.11.0) each
     # attempt's and decision's step of difficulty; @6 (0.12.0) each attempt's distractor and traps, each decision's
-    # probe, and each skill's fluency and suspected misconceptions. Older files still read, with none of what they lack.
+    # probe, and each skill's fluency and suspected misconceptions; @7 (0.13.0) each skill's transfer evidence, and
+    # generalised read from it. Older files still read, with none of what they lack.
     format: Literal[
         "flashtap-learner@1",
         "flashtap-learner@2",
@@ -607,7 +608,8 @@ class Export(BaseModel):
         "flashtap-learner@4",
         "flashtap-learner@5",
         "flashtap-learner@6",
-    ] = "flashtap-learner@6"
+        "flashtap-learner@7",
+    ] = "flashtap-learner@7"
     exported_at: datetime
     app_version: str
     learner: LearnerRow

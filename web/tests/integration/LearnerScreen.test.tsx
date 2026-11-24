@@ -196,6 +196,7 @@ describe('A learner', () => {
     const numerals = within(table).getByRole('row', { name: /Find the numeral for a spoken number/ })
     expect(within(numerals).getByText('Emerging')).toBeInTheDocument()
     expect(within(numerals).getByText('Held back: Confuses 6 and 9')).toBeInTheDocument()
+    expect(within(counting).getByText('Which group: 1 of 1 right')).toBeInTheDocument() // its transfer check so far
     expect(within(table).getByRole('row', { name: /See how many without counting/ })).toHaveTextContent(/4\.8\ss1\sanswer/)
     expect(within(table).getAllByText('Not timed yet').length).toBeGreaterThan(0)
   })

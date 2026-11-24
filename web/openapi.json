@@ -780,14 +780,15 @@
       "type": "string"
      },
      "format": {
-      "default": "flashtap-learner@6",
+      "default": "flashtap-learner@7",
       "enum": [
        "flashtap-learner@1",
        "flashtap-learner@2",
        "flashtap-learner@3",
        "flashtap-learner@4",
        "flashtap-learner@5",
-       "flashtap-learner@6"
+       "flashtap-learner@6",
+       "flashtap-learner@7"
       ],
       "title": "Format",
       "type": "string"
@@ -910,6 +911,18 @@
        "capitals",
        "sort_sounds",
        "sounds",
+       "hear_find",
+       "colour_box",
+       "shape_box",
+       "which_group",
+       "quick_dots",
+       "one_more",
+       "biggest",
+       "number_card",
+       "small_letters",
+       "letter_box",
+       "same_sound",
+       "first_sounds",
        "mixed"
       ],
       "title": "Mode",
@@ -1545,6 +1558,18 @@
      "capitals",
      "sort_sounds",
      "sounds",
+     "hear_find",
+     "colour_box",
+     "shape_box",
+     "which_group",
+     "quick_dots",
+     "one_more",
+     "biggest",
+     "number_card",
+     "small_letters",
+     "letter_box",
+     "same_sound",
+     "first_sounds",
      "mixed"
     ],
     "title": "Mode",
@@ -2349,7 +2374,7 @@
       "title": "Learner Id"
      },
      "policy": {
-      "default": "utility@5",
+      "default": "utility@6",
       "title": "Policy",
       "type": "string"
      },
@@ -2691,7 +2716,8 @@
     "enum": [
      "prerequisite_gap",
      "frustration_guard",
-     "just_played"
+     "just_played",
+     "held_out"
     ],
     "title": "SetAside",
     "type": "string"
@@ -2871,6 +2897,16 @@
         "type": "null"
        }
       ]
+     },
+     "transfer": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Transfer"
+       },
+       {
+        "type": "null"
+       }
+      ]
      }
     },
     "required": [
@@ -2887,7 +2923,8 @@
      "last_seen",
      "told",
      "fluency",
-     "suspected"
+     "suspected",
+     "transfer"
     ],
     "title": "SkillReport",
     "type": "object"
@@ -3152,6 +3189,39 @@
     "title": "Told",
     "type": "object"
    },
+   "Transfer": {
+    "description": "A skill's transfer evidence, for the grown-up: the kind that checks it, and how it went there.",
+    "properties": {
+     "mode": {
+      "$ref": "#/components/schemas/Mode"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "passed": {
+      "title": "Passed",
+      "type": "boolean"
+     },
+     "right": {
+      "title": "Right",
+      "type": "integer"
+     },
+     "tried": {
+      "title": "Tried",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "mode",
+     "name",
+     "tried",
+     "right",
+     "passed"
+    ],
+    "title": "Transfer",
+    "type": "object"
+   },
    "ValidationError": {
     "properties": {
      "ctx": {
@@ -3235,7 +3305,8 @@
      "liked",
      "step_up",
      "step_down",
-     "misconception_probe"
+     "misconception_probe",
+     "transfer_probe"
     ],
     "title": "Why",
     "type": "string"

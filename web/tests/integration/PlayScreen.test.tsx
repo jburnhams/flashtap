@@ -427,6 +427,20 @@ describe('Play, chosen for them', () => {
     expect(router.state.location.pathname).toBe(`/learners/${FOX}`)
   })
 
+  it('plays a transfer kind the engine chose, showing the card to count out', async () => {
+    mock.plan = ['number_card', 'end']
+    const { user } = openApp(`/?mode=next&learner=${FOX}`)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Put this many in the basket.' })).toBeInTheDocument()
+    expect(screen.getByText(rounds.number_card.show)).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Kind of round' })).not.toHaveTextContent('Number card') // held out of the list
+    for (let i = 0; i < 3; i++) {
+      await user.click(within(screen.getByRole('group', { name: 'Pictures to place' })).getAllByRole('button')[0] as HTMLElement)
+      await user.click(place('Put duck in the basket'))
+    }
+    await user.click(screen.getByRole('button', { name: 'Check' }))
+    expect(screen.getByText('That’s right.')).toBeInTheDocument()
+  })
+
   it('asks for the next decision only once the answer is saved, so the engine knows it', async () => {
     let land = () => {}
     const landed = new Promise<void>(resolve => { land = resolve })

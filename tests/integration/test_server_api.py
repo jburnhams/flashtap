@@ -28,7 +28,7 @@ def test_a_real_server_lists_the_content(live_app):
     with live_app(create_app()) as base:
         s = _get(f"{base}/api/content")
         assert {o["goal"] for o in s["objectives"]} >= {"Number", "Word Reading"}
-        assert any(k["modes"] == ["counting"] for k in s["skills"])
+        assert any(k["modes"] == ["counting", "which_group"] for k in s["skills"])  # practice kind, then transfer kind
 
 
 def _send(url: str, body: object, method: str = "POST"):

@@ -50,6 +50,15 @@ one decision: a round, a choice between two rounds for the learner to pick, an o
    replay finds the same seed. If none does, the round is played without one and the rationale does not claim it. The
    frustration guard still comes first: a probe is a round that could go wrong.
 
+10. **Transfer probes** (§12 "transfer probe", §13 "progress when ... transfer probes pass", from `utility@6`): a
+   transfer kind (`rounds.HELD_OUT`, a second form of one skill) is held out of practice. Its candidate is set aside
+   (`held_out`) unless its skill is rated known (`MASTERED`) with at least `CHECK_AFTER` right answers of its own in
+   the practice kinds and has not passed its check yet (`learners/transfer.py`: the latest two transfer answers
+   right); then it is a `transfer_probe`, with a bonus (`Weights.transfer`) for what passing would tell, and every
+   other term as usual, so the frustration guard and the limits still come first. A check that is missed stays open
+   and comes back after more practice like any other candidate. The never-stuck fallback never opens a held-out kind.
+   `utility@5` and before do not weigh the transfer kinds at all, and still replay.
+
 **Diagnostic contrasts** (§12): after a missed round, a candidate that shares a skill with it but leaves out another
 (Missing number after Counting: the numerals without the counting) isolates a cause; it gets a bonus for how uncertain
 the shared skills still are, and the rationale says so. A frustrated learner gets a break first, never more diagnosis.
@@ -78,6 +87,7 @@ DUE = 0.5  # recall below which a mastered skill is brought back
 PLACING = 12  # counted answers, over every skill, before placement probes give way to teaching
 FRUSTRATED = 3  # first answers missed in a row that end in an offered break
 GUARDED = 2  # misses in a row after which only rounds likely to go right are offered
+CHECK_AFTER = 3  # right answers in its practice kinds before a known skill is checked in its transfer kind
 PROBE_TRIES = 100  # seeds tried for a round that offers a misconception's trap (the rarest, in Sounds, is 1 in 14)
 
 
@@ -108,12 +118,14 @@ class Why(StrEnum):
     STEP_UP = "step_up"  # a step harder than their last round of this kind
     STEP_DOWN = "step_down"  # a step easier than their last round of this kind
     PROBE = "misconception_probe"  # it offers the tap a misconception they may have predicts (utility@5 on)
+    TRANSFER = "transfer_probe"  # a known skill asked in its second, held-out form (utility@6 on)
 
 
 class SetAside(StrEnum):
     PREREQUISITE = "prerequisite_gap"
     FRUSTRATION = "frustration_guard"
     REPEAT = "just_played"
+    HELD_OUT = "held_out"  # a transfer kind whose skill is not due a check (utility@6 on)
 
 
 class Config(BaseModel):
@@ -261,6 +273,9 @@ class Weights:
     diagnostic: float = 0.6
     liked: float = 0.3  # inside enjoyment's scale: a kind liked as much as can be is worth a change of mechanic
     misconception: float = 0.6  # as much as a diagnostic contrast: both are there to tell a cause from a slip
+    # a nudge, not a priority: on simulated learners (who know a skill in every form alike) 0.8 cost 0.3 skills learnt
+    # of 12.8 and 1.5 cost 0.6, as checks displace practice; 0.3 cost 0.15 and still checks every known skill in time
+    transfer: float = 0.3
 
 
 @dataclass(frozen=True)
@@ -271,7 +286,8 @@ class Policy:
     # 3 (0.9.0): the Sounds round. Otherwise 2: each version weighs the kinds it had (`OFFERS`), so 1 and 2 are kept.
     # 4 (0.11.0): steps of difficulty. 3 and before lay out the grown-up's number of choices at no step, so they replay.
     # 5 (0.12.0): checking misconceptions. 4 and before give no probe bonus and draw no probe seed, so they replay.
-    version: int = 5
+    # 6 (0.13.0): transfer kinds and probes. 5 and before weigh only the practice kinds (`OFFERS`), so they replay.
+    version: int = 6
     weights: Weights = field(default_factory=Weights)
     tau: float = 0.15  # softmax temperature: lower picks the best more often
     epsilon: float = 0.1  # share of every pick that is uniform over the eligible candidates
@@ -289,16 +305,19 @@ class Policy:
 # The kinds each version weighs. A new kind changes every decision's candidates and chances, so it comes with a new
 # version, and a logged decision is remade against the kinds its own version had.
 _ALL = frozenset(s.mode for s in SHAPES)
-_BEFORE_SOUNDS = _ALL - {Mode.SOUNDS}
+_PRACTICE = _ALL - set(rounds.HELD_OUT)
+_BEFORE_SOUNDS = _PRACTICE - {Mode.SOUNDS}
 OFFERS: dict[str, frozenset[Mode]] = {
     "utility@1": _BEFORE_SOUNDS,
     "utility@2": _BEFORE_SOUNDS,
-    "utility@3": _ALL,
-    "utility@4": _ALL,
-    "utility@5": _ALL,
+    "utility@3": _PRACTICE,
+    "utility@4": _PRACTICE,
+    "utility@5": _PRACTICE,
+    "utility@6": _ALL,
 }
 STEPS_FROM = 4  # the first version that chooses a step of difficulty
 PROBES_FROM = 5  # the first version that checks misconceptions
+TRANSFER_FROM = 6  # the first version that checks transfer
 
 POLICY = Policy()
 REPLAYS = frozenset(OFFERS)  # logged policies the current code remakes exactly
@@ -345,8 +364,9 @@ def decide(
         _candidate(k, s, past, config, now, policy, misses, failed, liked.get(s.mode.value, 0.0)) for s in policy.shapes
     ]
     open_ = [c for c in cands if c.set_aside is None]
-    if not open_:  # never stuck: drop the softer filters first, the prerequisite gap last
-        open_ = [c for c in cands if c.set_aside is not SetAside.PREREQUISITE] or cands
+    if not open_:  # never stuck: drop the softer filters first, the prerequisite gap last, a held-out kind never
+        playable = [c for c in cands if c.set_aside is not SetAside.HELD_OUT]
+        open_ = [c for c in playable if c.set_aside is not SetAside.PREREQUISITE] or playable
     best = max(c.utility for c in open_)
     weights = [math.exp((c.utility - best) / policy.tau) for c in open_]
     total = sum(weights)
@@ -467,7 +487,16 @@ def _candidate(
     g = k.graph
     me = k.state(shape.primary)
     placing = k.counted < PLACING
-    if not me.seen:
+    held = shape.mode in rounds.HELD_OUT and policy.version >= TRANSFER_FROM
+    due = (
+        held
+        and me.p >= MASTERED
+        and k.practised.get(shape.primary, 0) >= CHECK_AFTER
+        and not k.transferred(shape.primary)
+    )
+    if due:
+        action = Why.TRANSFER
+    elif not me.seen:
         action = Why.PLACEMENT if placing else Why.INTRODUCE
     elif me.p < MASTERED:
         action = Why.PRACTISE
@@ -503,7 +532,9 @@ def _candidate(
     probe, misconception = _probe(k, shape.mode, level) if policy.version >= PROBES_FROM else (None, 0.0)
 
     set_aside: SetAside | None = None
-    if any((k.state(q).own >= 2 or k.state(q).told) and k.p(q) < 0.3 for q in before):
+    if held and not due:
+        set_aside = SetAside.HELD_OUT
+    elif any((k.state(q).own >= 2 or k.state(q).told) and k.p(q) < 0.3 for q in before):
         set_aside = SetAside.PREREQUISITE
     elif misses >= GUARDED and p_right < 0.6:
         set_aside = SetAside.FRUSTRATION
@@ -519,6 +550,7 @@ def _candidate(
         - w.repetition * repetition
         + w.diagnostic * diagnostic
         + w.misconception * misconception
+        + w.transfer * due
     )
     return Candidate(
         mode=shape.mode,
@@ -591,6 +623,7 @@ _SAY: dict[Why, str] = {
     Why.STEP_UP: "A step harder than last time: {step}.",
     Why.STEP_DOWN: "A step easier than last time: {step}.",
     Why.PROBE: "It offers a likely mix-up ({probe}), to tell a mix-up from a slip.",
+    Why.TRANSFER: "Known in its own kind of round, so checked in a new one, to see that it carries over: {skill}.",
 }
 
 

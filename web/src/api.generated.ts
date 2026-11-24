@@ -719,10 +719,10 @@ export interface components {
             exported_at: string;
             /**
              * Format
-             * @default flashtap-learner@6
+             * @default flashtap-learner@7
              * @enum {string}
              */
-            format: "flashtap-learner@1" | "flashtap-learner@2" | "flashtap-learner@3" | "flashtap-learner@4" | "flashtap-learner@5" | "flashtap-learner@6";
+            format: "flashtap-learner@1" | "flashtap-learner@2" | "flashtap-learner@3" | "flashtap-learner@4" | "flashtap-learner@5" | "flashtap-learner@6" | "flashtap-learner@7";
             learner: components["schemas"]["LearnerRow"];
             /** Models */
             models: components["schemas"]["ModelInfo"][];
@@ -759,7 +759,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "mixed";
+            mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "hear_find" | "colour_box" | "shape_box" | "which_group" | "quick_dots" | "one_more" | "biggest" | "number_card" | "small_letters" | "letter_box" | "same_sound" | "first_sounds" | "mixed";
             /** Rate Every */
             rate_every: number;
             /** Session Minutes */
@@ -971,7 +971,7 @@ export interface components {
          *     saved settings still name them).
          * @enum {string}
          */
-        Mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "mixed";
+        Mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "hear_find" | "colour_box" | "shape_box" | "which_group" | "quick_dots" | "one_more" | "biggest" | "number_card" | "small_letters" | "letter_box" | "same_sound" | "first_sounds" | "mixed";
         /** ModeInfo */
         ModeInfo: {
             /** Description */
@@ -1298,7 +1298,7 @@ export interface components {
             learner_id?: string | null;
             /**
              * Policy
-             * @default utility@5
+             * @default utility@6
              */
             policy: string;
             simulated?: components["schemas"]["SimulatedIn"] | null;
@@ -1425,7 +1425,7 @@ export interface components {
          * SetAside
          * @enum {string}
          */
-        SetAside: "prerequisite_gap" | "frustration_guard" | "just_played";
+        SetAside: "prerequisite_gap" | "frustration_guard" | "just_played" | "held_out";
         /** SimReport */
         SimReport: {
             /** Attempts */
@@ -1494,6 +1494,7 @@ export interface components {
             /** Title */
             title: string;
             told: components["schemas"]["Told"] | null;
+            transfer: components["schemas"]["Transfer"] | null;
         };
         /** SkillRole */
         SkillRole: {
@@ -1595,6 +1596,21 @@ export interface components {
             /** Withdrawn At */
             withdrawn_at?: string | null;
         };
+        /**
+         * Transfer
+         * @description A skill's transfer evidence, for the grown-up: the kind that checks it, and how it went there.
+         */
+        Transfer: {
+            mode: components["schemas"]["Mode"];
+            /** Name */
+            name: string;
+            /** Passed */
+            passed: boolean;
+            /** Right */
+            right: number;
+            /** Tried */
+            tried: number;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -1622,7 +1638,7 @@ export interface components {
          * @description Rationale codes (§15 "validated item + rationale codes"): what a decision is for.
          * @enum {string}
          */
-        Why: "placement_probe" | "introduce" | "practise" | "spaced_review" | "consolidate" | "diagnostic_contrast" | "easier_after_misses" | "exploration" | "break_due" | "frustration_break" | "session_cap_rounds" | "session_cap_minutes" | "offered_choice" | "liked" | "step_up" | "step_down" | "misconception_probe";
+        Why: "placement_probe" | "introduce" | "practise" | "spaced_review" | "consolidate" | "diagnostic_contrast" | "easier_after_misses" | "exploration" | "break_due" | "frustration_break" | "session_cap_rounds" | "session_cap_minutes" | "offered_choice" | "liked" | "step_up" | "step_down" | "misconception_probe" | "transfer_probe";
     };
     responses: never;
     parameters: never;
