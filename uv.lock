@@ -228,7 +228,7 @@ wheels = [
 
 [[package]]
 name = "flashtap"
-version = "0.10.0"
+version = "0.10.1"
 source = { editable = "." }
 dependencies = [
     { name = "strata-python", extra = ["db"] },
@@ -241,7 +241,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "strata-python", extras = ["db"], specifier = ">=0.2.6,<0.3" }]
+requires-dist = [{ name = "strata-python", extras = ["db"], specifier = ">=0.2.12,<0.3" }]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1027,7 +1027,7 @@ wheels = [
 
 [[package]]
 name = "strata-python"
-version = "0.2.10"
+version = "0.2.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
@@ -1036,9 +1036,9 @@ dependencies = [
     { name = "tzdata", marker = "sys_platform == 'win32'" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e5/7d/9409bc02b78abd27c44b975860c4983d8e66432e20033130a38e0f824faa/strata_python-0.2.10.tar.gz", hash = "sha256:bb8af783e26e749b8681899e41d7fe02055a7bf89ffbef2722196fa1c31299f1", size = 242254, upload-time = "2026-11-23T20:02:25.658Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/5e/a29ce24ed25dd295fc9645302b7348e1e29439a27c00fca28a0cc5aa3724/strata_python-0.2.12.tar.gz", hash = "sha256:32bbcf3f7ba9f4f5f19872dc6e789addf545196d410e544394e48c0bec8a0c5d", size = 251010, upload-time = "2026-11-24T02:44:38.415Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/87/d7/e088737604266171245bb5aae08184e601b6545263d310e28e17ea9be3f0/strata_python-0.2.10-py3-none-any.whl", hash = "sha256:8995f586f13becc14132db58cafa5d312b77a75ed4a6ae96f1c93de092434a4d", size = 172031, upload-time = "2026-11-23T20:02:24.408Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/d8/93e2ee8a0f9f6995b844afaec19c6b2ecc234bba14e25c5704a897a58a2c/strata_python-0.2.12-py3-none-any.whl", hash = "sha256:514ed8df385780c1b766a6a86555942fff42b2b2ca20bbf834fa803b2e9490f1", size = 177459, upload-time = "2026-11-24T02:44:36.981Z" },
 ]
 
 [package.optional-dependencies]
