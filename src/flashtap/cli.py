@@ -1,6 +1,6 @@
 """Command line: `doctor` checks the environment, `round` prints a round, `content check` and `content list` read the
 content packs, `learners list` and `learners rebuild` read the learner records, `engine simulate` runs the adaptive
-engine on simulated learners, `openapi` writes the API's schema (the
+engine on simulated learners, `voice lines`, `voice status` and `voice build` list and make the recorded voice, `openapi` writes the API's schema (the
 source of the web app's types), `set` shows or changes a setting, `serve` starts the web server."""
 
 import argparse
@@ -169,6 +169,65 @@ def cmd_engine_simulate(args: argparse.Namespace) -> int:
     return 0 if r.beats_rule else 1
 
 
+def voice_default() -> str:
+    from flashtap.voice import DEFAULT_VOICE
+
+    return DEFAULT_VOICE
+
+
+def cmd_voice_lines(args: argparse.Namespace) -> int:
+    from flashtap import voice
+
+    _utf8()
+    have = voice.Store(voice.home()).read().clips
+    for line in voice.lines():
+        c = have.get(line)
+        if args.missing and c is not None:
+            continue
+        print(f"{c.source if c else 'missing':9}  {line}")
+    return 0
+
+
+def cmd_voice_status(args: argparse.Namespace) -> int:
+    from flashtap import voice
+
+    _utf8()
+    store = voice.Store(voice.home())
+    have = store.read().clips
+    wanted = voice.lines()
+    sentences = [x for x in wanted if voice.phoneme_of(x) is None]
+    sounds = [x for x in wanted if voice.phoneme_of(x) is not None]
+    print(f"voice clips in {store.root}")
+    print(f"  sentences: {sum(x in have for x in sentences)} of {len(sentences)} have a clip")
+    print(f"  sounds:    {sum(x in have for x in sounds)} of {len(sounds)} have a clip")
+    to_record = [x for x in sounds if x not in have and not voice.is_vowel(voice.phoneme_of(x) or "")]
+    if to_record:
+        print(f"  to record in the app (Sounds screen): {' '.join(to_record)}")
+    voices = sorted({c.voice for c in have.values()})
+    if voices:
+        print(f"  voices: {', '.join(voices)}")
+    return 0
+
+
+def cmd_voice_build(args: argparse.Namespace) -> int:
+    from flashtap import voice
+
+    _utf8()
+    store = voice.Store(voice.home())
+    wanted = voice.lines()
+    if args.only == "sounds":
+        wanted = [x for x in wanted if voice.phoneme_of(x) is not None]
+    elif args.only == "sentences":
+        wanted = [x for x in wanted if voice.phoneme_of(x) is None]
+    if args.limit:
+        wanted = wanted[: args.limit]
+    r = voice.build(store, wanted, voice=args.voice, model=args.model, force=args.force, say=print)
+    print(
+        f"made {len(r.made)}, kept {len(r.kept)}, failed {len(r.failed)}; {len(r.to_record)} sounds to record in the app"
+    )
+    return 1 if r.failed else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="flashtap")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -206,6 +265,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     sm.add_argument("--seed", type=int, default=1)
     sm.add_argument("--json", action="store_true")
     sm.set_defaults(fn=cmd_engine_simulate)
+    vo = sub.add_parser("voice", help="the recorded voice: what Flashtap says, and its clips")
+    vsub = vo.add_subparsers(dest="voice_cmd", required=True)
+    vl = vsub.add_parser("lines", help="every line Flashtap says, with its clip's source or 'missing'")
+    vl.add_argument("--missing", action="store_true", help="only the lines with no clip")
+    vl.set_defaults(fn=cmd_voice_lines)
+    vs = vsub.add_parser("status", help="how many lines have clips, and the sounds still to record")
+    vs.set_defaults(fn=cmd_voice_status)
+    vb = vsub.add_parser("build", help="make the missing clips with strata-models (role speak)")
+    vb.add_argument(
+        "--voice", default=voice_default(), help="the Kokoro voice (default %(default)s; UK voices start b)"
+    )
+    vb.add_argument("--model", default=None, help="a strata-models model other than the speak role's")
+    vb.add_argument("--force", action="store_true", help="remake made clips (never a recording)")
+    vb.add_argument("--only", choices=("sounds", "sentences"), default=None)
+    vb.add_argument("--limit", type=int, default=0, help="at most this many lines (a first listen)")
+    vb.set_defaults(fn=cmd_voice_build)
     shared.add_openapi(sub, _create_app)  # web/openapi.json, from the repository root; --check in CI
     shared.add_set(sub, settings.SETTINGS)
     shared.add_serve(sub, run_server, default_port=PORT)

@@ -135,6 +135,10 @@ TEMPLATES: dict[Mode, Template] = {
             (("literacy.phonemic.initial_sound", P), ("literacy.gpc.sound_from_grapheme", S), ("language.vocabulary.receptive", C)),
             place.sort_sounds,
         ),
+        Template(
+            Mode.SOUNDS, 1, Mechanic.AUDIO_RESPOND, "Sounds", "Hear a sound on its own and tap the letters that make it",
+            (("literacy.gpc.grapheme_from_sound", P),), choose.sounds,
+        ),
     )
 }  # fmt: skip
 
@@ -154,6 +158,7 @@ PICTURES: dict[Mode, str] = {
     Mode.ORDER: "\U0001fa9c",  # ladder
     Mode.CAPITALS: "\U0001f520",  # ABCD
     Mode.SORT_SOUNDS: "\U0001f5c2\ufe0f",  # card index dividers
+    Mode.SOUNDS: "\U0001f50a",  # speaker
 }
 # What each kind asks, for the list a person picks from (GET /api/modes), Mixed last.
 MODE_NAMES: dict[Mode, tuple[str, str]] = {

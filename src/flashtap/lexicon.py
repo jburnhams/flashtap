@@ -51,6 +51,7 @@ class Thing:
 class Lexicon:
     everything: tuple[Thing, ...]
     letters: tuple[GPC, ...] = ()  # the one-letter GPCs of the phonics inventory: the letters a learner is taught
+    gpcs: tuple[GPC, ...] = ()  # every GPC of the inventory, digraphs and trigraphs too (sh, igh), for Sounds
 
     def category(self, name: str) -> tuple[Thing, ...]:
         return tuple(t for t in self.everything if t.category == name)
@@ -115,4 +116,5 @@ def words() -> Lexicon:
             if w.picture
         ),
         tuple(g for g in r.gpcs() if len(g.grapheme) == 1),
+        tuple(r.gpcs()),
     )

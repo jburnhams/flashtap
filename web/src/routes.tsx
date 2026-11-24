@@ -11,6 +11,7 @@ import { LearnersScreen } from './screens/LearnersScreen'
 import { NotFoundScreen } from './screens/NotFoundScreen'
 import { PlayScreen } from './screens/PlayScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
+import { SoundsScreen } from './screens/SoundsScreen'
 
 export const routes: RouteObject[] = [
   {
@@ -20,6 +21,7 @@ export const routes: RouteObject[] = [
       { path: 'learners', element: <LearnersScreen /> },
       { path: 'learners/:id', element: <LearnerScreen /> },
       { path: 'content', element: <ContentScreen /> },
+      { path: 'sounds', element: <SoundsScreen /> },
       { path: 'settings', element: <SettingsScreen /> },
       { path: '*', element: <NotFoundScreen /> },
     ],

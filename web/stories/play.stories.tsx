@@ -28,6 +28,8 @@ export const GiveANumber: Story = { render: () => <AppAt route="/?mode=give" /> 
 export const Order: Story = { render: () => <AppAt route="/?mode=order" /> }
 export const Capitals: Story = { render: () => <AppAt route="/?mode=capitals" /> }
 export const SortBySound: Story = { render: () => <AppAt route="/?mode=sort_sounds" /> }
+/** A sound on its own is said (from its clip, or described by the browser), never printed: the speaker stands for it. */
+export const Sounds: Story = { render: () => <AppAt route="/?mode=sounds" /> }
 /** A learner chosen in Who is playing: each round is recorded for them. */
 export const PlayingAsFox: Story = { render: () => <AppAt route={`/?learner=${FOX}`} /> }
 /** Chosen for them: the adaptive engine picks each round for the learner and says why, for the grown-up. */

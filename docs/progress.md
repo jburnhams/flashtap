@@ -1,5 +1,14 @@
 # Progress log
 
+## 2026-11-23: voice clips and the Sounds round (0.10.0)
+
+- Asked for: replace browser speech with pre-made UK English clips from strata-models, browser speech kept as the fallback, with sounds on their own (/m/, /sh/) for a "hear /sh/, tap sh" round.
+- Measured: Kokoro (strata-models' `speak`) given IPA says every vowel and diphthong cleanly, and every lone consonant with a vowel round it: /ʃ/ is about 20 ms of hiss, then a vowel holding 87% of the energy under 1 kHz. Text spellings ("sh", "shh") are worse. A phoneme recogniser to score it could not be fetched here (its hosts are blocked), so the check is spectral. The consonants are therefore recorded by a person, once each, on the Sounds screen; strata-models#111 asks for a model that can say them.
+- Lines: every template swept over 1,200 seeds gives 1,384 sentences once a list of numbers is cut into its numbers (Order rounds made the sweep grow without end before that), plus 45 sounds. The cutting is written twice (Python builds, the browser looks up) and both are tested against one fixture.
+- One voice per prompt: if any line of a sentence has no clip, the browser says the whole sentence, so a prompt never switches voice mid-way; the first prompt waits for the clips list for the same reason.
+- A sound with no clip is described by where it is heard, never by its letters, which would give the answer away. The Sounds screen names sounds the same way, as the bundled face has no Greek for /θ/.
+- Raised: strata-react#310 (`speak` from clips; PR #311), strata-models#111. strata-models#110 adds IPA input to `speak` and fixes its best-of-N seeds, which all used the first seed.
+
 ## 2026-11-23: offline answers (0.9.0)
 
 - Asked for: the owner approved offline answer saving (spec §14): an answer the server did not receive was lost. It had to keep the append-only log, first-answer-only evidence, pack versions on each attempt and exact engine replay.

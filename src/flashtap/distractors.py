@@ -80,8 +80,8 @@ _CONSONANTS: dict[str, tuple[str, str, str]] = {
 # Short vowels next to each other in the mouth: the ones a learner hears as each other.
 _VOWELS: dict[str, tuple[str, ...]] = {
     "æ": ("e", "ʌ"),
-    "e": ("æ", "ɪ"),  # noqa: RUF001 (IPA)
-    "ɪ": ("e",),  # noqa: RUF001 (IPA)
+    "e": ("æ", "ɪ"),
+    "ɪ": ("e",),
     "ɒ": ("ʌ",),
     "ʌ": ("ɒ", "æ"),
 }

@@ -814,6 +814,7 @@
        "order",
        "capitals",
        "sort_sounds",
+       "sounds",
        "mixed"
       ],
       "title": "Mode",
@@ -1292,6 +1293,7 @@
      "order",
      "capitals",
      "sort_sounds",
+     "sounds",
      "mixed"
     ],
     "title": "Mode",
@@ -2066,7 +2068,7 @@
       "title": "Learner Id"
      },
      "policy": {
-      "default": "utility@2",
+      "default": "utility@3",
       "title": "Policy",
       "type": "string"
      },
@@ -2685,6 +2687,75 @@
     "title": "SkillUse",
     "type": "object"
    },
+   "SoundRow": {
+    "properties": {
+     "clip": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Clip"
+     },
+     "describe": {
+      "title": "Describe",
+      "type": "string"
+     },
+     "example": {
+      "title": "Example",
+      "type": "string"
+     },
+     "graphemes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Graphemes",
+      "type": "array"
+     },
+     "line": {
+      "title": "Line",
+      "type": "string"
+     },
+     "phoneme": {
+      "title": "Phoneme",
+      "type": "string"
+     },
+     "source": {
+      "anyOf": [
+       {
+        "enum": [
+         "generated",
+         "recorded"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Source"
+     },
+     "vowel": {
+      "title": "Vowel",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "line",
+     "phoneme",
+     "graphemes",
+     "example",
+     "describe",
+     "vowel",
+     "clip",
+     "source"
+    ],
+    "title": "SoundRow",
+    "type": "object"
+   },
    "State": {
     "enum": [
      "unobserved",
@@ -2806,6 +2877,30 @@
      "type"
     ],
     "title": "ValidationError",
+    "type": "object"
+   },
+   "VoiceOut": {
+    "properties": {
+     "clips": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "title": "Clips",
+      "type": "object"
+     },
+     "sounds": {
+      "items": {
+       "$ref": "#/components/schemas/SoundRow"
+      },
+      "title": "Sounds",
+      "type": "array"
+     }
+    },
+    "required": [
+     "clips",
+     "sounds"
+    ],
+    "title": "VoiceOut",
     "type": "object"
    },
    "Why": {
@@ -3820,6 +3915,125 @@
      }
     },
     "summary": "Post Next"
+   }
+  },
+  "/api/v1/voice": {
+   "get": {
+    "operationId": "get_voice_api_v1_voice_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/VoiceOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Get Voice"
+   }
+  },
+  "/api/v1/voice/clips/{name}": {
+   "get": {
+    "operationId": "get_clip_api_v1_voice_clips__name__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "name",
+      "required": true,
+      "schema": {
+       "title": "Name",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Clip"
+   }
+  },
+  "/api/v1/voice/recordings": {
+   "delete": {
+    "operationId": "delete_recording_api_v1_voice_recordings_delete",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "line",
+      "required": true,
+      "schema": {
+       "title": "Line",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Delete Recording"
+   },
+   "put": {
+    "operationId": "put_recording_api_v1_voice_recordings_put",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "line",
+      "required": true,
+      "schema": {
+       "title": "Line",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SoundRow"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Put Recording"
    }
   }
  }

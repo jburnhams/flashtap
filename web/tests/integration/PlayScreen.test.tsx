@@ -2,8 +2,8 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AttemptIn } from '../../src/api'
 import { rounds } from '../../src/mocks/fixtures'
-import { attemptRefused, attemptUnreachable, decisionFor, handlers, learnersError, nextChoice, nextError, nextUnreachable, pickFails, quickLookGoes, ratingRefused, roundError, roundUnreachable, SESSION, sessionError } from '../../src/mocks/handlers'
-import { openApp, screen, within } from '../utils/render'
+import { attemptRefused, attemptUnreachable, decisionFor, handlers, learnersError, nextChoice, nextError, nextUnreachable, pickFails, quickLookGoes, ratingRefused, roundError, roundUnreachable, SESSION, sessionError, voiceLoading } from '../../src/mocks/handlers'
+import { openApp, screen, waitFor, within } from '../utils/render'
 import { mock, server } from '../utils/server'
 import { expectOneFilledButton, installFakeSpeech } from 'strata-react/testing'
 
@@ -121,7 +121,7 @@ describe('Play, the new kinds of round', () => {
     openApp('/')
     const kind = await screen.findByRole('combobox', { name: 'Kind of round' })
     expect(within(kind).getAllByRole('option').map(o => o.textContent)).toEqual([
-      'Chosen for them', 'Matching', 'Colours', 'Shapes', 'Letters', 'Counting', 'Missing number', 'Quick look', 'Listen', 'Give a number', 'Order', 'Capitals', 'Sort by sound', 'Mixed',
+      'Chosen for them', 'Matching', 'Colours', 'Shapes', 'Letters', 'Counting', 'Missing number', 'Quick look', 'Listen', 'Give a number', 'Order', 'Capitals', 'Sort by sound', 'Sounds', 'Mixed',
     ])
   })
 
@@ -617,5 +617,55 @@ describe('Play, chosen for them', () => {
         expect.stringMatching(/^Fox, a face: Not sent, as what it follows was refused/),
       ])
     })
+  })
+})
+
+describe('Play, a sound on its own', () => {
+  let speech: ReturnType<typeof installFakeSpeech>
+  afterEach(() => speech.uninstall())
+  const recorded = (lines: Record<string, string>) => {
+    Object.assign(mock.voice.clips, lines)
+  }
+
+  it('plays every line from its clip when all are recorded, and never prints the letters', async () => {
+    speech = installFakeSpeech([{ lang: 'en-GB', name: 'Daniel' }])
+    recorded({ 'Listen.': 'api/v1/voice/clips/listen.wav', 'Which letters make that sound?': 'api/v1/voice/clips/which.wav' })
+    const { user } = openApp('/?mode=sounds')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Listen, then tap the letters that make the sound.' })).toBeInTheDocument()
+    expect(screen.queryByText('/ʃ/')).not.toBeInTheDocument()
+    await waitFor(() => expect(speech.clips()).toEqual(['api/v1/voice/clips/listen.wav']))
+    speech.finish()
+    speech.finish()
+    expect(speech.clips()).toEqual(['api/v1/voice/clips/listen.wav', mock.voice.clips['/ʃ/'], 'api/v1/voice/clips/which.wav'])
+    await user.click(screen.getByRole('row', { name: tile('sh') }))
+    expect(speech.said.at(-1)).toMatchObject({ text: 'Yes! sh makes that sound.', clip: null })
+  })
+
+  it('has the browser say it all, the sound described, when a line has no clip', async () => {
+    speech = installFakeSpeech([{ lang: 'en-GB', name: 'Daniel' }])
+    openApp('/?mode=sounds')
+    await waitFor(() => expect(speech.texts()).toEqual(['Listen. the first sound in ship. Which letters make that sound?']))
+    expect(speech.clips()).toEqual([])
+    expect(screen.getByRole('button', { name: 'Say again: Listen. the first sound in ship. Which letters make that sound?' })).toBeInTheDocument()
+  })
+
+  it('says nothing unasked at a break or a choice of two until the clips list is known', async () => {
+    speech = installFakeSpeech([{ lang: 'en-GB', name: 'Daniel' }])
+    server.use(voiceLoading)
+    mock.plan = ['break']
+    openApp(`/?mode=next&learner=${'a'.repeat(32)}`)
+    expect(await screen.findByRole('heading', { name: 'Time for a break?' })).toBeInTheDocument()
+    server.use(nextChoice)
+    openApp(`/?mode=next&learner=${'a'.repeat(32)}`)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Which one next?' })).toBeInTheDocument()
+    expect(speech.said).toEqual([])
+  })
+
+  it('waits for the clips list before saying the prompt unasked', async () => {
+    speech = installFakeSpeech([{ lang: 'en-GB', name: 'Daniel' }])
+    server.use(voiceLoading)
+    openApp('/?mode=sounds')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Listen, then tap the letters that make the sound.' })).toBeInTheDocument()
+    expect(speech.said).toEqual([])
   })
 })

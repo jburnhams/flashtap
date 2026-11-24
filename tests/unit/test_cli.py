@@ -183,3 +183,31 @@ def test_openapi_writes_the_schema_and_the_committed_file_is_current(capsys, tmp
     # The kind of round is a setting with fixed values, so the schema (and the web type) names them.
     assert "mixed" in schema["components"]["schemas"]["FlashtapSettings"]["properties"]["mode"]["enum"]
     assert cli.main(["openapi", "-o", str(out), "--check"]) == 0
+
+
+def test_voice_lines_status_and_a_build_with_no_service(capsys, monkeypatch):
+    """The recorded voice from the CLI with nothing made yet. With no strata-models to reach, `build` names each line
+    it could not make and fails; tests/integration runs it against the service's stand-in."""
+    from strata_python.testing import sine_wav
+
+    from flashtap import voice
+
+    voice.Store(voice.home()).put("/ʃ/", sine_wav(0.5, rate=24000), source="recorded", voice="recording")
+    assert cli.main(["voice", "lines"]) == 0
+    out = capsys.readouterr().out
+    assert "recorded   /ʃ/" in out
+    assert "missing    Listen." in out
+    assert cli.main(["voice", "lines", "--missing"]) == 0
+    assert "/ʃ/" not in capsys.readouterr().out
+    assert cli.main(["voice", "status"]) == 0
+    out = capsys.readouterr().out
+    assert "sounds:    1 of 45 have a clip" in out
+    assert "/m/" in out
+    assert "/ʃ/" not in out.split("to record")[1]
+    assert "voices: recording" in out
+
+    monkeypatch.setenv("STRATA_MODELS_URL", "http://127.0.0.1:9")  # the discard port: nothing answers
+    assert cli.main(["voice", "build", "--only", "sentences", "--limit", "1"]) == 1
+    assert "FAILED 0:" in capsys.readouterr().out
+    assert cli.main(["voice", "build", "--only", "sounds", "--limit", "1"]) == 0  # /s/: a consonant, to record
+    assert "made 0, kept 0, failed 0; 1 sounds to record in the app" in capsys.readouterr().out

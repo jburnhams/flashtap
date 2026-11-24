@@ -10,6 +10,11 @@ chosen by named generators (`flashtap.distractors`). The last three are new with
 - **Listen** (`audio_respond`): a word is said (and its picture shown, never its spelling) and the learner taps the
   letter it starts with. A letter that spells the same sound (c and k for /k/) is never offered: it would also be
   right. Wrong letters are the right one's look-alikes (b d p q) and its sound's neighbours (/p/ for /b/) first.
+- **Sounds** (`audio_respond`): one sound of the phonics inventory is said on its own (/ʃ/, never a word that holds
+  it), and the learner taps the letters that write it (sh). Unlike Listen it asks nothing of hearing a word's first
+  sound, so it is evidence of the correspondence alone. A grapheme that also writes the sound (c, k and ck for /k/) is
+  never offered. The sound is `/IPA/` inside `say`, which the voice clips play from a recording (`flashtap.voice`);
+  no browser voice can say /ʃ/ alone.
 """
 
 import math
@@ -238,4 +243,46 @@ def listen(rng: random.Random, choices: int) -> Body:
             for g, why in shown
         ],
         answer=f"l_{letter}",
+    )
+
+
+def sound_token(phoneme: str) -> str:
+    """How a sound on its own is written inside `say`: /ʃ/. `flashtap.voice` splits it out and plays its recording."""
+    return f"/{phoneme}/"
+
+
+def sounds(rng: random.Random, choices: int) -> Body:
+    gpcs = lexicon.words().gpcs
+    answer = rng.choice(gpcs)
+    graphemes = sorted({g.grapheme for g in gpcs})
+    same_sound = {g.grapheme for g in gpcs if g.phoneme == answer.phoneme}  # c, k, ck for /k/: each would be right
+    by_sound: dict[str, list[str]] = {}
+    for g in gpcs:
+        by_sound.setdefault(g.phoneme, []).append(g.grapheme)
+    preferred = [(g, dx.CONFUSABLE_GRAPHEME) for g in dx.confusable_graphemes(answer.grapheme) if g in graphemes]
+    preferred += [
+        (g, dx.PHONOLOGICAL_NEIGHBOUR) for p in dx.phonological_neighbours(answer.phoneme) for g in by_sound.get(p, [])
+    ]
+    wanted = choices - 1
+    wrong = dx.fill(rng, math.ceil(wanted / 2), preferred, [], same_sound)
+    wrong += dx.fill(rng, wanted - len(wrong), [], graphemes, same_sound | {g for g, _ in wrong})
+    letters = answer.grapheme
+    shown = [(letters, ""), *wrong]
+    rng.shuffle(shown)
+    return Body(
+        prompt="Listen, then tap the letters that make the sound.",
+        say=f"Listen. {sound_token(answer.phoneme)} Which letters make that sound?",
+        show="\U0001f50a",  # speaker: the sound is heard, never printed
+        options=[
+            Option(
+                id=f"g_{g}",
+                picture=g,
+                word=g,
+                correct=g == letters,
+                feedback=f"Yes! {letters} makes that sound." if g == letters else f"No, that's {g}.",
+                distractor=why,
+            )
+            for g, why in shown
+        ],
+        answer=f"g_{letters}",
     )

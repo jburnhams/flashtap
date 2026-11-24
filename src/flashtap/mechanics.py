@@ -48,6 +48,7 @@ class Mode(StrEnum):
     ORDER = "order"
     CAPITALS = "capitals"
     SORT_SOUNDS = "sort_sounds"
+    SOUNDS = "sounds"
     MIXED = "mixed"
 
 
