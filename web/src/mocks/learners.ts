@@ -51,7 +51,8 @@ export const foxProfile: Profile = {
       "last_seen": "2026-11-11T09:21:00Z",
       "told": null,
       "fluency": null,
-      "suspected": []
+      "suspected": [],
+      "transfer": null
     },
     {
       "skill": "literacy.phonemic.initial_sound",
@@ -67,7 +68,8 @@ export const foxProfile: Profile = {
       "last_seen": "2026-11-11T09:21:00Z",
       "told": null,
       "fluency": null,
-      "suspected": []
+      "suspected": [],
+      "transfer": null
     },
     {
       "skill": "literacy.gpc.initial_letter",
@@ -83,7 +85,8 @@ export const foxProfile: Profile = {
       "last_seen": "2026-11-11T09:21:00Z",
       "told": null,
       "fluency": null,
-      "suspected": []
+      "suspected": [],
+      "transfer": null
     },
     {
       "skill": "maths.counting.one_to_one",
@@ -114,7 +117,8 @@ export const foxProfile: Profile = {
       "last_seen": "2026-11-08T09:12:00Z",
       "told": { "id": "f0000000000000000000000000000002", "skill": "maths.counting.one_to_one", "says": "not_yet", "observer": "teacher", "note": "", "at": "2026-11-09T15:30:00Z", "withdrawn_at": null },
       "fluency": null,
-      "suspected": []
+      "suspected": [],
+      "transfer": null
     },
     {
       "skill": "maths.counting.objects",
@@ -145,7 +149,8 @@ export const foxProfile: Profile = {
       "last_seen": "2026-11-05T09:09:00Z",
       "told": null,
       "fluency": { "seconds": 3.4, "low": 2.9, "high": 4.2, "used": 8, "trend": "quicker" },
-      "suspected": []
+      "suspected": [],
+      "transfer": { "mode": "which_group", "name": "Which group", "tried": 1, "right": 1, "passed": false }
     },
     {
       "skill": "maths.cardinality.last_number",
@@ -176,7 +181,8 @@ export const foxProfile: Profile = {
       "last_seen": "2026-11-05T09:09:00Z",
       "told": null,
       "fluency": null,
-      "suspected": []
+      "suspected": [],
+      "transfer": null
     },
     {
       "skill": "maths.cardinality.give_n",
@@ -207,7 +213,8 @@ export const foxProfile: Profile = {
       "last_seen": "2026-11-08T09:12:00Z",
       "told": null,
       "fluency": null,
-      "suspected": []
+      "suspected": [],
+      "transfer": null
     },
     {
       "skill": "maths.subitising.perceptual",
@@ -238,7 +245,8 @@ export const foxProfile: Profile = {
       "last_seen": "2026-11-08T09:17:00Z",
       "told": null,
       "fluency": { "seconds": 4.8, "low": 4.8, "high": 4.8, "used": 1, "trend": null },
-      "suspected": []
+      "suspected": [],
+      "transfer": null
     },
     {
       "skill": "maths.numerals.recognise",
@@ -271,7 +279,8 @@ export const foxProfile: Profile = {
       "last_seen": "2026-11-11T09:23:00Z",
       "told": null,
       "fluency": { "seconds": 2.6, "low": 2.1, "high": 3.5, "used": 8, "trend": "steady" },
-      "suspected": ["Confuses 6 and 9"]
+      "suspected": ["Confuses 6 and 9"],
+      "transfer": null
     },
     {
       "skill": "maths.comparison.order",
@@ -302,7 +311,8 @@ export const foxProfile: Profile = {
       "last_seen": "2026-11-11T09:23:00Z",
       "told": null,
       "fluency": null,
-      "suspected": []
+      "suspected": [],
+      "transfer": null
     },
     {
       "skill": "language.vocabulary.colours",
@@ -318,7 +328,8 @@ export const foxProfile: Profile = {
       "last_seen": null,
       "told": null,
       "fluency": null,
-      "suspected": []
+      "suspected": [],
+      "transfer": null
     },
     {
       "skill": "language.listening.story",
@@ -334,7 +345,8 @@ export const foxProfile: Profile = {
       "last_seen": null,
       "told": null,
       "fluency": null,
-      "suspected": []
+      "suspected": [],
+      "transfer": null
     },
     {
       "skill": "literacy.phonological.rhyme",
@@ -357,7 +369,8 @@ export const foxProfile: Profile = {
       "last_seen": null,
       "told": { "id": "f0000000000000000000000000000001", "skill": "literacy.phonological.rhyme", "says": "can", "observer": "parent", "note": "Rhymes in songs at bath time", "at": "2026-11-10T18:00:00Z", "withdrawn_at": null },
       "fluency": null,
-      "suspected": []
+      "suspected": [],
+      "transfer": null
     }
   ],
   "misconceptions": [

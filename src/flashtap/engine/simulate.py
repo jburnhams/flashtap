@@ -32,6 +32,7 @@ from flashtap.mechanics import SEED_LIMIT, Mode
 START = datetime(2026, 1, 5, 16, 0, tzinfo=UTC)
 STEP_COST = 0.06  # the share of right answers a knowing learner loses per step of difficulty
 CONFIG = Config(choices=4, tries=0)
+PRACTICE = tuple(s for s in SHAPES if s.mode not in rounds.HELD_OUT)  # what Mixed plays (0.13.0; was every kind)
 
 
 @dataclass
@@ -63,7 +64,7 @@ def learner(i: int, g: Graph, rng: random.Random) -> Sim:
 
 def _uniform(key: str) -> tuple[Mode, int]:
     rng = random.Random(key)
-    return rng.choice(SHAPES).mode, rng.randrange(SEED_LIMIT)
+    return rng.choice(PRACTICE).mode, rng.randrange(SEED_LIMIT)
 
 
 def play(sim: Sim, g: Graph, sessions: int, policy: Policy | None) -> list[Event]:

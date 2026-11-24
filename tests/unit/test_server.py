@@ -37,7 +37,9 @@ def test_modes_lists_every_mode(client):
     modes = client.get("/api/modes").json()
     assert [m["mode"] for m in modes] == [
         "matching", "colours", "shapes", "letters", "counting",
-        "missing", "quick_look", "listen", "give", "order", "capitals", "sort_sounds", "sounds", "mixed",
+        "missing", "quick_look", "listen", "give", "order", "capitals", "sort_sounds", "sounds",
+        "hear_find", "colour_box", "shape_box", "which_group", "quick_dots", "one_more", "biggest", "number_card",
+        "small_letters", "letter_box", "same_sound", "first_sounds", "mixed",
     ]  # fmt: skip
     assert modes[0] == {
         "mode": "matching",
@@ -101,7 +103,7 @@ def test_an_attempt_at_a_step_is_judged_on_the_round_at_that_step(client):
     assert client.post("/api/attempts", json=attempt).json()["first_correct"] is True
     assert client.post("/api/attempts", json={**attempt, "level": 1}).status_code == 409  # the same event, changed
     log = client.get(f"/api/learners/{fox}/export").json()
-    assert log["format"] == "flashtap-learner@6"
+    assert log["format"] == "flashtap-learner@7"
     assert [e["level"] for e in log["events"]] == [2]
 
 
@@ -159,7 +161,7 @@ def test_settings_refuse_a_bad_value(client):
 def test_content_lists_skills_objectives_and_phonics(client):
     s = client.get("/api/content").json()
     skills = {k["id"]: k for k in s["skills"]}
-    assert skills["literacy.gpc.initial_letter"]["modes"] == ["letters"]
+    assert skills["literacy.gpc.initial_letter"]["modes"] == ["letter_box", "letters"]
     assert skills["maths.subitising.perceptual"]["stages"] == ["eyfs"]
     assert sum(1 for o in s["objectives"] if o["out_of_scope"]) == 3
     assert s["phonics"][0]["sets"][0]["gpcs"][1] == {"grapheme": "a", "phoneme": "æ", "example": "ant"}
@@ -251,7 +253,7 @@ def test_engine_sessions_next_and_replay(client):
     r = client.post("/api/v1/sessions", json={"learner_id": fox})
     assert r.status_code == 201
     s = r.json()
-    assert s["policy"] == "utility@5"
+    assert s["policy"] == "utility@6"
     assert s["config"] == {
         "choices": 3,
         "tries": 1,
@@ -349,7 +351,7 @@ def test_choices_picks_ratings_and_overrides_over_http(client):
     out = client.post("/api/v1/evaluations/replay", json={"learner_id": fox}).json()
     assert (out["reproduced"], out["differences"]) == (out["decisions"], [])
     export = client.get(f"/api/learners/{fox}/export").json()
-    assert export["format"] == "flashtap-learner@6"
+    assert export["format"] == "flashtap-learner@7"
     assert len(export["ratings"]) == 1
     assert len(export["overrides"]) == 1
 

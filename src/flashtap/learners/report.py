@@ -11,8 +11,11 @@ Reporting states (spec §13) are derived labels, not the model's state: the mode
   at least `ENOUGH` right answers in rounds written to assess this skill (primary). Right answers where it was only
   secondary or a confound move the estimates but cannot make a skill independent alone: a right answer to a task that
   needs several skills is not proof of each of them (§8).
-- `generalised`: independent, and right in at least two mechanics (a tap and an arrangement, say), so it is not one
-  game learnt by heart (§11: "strong skill in one mechanic only").
+- `generalised`: independent, and its **transfer** passed (`transfer.py`): the latest two answers in its transfer kind,
+  a second form of the skill held out of practice, right, beside a right answer in a practice kind. So it is not one
+  game learnt by heart (§11: "strong skill in one mechanic only"; §13 "transfer probes pass"). Before 0.13.0 this was
+  "right in at least two mechanics", in any role, which a right answer in a round that only needed the skill could
+  meet, and which two kinds of the same mechanic (Listen and Sounds) never could.
 - `retained`: generalised, right again at least `RETAINED_AFTER` after its first counted right answer, and the latest
   counted answer right.
 
@@ -29,7 +32,7 @@ but it is not an answer: it adds no counted answers, so it cannot make a state o
 no rounds stays `unobserved` by Flashtap, with the grown-up's word beside it.
 
 The thresholds are experimental defaults (§13 asks for "no global accuracy threshold" in the end: P3 replaces them with
-uncertainty and transfer probes once there is data).
+uncertainty once there is data).
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -47,6 +50,7 @@ from flashtap.learners import misconceptions
 from flashtap.learners.estimators import BAYES, ESTIMATORS, RULE, Estimate, model_id
 from flashtap.learners.evidence import TOLD_P, Event, Told, Use, observations, standing, uses
 from flashtap.learners.fluency import Fluency, fluency, starts
+from flashtap.learners.transfer import Transfer, is_practice, transfer
 from flashtap.mechanics import Mode, QRole
 
 ENOUGH = 3
@@ -91,6 +95,8 @@ class SkillReport(ApiModel):  # every field always sent: the web app's type has 
     # by title, which hold it at emerging. Both absent from exports before 0.12.0, whose attempts recorded no traps.
     fluency: Fluency | None = None
     suspected: list[str] = Field(default_factory=list[str])
+    # Its transfer kind and how it went there (0.13.0; None for a skill no practice kind assesses, which has none).
+    transfer: Transfer | None = None
 
 
 class ModelInfo(BaseModel):
@@ -101,7 +107,10 @@ class ModelInfo(BaseModel):
 MODELS = [ModelInfo(model=model_id(e), description=e.description) for e in ESTIMATORS]
 
 
-def state_of(counted: Sequence[Use], estimates: Mapping[str, Estimate], touched: bool) -> State:
+def state_of(
+    counted: Sequence[Use], estimates: Mapping[str, Estimate], touched: bool, moved: Transfer | None = None
+) -> State:
+    """`moved`: the skill's transfer evidence (`transfer.transfer`); with none, a skill stops at independent."""
     if not touched:
         return State.UNOBSERVED
     bkt, rule = estimates.get(model_id(BAYES)), estimates.get(model_id(RULE))
@@ -111,7 +120,7 @@ def state_of(counted: Sequence[Use], estimates: Mapping[str, Estimate], touched:
     primary = [u for u in rights if u.role == "primary"]
     if bkt.p < INDEPENDENT or rule.p < RECENT or len(primary) < ENOUGH:
         return State.EMERGING
-    if len({u.event.mechanic for u in rights}) < 2:
+    if moved is None or not moved.passed or not any(is_practice(u.event) for u in primary):
         return State.INDEPENDENT
     first = rights[0].event.presented_at
     if counted[-1].event.first_correct and any(u.event.presented_at - first >= RETAINED_AFTER for u in rights):
@@ -157,7 +166,8 @@ def skill_reports(
             estimates = [e.estimate(obs, points) for e in ESTIMATORS]
         else:
             estimates = [BAYES.estimate(obs, points)] if points else []
-        state = state_of(counted, {e.model: e for e in estimates}, bool(live))
+        moved = transfer(s.id, counted)
+        state = state_of(counted, {e.model: e for e in estimates}, bool(live), moved)
         held_back = held_by.get(s.id, [])
         if held_back and state in HELD:
             state = State.EMERGING
@@ -177,6 +187,7 @@ def skill_reports(
                 told=said[s.id][-1] if s.id in said else None,
                 fluency=fluency(live, started),
                 suspected=held_back,
+                transfer=moved,
             )
         )
     return out
@@ -264,13 +275,16 @@ def evidence_rows(events: Iterable[Event], skill: str, titles: Mapping[str, str]
     return rows[::-1]
 
 
-def differences(saved: Sequence[SkillReport], rebuilt: Sequence[SkillReport]) -> list[str]:
-    """Where a rebuilt report differs from a saved one, as sentences; empty when they agree exactly."""
+def differences(
+    saved: Sequence[SkillReport], rebuilt: Sequence[SkillReport], absent: frozenset[str] = frozenset()
+) -> list[str]:
+    """Where a rebuilt report differs from a saved one, as sentences; empty when they agree exactly. `absent`: fields
+    the saved report's format did not record (`store.ADDED`), which are not compared."""
     a = {r.skill: r for r in saved}
     b = {r.skill: r for r in rebuilt}
     out = [f"{k}: only in the saved report" for k in sorted(a.keys() - b.keys())]
     out += [f"{k}: only in the rebuilt report" for k in sorted(b.keys() - a.keys())]
     for k in sorted(a.keys() & b.keys()):
         x, y = a[k].model_dump(mode="json"), b[k].model_dump(mode="json")
-        out += [f"{k}: {f} was {x[f]!r}, rebuilt {y[f]!r}" for f in x if x[f] != y[f]]
+        out += [f"{k}: {f} was {x[f]!r}, rebuilt {y[f]!r}" for f in x if f not in absent and x[f] != y[f]]
     return out

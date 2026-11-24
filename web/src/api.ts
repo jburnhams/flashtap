@@ -13,8 +13,9 @@ import type { paths as ApiPaths, Schema } from './api.generated'
 
 export type Mode = Schema<'Mode'>
 /** The kinds of round, as the server lists them (src/flashtap/mechanics.py `Mode`), Mixed last. */
+// The kinds a grown-up picks from: the transfer kinds are left out, being held out of practice (0.13.0).
 export const MODES = ['matching', 'colours', 'shapes', 'letters', 'counting', 'missing', 'quick_look', 'listen', 'give', 'order', 'capitals', 'sort_sounds', 'sounds', 'mixed'] as const satisfies readonly Mode[]
-export const isMode = (v: string | null): v is Mode => MODES.includes(v as Mode)
+export const isMode = (v: string | null): v is Mode => (MODES as readonly (string | null)[]).includes(v)
 
 /** `GET /api/settings`: the kind of round, and how many choices and tries, as numbers. */
 export type Settings = Schema<'FlashtapSettings'>

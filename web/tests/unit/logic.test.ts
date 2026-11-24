@@ -4,6 +4,9 @@ import { colorSchemeScript } from 'strata-react'
 import { exportUrl, isMode, PLACE_MECHANICS } from '../../src/api'
 import { rounds } from '../../src/mocks/fixtures'
 import { roundFor } from '../../src/mocks/handlers'
+import { foxProfile } from '../../src/mocks/learners'
+import { transferNote } from '../../src/transfer'
+import type { SkillReport } from '../../src/api'
 import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRight, solution } from '../../src/play'
 
 describe('api helpers', () => {
@@ -97,5 +100,17 @@ describe('index.html', () => {
   it('inlines Strata’s colour-scheme script, so a dark page does not flash light', () => {
     const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8')
     expect(html).toContain(colorSchemeScript())
+  })
+})
+
+describe('transferNote', () => {
+  const skill = (state: SkillReport['state'], transfer: SkillReport['transfer']) => ({ ...foxProfile.skills[0], state, transfer }) as SkillReport
+  const t = { mode: 'which_group', name: 'Which group', tried: 0, right: 0, passed: false } as const
+  it('says how the skill has done in its transfer kind, and nothing when there is nothing to say', () => {
+    expect(transferNote(skill('independent', null))).toBe('')
+    expect(transferNote(skill('independent', t))).toBe('Not yet checked in Which group')
+    expect(transferNote(skill('emerging', t))).toBe('')
+    expect(transferNote(skill('independent', { ...t, tried: 3, right: 2 }))).toBe('Which group: 2 of 3 right')
+    expect(transferNote(skill('generalised', { ...t, tried: 2, right: 2, passed: true }))).toBe('Carries over: right in Which group')
   })
 })

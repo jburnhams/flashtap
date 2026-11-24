@@ -1,5 +1,14 @@
 # Progress log
 
+## 2026-11-24: transfer rounds (0.13.0)
+
+- Asked for: the next spec gap, transfer probes (§13 "progress when ... transfer probes pass"; §9 "holdout families for transfer evaluation"; §11 "strong skill in one mechanic only").
+- Before this, Generalised meant "right in two mechanics, any role". No skill was primary in two mechanics, so it was met only through rounds that merely needed the skill (Shapes for colours), and never for Listen and Sounds (one mechanic). It said little.
+- A family per skill, not per item: each of the 12 skills a practice kind assesses got one transfer kind, a second form of it (another mechanic or representation), held out of practice. Held out means Mixed, Play's list and the engine's practice never offer it, so a right answer there cannot be that game remembered. Item-level holdout (words kept back) would have needed new pack versions, which refuse every older round's rebuild; a second kind needs none.
+- Pass rule: the latest two transfer answers right (1 in 16 by luck among four tiles), plus a right answer in the practice kind, so both forms are in the evidence. It follows the latest evidence: a later miss takes Generalised back to Independent.
+- Engine (`utility@6`): a transfer kind is a candidate only once its skill is rated known with 3 right in practice and not yet passed (`transfer_probe`); otherwise set aside (`held_out`, never opened by the never-stuck fallback). Weight 0.3: on 200 simulated learners 0.8 cost 0.3 skills learnt and 1.5 cost 0.6 (12.79 before, 12.48 and 12.18), since checks take rounds from practice and the simulated learners know a skill in every form alike, so a check can only cost there. 0.3 gave 12.64 against a uniform pick's 12.44. Held-out log loss: engine 0.570, rule 0.619 (the log has more kinds now, so not comparable with 0.12's numbers).
+- Older policies (`utility@5` and before) weigh only the practice kinds and still replay.
+
 ## 2026-11-24: fluency and misconceptions (0.12.0)
 
 - Asked for: the next spec gap, answer speed (fluency) and misconceptions read from wrong answers.

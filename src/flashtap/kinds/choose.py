@@ -300,3 +300,168 @@ def sounds(rng: random.Random, choices: int) -> Body:
         ],
         answer=f"g_{letters}",
     )
+
+
+# Transfer kinds (0.13.0): each asks for a skill another kind already practises, in another form, and is held out of
+# practice (`rounds.Template.held_out`) so that a right answer here is evidence the skill carries over to something
+# new, not that one game was learnt (spec §9 "holdout families for transfer evaluation", §11 "strong skill in one
+# mechanic only", §13 "transfer probes pass").
+
+
+def hear_find(rng: random.Random, choices: int) -> Body:
+    """Matching shows the named picture above the tiles, so it can be answered by matching pictures; here the word is
+    only heard, so a right tap is the word understood (`language.vocabulary.receptive`)."""
+    pool = rng.choice(lexicon.words().matching_pools)
+    answer = rng.choice(pool)
+    shown = _pick(rng, pool, answer, choices, dx.SAME_CATEGORY)
+    return Body(
+        prompt="Listen, then tap the picture.",  # printed: never the word, which a reader would match by its letters
+        say=f"Find the {answer.word}.",
+        show="\U0001f50a",  # speaker: the word is heard, never shown
+        options=_options(shown, answer, f"Yes! You found the {answer.word}."),
+        answer=answer.id,
+    )
+
+
+def which_group(rng: random.Random, choices: int, top: int | None = None) -> Body:
+    """Counting the other way round: a number is said and the learner finds the group with that many. Counting gives
+    a group and asks for its numeral; here every tile is a group to count, and no numeral needs reading."""
+    most, (low, high) = _counted(top)
+    high = max(high, low + choices - 1)  # never more tiles than different groups
+    thing = rng.choice(lexicon.words().countable)
+    n = rng.randint(1, most)
+    many = thing.word if n == 1 else thing.many
+    shown = _numerals(rng, n, low, high, choices, 0.5)
+    return Body(
+        prompt=f"Which group has {n}?",
+        say=f"Which group has {n} {many}?",
+        show=thing.picture,
+        options=[
+            Option(
+                id=f"n{k}",
+                picture=" ".join([thing.picture] * k),
+                word=str(k),
+                correct=k == n,
+                feedback=f"Yes! That group has {n}." if k == n else f"No, that group has {k}.",
+                distractor=why,
+            )
+            for k, why in shown
+        ],
+        answer=f"n{n}",
+    )
+
+
+DOT = "\U0001f535"  # a blue circle: a dot, no thing to name
+
+
+def quick_dots(rng: random.Random, choices: int, top: int | None = None) -> Body:
+    """Quick look with dots instead of pictures: the same glance, a plainer representation (spec §6 "presentation:
+    objects, dots, fingers, ten-frame")."""
+    most, numerals = _counted(top)
+    n = rng.randint(1, most)
+    return Body(
+        prompt="How many dots did you see?",
+        say="Look quickly! How many dots?",
+        show=" ".join([DOT] * n),
+        exposure_ms=QUICK_LOOK_MS,
+        options=_number_options(
+            _numerals(rng, n, *numerals, choices, 0.5), n, f"Yes! There {'was' if n == 1 else 'were'} {n}."
+        ),
+        answer=f"n{n}",
+    )
+
+
+def one_more(rng: random.Random, choices: int, top: int | None = None) -> Body:
+    """One more or one less than a number, asked straight out: Missing number asks it inside a run, where the run's
+    rhythm can carry a learner to the gap. The number itself and the step the other way are among the wrong ones."""
+    low, high = MISSING_RANGE if top is None else (0, top)
+    more = rng.random() < 0.5
+    n = rng.randint(low, high - 1) if more else rng.randint(low + 1, high)
+    answer = n + 1 if more else n - 1
+    word = "more" if more else "less"
+    return Body(
+        prompt=f"What is one {word} than {n}?",
+        show=str(n),
+        options=_number_options(
+            _numerals(rng, answer, low, high, choices, 0.5), answer, f"Yes! One {word} is {answer}."
+        ),
+        answer=f"n{answer}",
+    )
+
+
+ORDER_ENDS = ("biggest", "smallest")
+
+
+def biggest(rng: random.Random, choices: int, top: int | None = None) -> Body:
+    """Order asks for a whole row smallest first; here the learner picks one end of a set, the biggest or the
+    smallest. The number next to the answer, when it is there, is the near miss."""
+    low, high = (0, 10) if top is None else (0, top)
+    numbers = rng.sample(range(low, high + 1), choices)
+    end = rng.choice(ORDER_ENDS)
+    n = max(numbers) if end == "biggest" else min(numbers)
+    shown = [(k, "" if k == n else dx.NEAR_NUMBER if abs(k - n) == 1 else dx.RANDOM) for k in numbers]
+    return Body(
+        prompt=f"Which number is the {end}?",
+        options=_number_options(shown, n, f"Yes! {n} is the {end}."),
+        answer=f"n{n}",
+    )
+
+
+def small_letters(rng: random.Random, choices: int) -> Body:
+    """Capitals lays pairs out to be matched; here one capital is shown and its small letter is picked from among
+    look-alikes (b for d), the confusion that matching pairs can hide by elimination."""
+    alphabet = sorted({g.grapheme for g in lexicon.words().letters})
+    letter = rng.choice(alphabet)
+    wanted = choices - 1
+    look = [(g, dx.CONFUSABLE_GRAPHEME) for g in dx.confusable_graphemes(letter) if g in alphabet]
+    wrong = dx.fill(rng, math.ceil(wanted / 2), look, [], {letter})
+    wrong += dx.fill(rng, wanted - len(wrong), [], alphabet, {letter, *(g for g, _ in wrong)})
+    shown = [(letter, ""), *wrong]
+    rng.shuffle(shown)
+    capital = letter.upper()
+    return Body(
+        prompt=f"Find the small letter for {capital}.",
+        say=f"Find the small letter for capital {capital}.",
+        show=capital,
+        options=[
+            Option(
+                id=f"l_{g}",
+                picture=g,
+                word=g,
+                correct=g == letter,
+                feedback=f"Yes! That's small {letter}." if g == letter else f"No, that's {g}.",
+                distractor=why,
+            )
+            for g, why in shown
+        ],
+        answer=f"l_{letter}",
+    )
+
+
+def same_sound(rng: random.Random, choices: int) -> Body:
+    """The first sound with no letter anywhere: a picture is named and the learner finds the one that starts the same
+    way. Sort by sound and Letters show letters, so a learner could get them right from letter names alone; here only
+    the sound helps. Wrong pictures whose first sound is a neighbour (/p/ for /b/) come first."""
+    words = tuple(t for t in lexicon.words().everything if t.onset is not None and t.category != "shapes")
+    by_sound: dict[str, list[Thing]] = {}
+    for t in words:
+        if t.onset:
+            by_sound.setdefault(t.onset.phoneme, []).append(t)
+    cue = rng.choice([t for t in words if t.onset and len(by_sound[t.onset.phoneme]) >= 2])
+    sound = cue.onset.phoneme if cue.onset else ""
+    answer = rng.choice([t for t in by_sound[sound] if t is not cue])
+    others = sorted((t for t in words if t.onset and t.onset.phoneme != sound), key=lambda t: t.id)
+    near = set(dx.phonological_neighbours(sound))
+    preferred = [(t, dx.PHONOLOGICAL_NEIGHBOUR) for t in others if t.onset and t.onset.phoneme in near]
+    rng.shuffle(preferred)
+    wanted = choices - 1
+    wrong = dx.fill(rng, math.ceil(wanted / 2), preferred, [], {answer, cue})
+    wrong += dx.fill(rng, wanted - len(wrong), [], others, {answer, cue, *(t for t, _ in wrong)})
+    shown = [(answer, ""), *wrong]
+    rng.shuffle(shown)
+    return Body(
+        prompt=f"What starts with the same sound as {cue.word}?",
+        show=cue.picture,
+        options=_options(shown, answer, f"Yes! {answer.label} and {cue.word} start the same."),
+        answer=answer.id,
+    )

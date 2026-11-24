@@ -113,9 +113,10 @@ export function decisionFor(seq: number): Next {
 // Matched as paths, so they answer whatever origin and base the app runs under.
 const at = (path: string) => `*${path}`
 
-/** The fixed round for a mode; Mixed plays Matching, so it is the same picture every time. */
+/** The fixed round for a mode (a transfer kind too, which only the engine plays); Mixed plays Matching, so it is the
+ * same picture every time. */
 export function roundFor(mode: string | null): Round {
-  const m = isMode(mode) ? mode : mock.settings.mode
+  const m = mode !== null && mode in rounds ? (mode as Round['mode']) : isMode(mode) ? mode : mock.settings.mode
   const tries = mock.tries ?? (Number(mock.settings.tries) || null)
   return { ...rounds[m === 'mixed' ? 'matching' : m], tries }
 }

@@ -64,6 +64,27 @@ Words: `segments` splits the spelling into graphemes from the GPC inventory (`"o
 
 An id used twice (across every kind); an edge, strand, domain, source, skill or stage that does not exist; an edge to itself or written twice; a `prerequisite_strong` or `part_of` cycle; a skill parameter outside its dimension (a range outside its bounds or reversed, a value not in the set); a GPC taught twice in one sequence; a word segment that is not exactly one GPC, segments that do not spell the word, an onset that is not how the word starts, two words with one picture; an objective with both or neither of `skills` and `out_of_scope`; and anything malformed (bad id, unknown key, unknown relation, a source that is not `https`).
 
+## Transfer kinds
+
+A skill a learner gets right in the one kind of round that practises it may be that game learnt, not the skill (spec §11, "strong skill in one mechanic only"). So every skill a practice kind assesses has one **transfer kind** (`rounds.TRANSFER`, 0.13.0): the same skill asked another way, held out of practice (Mixed and Play's list never offer it; the engine plays it only to check a skill it rates known; `src/flashtap/learners/transfer.py`). A skill is Generalised only once its latest two answers there are right.
+
+| Skill | Practised in | Checked in | What changes |
+| --- | --- | --- | --- |
+| Find the picture for a spoken word | Matching | Hear and find | the word is only heard; Matching shows the picture to match |
+| Know the colour words | Colours | Colour box | every shape of the colour, of any shape, into a box; not the one shape of it |
+| Name flat shapes | Shapes | Shape box | every circle (say), of any colour, into a box; Shapes shows the coloured shape it names |
+| Count a set of things | Counting | Which group | a number is said and the group with that many is found; Counting gives a group and asks its numeral |
+| See how many without counting | Quick look | Quick dots | dots instead of pictures |
+| Say one more and one less | Missing number | One more, one less | asked straight out, not inside a run whose rhythm can carry a learner to the gap |
+| Put numbers in order | Order | Biggest number | one end of a set picked, not a row arranged |
+| Give a number of things | Give a number | Number card | the number is a numeral on a card, never said |
+| Match capital and small letters | Capitals | Small letters | one capital, its small letter picked among look-alikes; pairs can be matched by elimination |
+| Find a word that starts with a letter's sound | Letters | Letter box | every picture that starts with the letter into its box; not the one picture |
+| Hear the first sound in a word | Sort by sound | Same first sound | no letters at all: a picture that starts like the named one |
+| Find the letters for a sound | Listen, Sounds | First sounds | the sound inside a word, with two-letter sounds (ship on sh), and the first letter of one (s) as the tempting wrong place |
+
+These are judgements about what counts as "the same skill in another form", like the `src.flashtap_judgement` edges, and are for the same review.
+
 ## Still to review
 
-The packs are drafts written from the sources in `core.toml`. Before treating them as right: a phonics teacher checks the IPA and word segmentations (spec §9: generated text never supplies unchecked transcriptions); someone who teaches early maths and reading checks the `src.flashtap_judgement` edges and the confidence words; the EYFS goal wording is compared once more with the framework PDF.
+The packs are drafts written from the sources in `core.toml`. Before treating them as right (and the transfer kinds above, which lean on them): a phonics teacher checks the IPA and word segmentations (spec §9: generated text never supplies unchecked transcriptions); someone who teaches early maths and reading checks the `src.flashtap_judgement` edges and the confidence words; the EYFS goal wording is compared once more with the framework PDF.

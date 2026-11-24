@@ -281,7 +281,7 @@ def test_a_suspected_misconception_holds_its_skills_at_emerging_and_moves_no_est
         ev(right=True, skill=NUMERAL, traps={}, mode=Mode.COUNTING, at=T0 + timedelta(minutes=5 + i)) for i in range(5)
     ]
     clean = skill_reports(rights, skills)[0]
-    assert clean.state is State.GENERALISED
+    assert clean.state is State.INDEPENDENT  # the top it can reach: reading numerals has no transfer kind of its own
     assert clean.suspected == []
     assert clean.fluency is not None
     slips = [ev(right=False, tapped="n9", skill=COUNT, at=T0 - timedelta(minutes=10 - i)) for i in range(3)]

@@ -45,7 +45,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, ButtonLink, isRefusal, ChoiceGrid, ChoiceGridSkeleton, DataView, Done, EmptyState, format, Field, NativeSelect, PageHeader, PlaceBoard, SayAgain, Skeleton, useLoad, useSearchParam, type ChoiceState, type Delivery, type Load, type PlaceState } from 'strata-react'
-import { api, isPlayChoice, keepAttempt, keepRating, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type Face, type LearnerRow, type Mode, type Next, type OfferOut, type Option, type PlayChoice, type Round, type SessionInfo, type Settings } from '../api'
+import { api, isMode, isPlayChoice, keepAttempt, keepRating, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type Face, type LearnerRow, type Mode, type Next, type OfferOut, type Option, type PlayChoice, type Round, type SessionInfo, type Settings } from '../api'
 import { LANG, useVoice } from '../voice'
 import { refresh, take } from '../reserve'
 import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRight, solution, type Placement, type Turn } from '../play'
@@ -67,6 +67,18 @@ export const modeLabels: Record<Mode, string> = {
   capitals: 'Capitals',
   sort_sounds: 'Sort by sound',
   sounds: 'Sounds',
+  hear_find: 'Hear and find',
+  colour_box: 'Colour box',
+  shape_box: 'Shape box',
+  which_group: 'Which group',
+  quick_dots: 'Quick dots',
+  one_more: 'One more, one less',
+  biggest: 'Biggest number',
+  number_card: 'Number card',
+  small_letters: 'Small letters',
+  letter_box: 'Letter box',
+  same_sound: 'Same first sound',
+  first_sounds: 'First sounds',
   mixed: 'Mixed',
 }
 
@@ -260,6 +272,9 @@ function Chosen({ round, onChosen }: { round: Round; onChosen: (m: Mode) => void
   const latest = useRef(onChosen)
   useEffect(() => { latest.current = onChosen })
   useEffect(() => {
+    // A transfer kind (held out of practice, so not among the kinds a grown-up picks) is never kept or played away:
+    // rounds of it played offline would be practice, and their answers would pass the check the engine is making.
+    if (!isMode(round.mode)) return
     latest.current(round.mode)
     void refresh(round.mode, round)
   }, [round])
@@ -538,6 +553,7 @@ function Arrange({ round, onNext, onAnswered, onRated }: { round: Round; onNext:
   return (
     <section aria-labelledby="prompt" className="grid gap-6">
       <RoundHeader round={round} over={done ? state : null} onNext={onNext} />
+      {round.show && <Show round={round} />}
       <PlaceBoard
         label="Pictures and places"
         pieces={round.pieces}

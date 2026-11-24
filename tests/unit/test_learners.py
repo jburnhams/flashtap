@@ -16,6 +16,7 @@ from flashtap.learners.estimators import BAYES, PLACE_GUESS, RULE
 from flashtap.learners.evidence import Event, Observation, SkillUse, Told, uses
 from flashtap.learners.models import Attempt, Learner, Override, Sitting, Tombstone, utc
 from flashtap.learners.report import SkillInfo, State, differences, evidence_rows, skill_reports
+from flashtap.learners.transfer import Transfer, is_practice, is_transfer, passed, transfer
 from flashtap.mechanics import Mode
 
 T0 = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
@@ -205,11 +206,13 @@ def event(
     skills: list[tuple[str, str]] | None = None,
     mechanic: str = "select_one",
     struck: str | None = None,
+    mode: str = "counting",
+    asked: str | None = None,
 ) -> Event:
     return Event(
         event_id=uuid.uuid4().hex,
         session_id="s",
-        mode="counting",
+        mode=mode,
         version=1,
         choices=4,
         seed=1,
@@ -224,7 +227,7 @@ def event(
                 ("maths.cardinality.last_number", "secondary"),
             ]
         ],
-        asked="mixed",
+        asked=asked or ("next" if mode in {m.value for m in rounds.HELD_OUT} else "mixed"),  # the engine plays those
         presented_at=at,
         answered_at=at,
         first_answer={"option": "n1"},
@@ -279,8 +282,20 @@ def test_reporting_states_climb_with_evidence_and_unobserved_is_its_own_state() 
     assert state(mixed) is State.EMERGING
     taps = [event(right=True, at=T0 + timedelta(minutes=i), skills=skill) for i in range(5)]
     assert state(taps) is State.INDEPENDENT
-    both = [*taps, event(right=True, at=T0 + timedelta(minutes=9), skills=skill, mechanic="give_n")]
+    # Right in another mechanic is no longer enough (it was before 0.13.0): the transfer kind has to be passed.
+    other = [*taps, event(right=True, at=T0 + timedelta(minutes=9), skills=skill, mechanic="give_n")]
+    assert state(other) is State.INDEPENDENT
+
+    def held(i: int, right: bool = True) -> Event:
+        return event(right=right, at=T0 + timedelta(minutes=10 + i), skills=skill, mode="which_group")
+
+    assert state([*taps, held(0)]) is State.INDEPENDENT  # one right is not yet a pass
+    both = [*taps, held(0), held(1)]
     assert state(both) is State.GENERALISED
+    assert state([*both, held(2, right=False)]) is State.INDEPENDENT  # the latest two, not the best two
+    assert skill_reports(both, SKILLS[:1])[0].transfer == Transfer(
+        mode=Mode.WHICH_GROUP, name="Which group", tried=2, right=2, passed=True
+    )
     later = [*both, event(right=True, at=T0 + timedelta(days=8), skills=skill)]
     assert state(later) is State.RETAINED
     assert state([*later, event(right=False, at=T0 + timedelta(days=9), skills=skill)]) is not State.RETAINED
@@ -323,6 +338,19 @@ def test_rebuilding_from_the_log_reproduces_identical_estimates(db_session: Sess
     saved = store.export(db_session, fox, SKILLS)
     assert store.rebuild(saved) == []
     assert store.rebuild(store.Export.model_validate_json(saved.model_dump_json())) == []  # through the file format
+    # An export from before a field was recorded reads it as its default; the rebuild leaves that field out, and
+    # still compares what the format did record.
+    old = saved.model_dump(mode="json")
+    old["format"] = "flashtap-learner@6"
+    for s in old["skills"]:
+        del s["transfer"]
+    older = store.Export.model_validate(old)
+    assert store.rebuild(older) == []
+    assert store.rebuild(older.model_copy(update={"format": "flashtap-learner@7"}))  # @7 recorded it: a difference
+    older.skills[0].counted += 1
+    assert store.rebuild(older) == [
+        f"{older.skills[0].skill}: counted was {older.skills[0].counted}, rebuilt {older.skills[0].counted - 1}"
+    ]
     # The same attempts arriving in another order (a queue replayed) give the same estimates.
     owl = store.add_learner(db_session, "Owl", at=T0).id
     shuffled = sent[:]
@@ -357,7 +385,7 @@ def test_profile_export_and_evidence_rows(db_session: Session, fox: str) -> None
     assert p.struck == 0
     assert [m.model for m in p.models] == ["bkt@1", "rule@1"]
     out = store.export(db_session, fox, SKILLS, at=T0)
-    assert out.format == "flashtap-learner@6"
+    assert out.format == "flashtap-learner@7"
     assert out.decisions == []
     assert out.sessions[0].policy is None
     assert len(out.events) == 2
@@ -486,3 +514,38 @@ def test_a_later_override_wins_and_one_alone_says_bkt_only() -> None:
     (r,) = [x for x in skill_reports([], SKILLS, [b, a]) if x.skill == COUNT]
     assert r.told == b
     assert [(e.model, e.p) for e in r.estimates] == [("bkt@1", 0.05)]
+
+
+def test_transfer_evidence_needs_the_transfer_kind_as_primary_and_a_practice_kind_beside_it() -> None:
+    skill = [(COUNT, "primary")]
+    held = [event(right=True, at=T0 + timedelta(minutes=i), skills=skill, mode="which_group") for i in range(5)]
+    only = skill_reports(held, SKILLS[:1])[0]
+    assert only.transfer is not None
+    assert only.transfer.passed
+    assert only.state is State.INDEPENDENT  # passed, but never shown in its own kind: one form is not two
+    # a right answer where the skill was only secondary in a transfer kind is not transfer evidence for it
+    secondary = [event(right=True, skills=[(COUNT, "secondary")], mode="which_group")]
+    assert not is_transfer(secondary[0], COUNT, "secondary")
+    assert transfer(COUNT, uses(secondary)[COUNT]) == Transfer(
+        mode=Mode.WHICH_GROUP, name="Which group", tried=0, right=0, passed=False
+    )
+    assert transfer("maths.numerals.recognise", []) is None  # no practice kind assesses it, so it has no transfer kind
+    assert is_practice(event(right=True, mode="a_retired_kind"))
+    assert not is_practice(event(right=True, mode="which_group"))
+    assert [passed(r) for r in ([True], [False, True, True], [True, True, False])] == [False, True, False]
+
+
+def test_a_transfer_round_the_engine_did_not_choose_is_practice_not_a_check() -> None:
+    """Kept rounds played while the server was away, or one asked for by hand, are answers like any other but not
+    the check: the engine chose none of them."""
+    skill = [(COUNT, "primary")]
+    taps = [event(right=True, at=T0 + timedelta(minutes=i), skills=skill) for i in range(5)]
+    away = [
+        event(right=True, at=T0 + timedelta(minutes=10 + i), skills=skill, mode="which_group", asked="offline")
+        for i in range(3)
+    ]
+    r = skill_reports([*taps, *away], SKILLS[:1])[0]
+    assert r.state is State.INDEPENDENT
+    assert r.transfer is not None
+    assert r.transfer.tried == 0
+    assert r.counted == 8  # still counted as answers

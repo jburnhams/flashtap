@@ -49,14 +49,17 @@ from flashtap.mechanics import (
 )
 
 __all__ = [
+    "HELD_OUT",
     "MAX_CHOICES",
     "MIN_CHOICES",
     "MODE_NAMES",
     "MODE_SKILLS",
     "PICTURES",
     "PLAYABLE",
+    "PRACTICE",
     "SEED_LIMIT",
     "TEMPLATES",
+    "TRANSFER",
     "InvalidRound",
     "Level",
     "Mechanic",
@@ -115,6 +118,10 @@ class Template:
     skills: tuple[tuple[str, QRole], ...]
     build: Build
     levels: tuple[Level, ...]  # easiest first; the engine's steps (the grown-up's rounds have none)
+    # A transfer kind (0.13.0): a second form of its primary skill, held out of practice. The engine plays it only to
+    # check that a skill known in its own kind carries over (engine/policy.py), Mixed never picks it, and Play's list
+    # leaves it out; its answers are the skill's transfer evidence (learners/transfer.py).
+    held_out: bool = False
 
 
 TEMPLATES: dict[Mode, Template] = {
@@ -182,10 +189,80 @@ TEMPLATES: dict[Mode, Template] = {
             Mode.SOUNDS, 1, Mechanic.AUDIO_RESPOND, "Sounds", "Hear a sound on its own and tap the letters that make it",
             (("literacy.gpc.grapheme_from_sound", P),), _plain(choose.sounds), _picks(2, 3, 4, 6),
         ),
+        # Transfer kinds (0.13.0), one per skill a practice kind assesses: the same skill in another mechanic or
+        # another representation, held out of practice (spec §9, §13; docs/content.md "Transfer kinds").
+        Template(
+            Mode.HEAR_FIND, 1, Mechanic.AUDIO_RESPOND, "Hear and find", "Hear a word, with no picture to match, and tap its picture",
+            (("language.vocabulary.receptive", P),), _plain(choose.hear_find), _picks(2, 3, 4, 6), held_out=True,
+        ),
+        Template(
+            Mode.COLOUR_BOX, 1, Mechanic.SORT, "Colour box", "Put every shape of the named colour in the box",
+            (("language.vocabulary.colours", P),), _plain(place.colour_box),
+            tuple(Level(n, f"{n} shapes") for n in (3, 4, 6)), held_out=True,
+        ),
+        Template(
+            Mode.SHAPE_BOX, 1, Mechanic.SORT, "Shape box", "Put every shape of the named kind in the box, whatever its colour",
+            (("maths.geometry.name_2d", P),), _plain(place.shape_box),
+            tuple(Level(n, f"{n} shapes") for n in (3, 4, 6)), held_out=True,
+        ),
+        Template(
+            Mode.WHICH_GROUP, 1, Mechanic.SELECT_ONE, "Which group", "Hear a number and tap the group with that many",
+            (("maths.counting.objects", P), ("maths.cardinality.last_number", S)), choose.which_group,
+            _numbers((2, 3), (3, 4), (4, 5)), held_out=True,
+        ),
+        Template(
+            Mode.QUICK_DOTS, 1, Mechanic.BRIEF_EXPOSURE, "Quick dots", "See some dots for a moment and say how many",
+            (("maths.subitising.perceptual", P), ("maths.numerals.recognise", C)), choose.quick_dots,
+            _numbers((3, 3), (4, 5), (6, 5)), held_out=True,
+        ),
+        Template(
+            Mode.ONE_MORE, 1, Mechanic.SELECT_ONE, "One more, one less", "Find the number one more or one less than another",
+            (("maths.verbal_count.one_more", P), ("maths.numerals.recognise", C)), choose.one_more,
+            _numbers((3, 5), (4, 10), (4, 20), (6, 20)), held_out=True,
+        ),
+        Template(
+            Mode.BIGGEST, 1, Mechanic.SELECT_ONE, "Biggest number", "Tap the biggest or the smallest number",
+            (("maths.comparison.order", P), ("maths.numerals.recognise", C)), choose.biggest,
+            _numbers((3, 5), (4, 10), (4, 20), (6, 20)), held_out=True,
+        ),
+        Template(
+            Mode.NUMBER_CARD, 1, Mechanic.GIVE_N, "Number card", "Put as many pictures in the basket as the card shows",
+            (("maths.cardinality.give_n", P), ("maths.numerals.recognise", C), ("maths.counting.one_to_one", C)),
+            place.number_card,
+            (Level(3, "up to 3", 3), Level(5, "up to 5", 5), Level(6, "up to 8", 8), Level(8, "up to 10", 10)),
+            held_out=True,
+        ),
+        Template(
+            Mode.SMALL_LETTERS, 1, Mechanic.SELECT_ONE, "Small letters", "See a capital and tap its small letter",
+            (("literacy.letters.case_match", P), ("literacy.letters.identify", S)), _plain(choose.small_letters),
+            _picks(2, 3, 4, 6), held_out=True,
+        ),
+        Template(
+            Mode.LETTER_BOX, 1, Mechanic.SORT, "Letter box", "Put every picture that starts with the letter in its box",
+            (("literacy.gpc.initial_letter", P), ("literacy.phonemic.initial_sound", S), ("language.vocabulary.receptive", C)),
+            _plain(place.letter_box), tuple(Level(n, f"{n} pictures") for n in (4, 5, 6)), held_out=True,
+        ),
+        Template(
+            Mode.SAME_SOUND, 1, Mechanic.SELECT_ONE, "Same first sound", "Tap the picture that starts with the same sound",
+            (("literacy.phonemic.initial_sound", P), ("language.vocabulary.receptive", C)), _plain(choose.same_sound),
+            _picks(2, 3, 4), held_out=True,
+        ),
+        Template(
+            Mode.FIRST_SOUNDS, 1, Mechanic.MATCH_PAIRS, "First sounds", "Put each picture on the letters of its first sound",
+            (("literacy.gpc.grapheme_from_sound", P), ("literacy.phonemic.initial_sound", S), ("language.vocabulary.receptive", C)),
+            _plain(place.first_sounds), tuple(Level(n, f"{n} pairs") for n in (2, 3, 4)), held_out=True,
+        ),
     )
 }  # fmt: skip
 
 PLAYABLE = tuple(TEMPLATES)
+PRACTICE = tuple(m for m, t in TEMPLATES.items() if not t.held_out)  # the kinds Mixed and Play's list offer
+# Each transfer kind's skill, and each skill's transfer kind: one each (tests/unit/test_rounds.py checks every skill a
+# practice kind assesses has one).
+HELD_OUT: dict[Mode, str] = {
+    m: next(s for s, r in t.skills if r is QRole.PRIMARY) for m, t in TEMPLATES.items() if t.held_out
+}
+TRANSFER: dict[str, Mode] = {s: m for m, s in HELD_OUT.items()}
 # One picture per kind, for the tiles a learner picks between when offered a choice of two (engine/policy.py): what
 # the round looks like, since a learner who cannot read yet picks by the picture and the spoken name.
 PICTURES: dict[Mode, str] = {
@@ -202,6 +279,18 @@ PICTURES: dict[Mode, str] = {
     Mode.CAPITALS: "\U0001f520",  # ABCD
     Mode.SORT_SOUNDS: "\U0001f5c2\ufe0f",  # card index dividers
     Mode.SOUNDS: "\U0001f50a",  # speaker
+    Mode.HEAR_FIND: "\U0001f5e3\ufe0f",  # speaking head
+    Mode.COLOUR_BOX: "\U0001f58d\ufe0f",  # crayon
+    Mode.SHAPE_BOX: "\U0001f537",  # blue diamond
+    Mode.WHICH_GROUP: "\U0001f9ee",  # abacus
+    Mode.QUICK_DOTS: "\U0001f535",  # blue circle
+    Mode.ONE_MORE: "\u2795",  # plus
+    Mode.BIGGEST: "\U0001f418",  # elephant
+    Mode.NUMBER_CARD: "\U0001f0cf",  # card
+    Mode.SMALL_LETTERS: "\U0001f521",  # abcd
+    Mode.LETTER_BOX: "\U0001f4ee",  # postbox
+    Mode.SAME_SOUND: "\U0001f3b5",  # music note
+    Mode.FIRST_SOUNDS: "\U0001f9e9",  # puzzle piece
 }
 # What each kind asks, for the list a person picks from (GET /api/modes), Mixed last.
 MODE_NAMES: dict[Mode, tuple[str, str]] = {
@@ -263,7 +352,7 @@ def generate(
         # rebuilds it without going through Mixed. (0.2 drew the round from the same generator after picking the kind,
         # so a Mixed round's reported kind and seed rebuilt a different round.)
         pick = random.Random(seed)
-        played = pick.choice(PLAYABLE)
+        played = pick.choice(PRACTICE)  # never a transfer kind: those are held out (0.13.0; was every kind)
         seed = pick.randrange(SEED_LIMIT)
     rng = random.Random(seed)
     t = TEMPLATES[played]

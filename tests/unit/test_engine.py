@@ -122,7 +122,7 @@ def test_retention_doubles_after_a_spaced_right_answer_and_halves_after_a_miss()
     s = k.state(COUNT)
     assert s.half_life == 1.0
     assert s.recall(T0 + timedelta(days=1)) == pytest.approx(0.5)
-    k.observe(event(Mode.COUNTING, at=T0 + timedelta(hours=1)))  # the same day: no spacing
+    k.observe(event(Mode.COUNTING, at=LATER))  # the same day: no spacing
     assert s.half_life == 1.0
     k.observe(event(Mode.COUNTING, at=T0 + timedelta(days=2)))
     assert s.half_life == 2.0
@@ -210,7 +210,7 @@ def test_candidates_are_labelled_by_what_they_would_do_for_their_skill() -> None
     assert set(first.values()) == {Why.PLACEMENT}
     log = [event(Mode.MATCHING, at=T0 + timedelta(minutes=i)) for i in range(policy.PLACING)]
     k = fold(log, G)
-    soon = T0 + timedelta(hours=1)
+    soon = LATER
     cands = {x.mode: x for x in decide(k, past(started=soon), CONFIG, "s:0", soon).candidates}
     assert cands[Mode.COUNTING].action is Why.INTRODUCE
     assert cands[Mode.MATCHING].action is Why.CONSOLIDATE
@@ -261,6 +261,7 @@ def test_when_every_round_is_set_aside_the_softer_filters_give_way() -> None:
     assert all(x.set_aside is not None for x in c.candidates)
     assert c.action is Action.ROUND
     assert sum(x.probability for x in c.candidates) == pytest.approx(1.0)
+    assert all(x.probability == 0 for x in c.candidates if x.set_aside is SetAside.HELD_OUT)  # never opened
 
 
 def test_a_missed_round_is_followed_by_contrasts_that_leave_part_of_it_out() -> None:
@@ -318,7 +319,7 @@ def test_scores_are_log_loss_and_brier_best_first() -> None:
     )  # clipped, not infinite
     assert evaluate.score("m", "d", []).attempts == 0
     log = [event(Mode.MATCHING, right=i % 4 != 0, at=T0 + timedelta(minutes=i)) for i in range(20)]
-    log.append(event(Mode.MATCHING, struck="someone else", at=T0 + timedelta(hours=1)))
+    log.append(event(Mode.MATCHING, struck="someone else", at=LATER))
     out = evaluate.scores([log], G)
     assert [x.attempts for x in out] == [20, 20, 20]  # the struck attempt is not predicted
     assert out == sorted(out, key=lambda x: x.log_loss)
@@ -504,7 +505,7 @@ def test_replay_remakes_every_logged_decision_even_after_a_strike(db_session: Se
     assert out.scores[0].attempts == len(store.events(db_session, fox)) - 1
 
     saved = store.export(db_session, fox, [])
-    assert saved.format == "flashtap-learner@6"
+    assert saved.format == "flashtap-learner@7"
     assert saved.sessions[0].config is not None
     starts = {x.id: (x.started_at, x.config) for x in saved.sessions}
     assert replay.replay(saved.events, saved.decisions, starts, G) == (out.decisions, [])
@@ -529,7 +530,7 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
     assert replay.replay(log, retired, {}, G) == (
         0,
         [
-            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3, utility@4, utility@5)"
+            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3, utility@4, utility@5, utility@6)"
         ],
     )
     assert replay.replay(log, old[:1], {}, G)[1] == [
@@ -840,7 +841,7 @@ def test_a_grown_ups_override_places_a_skill_and_its_neighbours(db_session: Sess
 def test_overrides_replay_as_they_stood(db_session: Session, fox: str) -> None:
     t = store.tell(db_session, fox, store.OverrideIn(skill=COUNT, says="can", observer="parent"), {COUNT}, at=T0)
     play_session(db_session, fox, Config(choices=4, tries=0, max_rounds=4), T0 + timedelta(minutes=1))
-    store.withdraw(db_session, fox, t.id, at=T0 + timedelta(hours=1))
+    store.withdraw(db_session, fox, t.id, at=LATER)
     play_session(db_session, fox, Config(choices=4, tries=0, max_rounds=4), T0 + timedelta(hours=2), seed=3)
     made = store.decisions(db_session, fox)
     first = next(c for c in made[0].candidates if c.mode is Mode.COUNTING)
@@ -875,7 +876,8 @@ def test_each_policy_version_weighs_the_kinds_it_had() -> None:
     assert Mode.SOUNDS not in {s.mode for s in policy.kept("utility@2").shapes}
     assert policy.kept("utility@1").shapes == policy.kept("utility@2").shapes
     assert {s.mode for s in POLICY.shapes} == set(rounds.TEMPLATES)
-    assert set(policy.REPLAYS) == {"utility@1", "utility@2", "utility@3", "utility@4", POLICY.id}
+    assert {s.mode for s in policy.kept("utility@5").shapes} == set(rounds.PRACTICE)  # no transfer kinds before 6
+    assert set(policy.REPLAYS) == {"utility@1", "utility@2", "utility@3", "utility@4", "utility@5", POLICY.id}
 
 
 def test_deleting_a_learner_deletes_their_ratings_and_overrides(db_session: Session, fox: str) -> None:
@@ -1006,3 +1008,71 @@ def test_policies_before_steps_lay_out_the_grown_ups_choices() -> None:
     chose = decide(k, past(), Config(choices=4, tries=0, choice_every=1), "s:1", T0, old)
     assert chose.offers is not None
     assert all((o.choices, o.level) == (4, None) for o in chose.offers)
+
+
+# Transfer probes (utility@6): a transfer kind is held out until its skill is known in practice, then checked
+
+
+LATER = T0 + timedelta(hours=1)
+
+
+def candidate_of(k: Knowledge, mode: Mode, key: str = "s:0") -> policy.Candidate:
+    return next(x for x in decide(k, past(started=LATER), CONFIG, key, LATER).candidates if x.mode is mode)
+
+
+def counted(*answers: tuple[Mode, bool]) -> list[Event]:
+    return [event(m, right=r, at=T0 + timedelta(minutes=i)) for i, (m, r) in enumerate(answers)]
+
+
+def test_a_transfer_kind_is_held_out_until_its_skill_is_known_in_practice_then_checked_until_it_passes() -> None:
+    assert candidate_of(Knowledge(G), Mode.WHICH_GROUP).set_aside is SetAside.HELD_OUT  # nothing known yet
+    two = fold(counted(*[(Mode.COUNTING, True)] * 2), G)
+    assert two.practised[COUNT] == 2
+    assert candidate_of(two, Mode.WHICH_GROUP).set_aside is SetAside.HELD_OUT  # not enough practice yet
+    known = counted(*[(Mode.COUNTING, True)] * 6)
+    k = fold(known, G)
+    assert k.p(COUNT) >= policy.MASTERED
+    assert k.practised[COUNT] == 6
+    due = candidate_of(k, Mode.WHICH_GROUP)
+    assert (due.set_aside, due.action, due.probability > 0) == (None, Why.TRANSFER, True)
+    # the bonus is what the transfer weight adds
+    zero = next(
+        x
+        for x in decide(
+            k, past(started=LATER), CONFIG, "s:0", LATER, policy.Policy(weights=policy.Weights(transfer=0.0))
+        ).candidates
+        if x.mode is Mode.WHICH_GROUP
+    )
+    assert due.utility == pytest.approx(zero.utility + POLICY.weights.transfer, abs=1e-5)
+    # a miss leaves the check open; two right in a row pass it, and the kind is held out again
+    later = T0 + timedelta(minutes=30)
+    missed = fold([*known, event(Mode.WHICH_GROUP, right=False, at=later)], G)
+    assert missed.transfers[COUNT] == [False]
+    assert not missed.transferred(COUNT)
+    assert candidate_of(missed, Mode.WHICH_GROUP).action is Why.TRANSFER
+    passed = fold([*known, *(event(Mode.WHICH_GROUP, at=later + timedelta(minutes=i)) for i in range(2))], G)
+    assert passed.transferred(COUNT)
+    assert passed.practised[COUNT] == 6  # a transfer answer is not practice
+    assert candidate_of(passed, Mode.WHICH_GROUP).set_aside is SetAside.HELD_OUT
+
+
+def test_a_transfer_probe_is_drawn_and_says_why_in_words() -> None:
+    k = fold(counted(*[(Mode.COUNTING, True)] * 6), G)
+    for i in range(400):
+        c = decide(k, past(started=LATER), CONFIG, f"s:{i}", LATER)
+        if c.mode is Mode.WHICH_GROUP:
+            break
+    else:
+        pytest.fail("the transfer probe was never drawn")
+    assert c.rationale[0] is Why.TRANSFER
+    assert c.skill == COUNT
+    assert explain(c, TITLES, CONFIG, 3).startswith(
+        "Known in its own kind of round, so checked in a new one, to see that it carries over: Count a set of things."
+    )
+    assert rounds.at_level(c.mode, c.level or 0, c.seed).mode is Mode.WHICH_GROUP
+
+
+def test_policies_before_transfer_never_weigh_a_transfer_kind() -> None:
+    k = fold(counted(*[(Mode.COUNTING, True)] * 6), G)
+    c = decide(k, past(started=LATER), CONFIG, "s:0", LATER, policy.kept("utility@5"))
+    assert not {x.mode for x in c.candidates} & set(rounds.HELD_OUT)
