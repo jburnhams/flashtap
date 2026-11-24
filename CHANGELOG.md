@@ -4,6 +4,15 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-24
 
+**Voice build remakes a clip when the speak model or its settings change; shared atomic writes (0.12.1, branch `claude/project-thread-8eg5hn`)**
+
+Asked for: a second audit of code that belongs in strata-python or strata-react (raised as strata-python #73, #74 and strata-react #318, #319), plus two fixes found on the way. Corrects an earlier claim: `voice.build`'s docstring said a clip is remade under other model settings, but only the voice was compared.
+
+- `src/flashtap/voice.py`: `build(now=...)` takes the speak role's model and `settings_hash` as the service reports them (`strata_python.clients.models.RoleSettings`) and remakes a made clip whose model or settings differ (`_stale`; a hash only one side knows compares the model alone); never a recording. `Store` writes the manifest and clips with `strata_python.files.write_text_atomic`/`write_bytes_atomic` instead of its own `mkstemp` + `os.replace`.
+- `src/flashtap/cli.py`: `voice build` reads `role_settings("speak")` (or the model `--model` names) and passes it as `now`; with the service out of reach it passes nothing and each line fails on its own, as before.
+- `tests/unit/test_voice.py`: a new model or settings remakes, the same or an unknown hash keeps, a recording is never remade. `tests/integration/test_cli_end_to_end.py`: changing the stand-in service's speak model remakes every made clip.
+- `pyproject.toml`, `uv.lock`: 0.12.1.
+
 **Fluency and misconceptions: how quickly right answers come, and which wrong answers are a mix-up (0.12.0, branch `claude/project-thread-azpq19`)**
 
 Asked for: the next work on Flashtap. The spec check's next gap after steps of difficulty was the learner state's fluency and active misconceptions (§10, §16). Speed is reported and kept out of mastery and the engine (§10: never speed as mastery); misconceptions hold a skill's reporting state back and the engine checks them.

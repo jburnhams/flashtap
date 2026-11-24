@@ -18,6 +18,7 @@ from flashtap.server.app import PORT
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+    from strata_python.clients.models import RoleSettings
 
     from flashtap.learners import store
 
@@ -209,6 +210,20 @@ def cmd_voice_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _speak_settings(model: str | None) -> "RoleSettings | None":
+    """What made clips are compared with: the speak role's model and settings now, or the model `--model` names (whose
+    settings the registry does not report, so only the model is compared). With the service out of reach, None: each
+    line then fails on its own and is named, as it would without this read."""
+    from strata_python.clients.models import RoleSettings, Unavailable, role_settings
+
+    if model:
+        return RoleSettings(model, None)
+    try:
+        return role_settings("speak")
+    except Unavailable:
+        return None
+
+
 def cmd_voice_build(args: argparse.Namespace) -> int:
     from flashtap import voice
 
@@ -221,7 +236,9 @@ def cmd_voice_build(args: argparse.Namespace) -> int:
         wanted = [x for x in wanted if voice.phoneme_of(x) is None]
     if args.limit:
         wanted = wanted[: args.limit]
-    r = voice.build(store, wanted, voice=args.voice, model=args.model, force=args.force, say=print)
+    r = voice.build(
+        store, wanted, voice=args.voice, model=args.model, force=args.force, now=_speak_settings(args.model), say=print
+    )
     print(
         f"made {len(r.made)}, kept {len(r.kept)}, failed {len(r.failed)}; {len(r.to_record)} sounds to record in the app"
     )
