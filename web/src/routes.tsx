@@ -5,7 +5,8 @@
 // with the app (src/flashtap/server/app.py), so a reload or a shared link opens that screen.
 import type { RouteObject } from 'react-router'
 import { ContentScreen } from './screens/ContentScreen'
-import { Layout } from './screens/Layout'
+import { BreakScreen } from './screens/BreakScreen'
+import { Bare, Layout } from './screens/Layout'
 import { LearnerScreen } from './screens/LearnerScreen'
 import { LearnersScreen } from './screens/LearnersScreen'
 import { NotFoundScreen } from './screens/NotFoundScreen'
@@ -14,6 +15,8 @@ import { SettingsScreen } from './screens/SettingsScreen'
 import { SoundsScreen } from './screens/SoundsScreen'
 
 export const routes: RouteObject[] = [
+  // Play inside another app's frame (a video player's break): no nav, ends by telling the parent page.
+  { path: 'break', element: <Bare />, children: [{ index: true, element: <BreakScreen /> }] },
   {
     element: <Layout />,
     children: [

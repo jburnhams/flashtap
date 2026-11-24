@@ -172,9 +172,13 @@ function rate(who: LearnerRow, eventId: string, value: Face): Promise<unknown> {
   return keepRating(eventId, value, `${who.nickname}, a face`).then(d => (d === 'refused' ? Promise.reject(new Error('refused')) : d))
 }
 
+/** What a game embedded elsewhere (the Break screen) is told: each round played (on its Next), and the engine ending
+ * the sitting (a break offered or the session over), which an embedded game takes as its end instead of asking. */
+export type Embedded = { onPlayed: () => void; onOver: () => void }
+
 /** One round after another in `mode`: each Next asks the server for a new one. Every `rateEvery`th round a recorded
  * learner is asked how it was. */
-function Game({ mode, learner, session, rateEvery }: { mode: Mode; learner: LearnerRow | null; session: string; rateEvery: number }) {
+export function Game({ mode, learner, session, rateEvery, embedded }: { mode: Mode; learner: LearnerRow | null; session: string; rateEvery: number; embedded?: Embedded }) {
   const [n, setN] = useState(0)
   const last = useRef('') // the last answer kept: a face is offered only after one
   // A fresh round for every visit (a change of kind or of who is playing remounts this Game): a round left
@@ -189,7 +193,7 @@ function Game({ mode, learner, session, rateEvery }: { mode: Mode; learner: Lear
     <DataView state={round} isEmpty={p => p.round.options.length === 0 && p.round.pieces.length === 0} skeleton={<RoundSkeleton />} empty={<EmptyState title="Nothing to play">The server sent a round with no pictures.</EmptyState>}>
       {({ round: r, kept }) => (
         <div className="grid gap-4">
-          <Board key={`${r.mode}-${r.seed}`} round={r} onNext={() => setN(x => x + 1)} onAnswered={learner ? a => record(learner, r, a) : undefined} onRated={asking && learner ? v => rate(learner, last.current, v) : undefined} />
+          <Board key={`${r.mode}-${r.seed}`} round={r} onNext={() => { setN(x => x + 1); embedded?.onPlayed() }} onAnswered={learner ? a => record(learner, r, a) : undefined} onRated={asking && learner ? v => rate(learner, last.current, v) : undefined} />
           {kept && <p className="type-caption text-muted-foreground">{KEPT}</p>}
         </div>
       )}
@@ -198,12 +202,12 @@ function Game({ mode, learner, session, rateEvery }: { mode: Mode; learner: Lear
 }
 
 /** A session the engine plans for `learner`: started once per visit, then one decision after another. */
-function Planned({ learner }: { learner: LearnerRow }) {
+export function Planned({ learner, embedded }: { learner: LearnerRow; embedded?: Embedded }) {
   const [visit] = useState(newId)
   const session = useLoad({ queryKey: keys.session(learner.id, visit), queryFn: () => api.startSession(learner.id), staleTime: Infinity })
   return (
     <DataView state={session} isEmpty={() => false} skeleton={<RoundSkeleton />} empty={<EmptyState title="No session">The server started none.</EmptyState>}>
-      {s => <Decisions session={s} learner={learner} />}
+      {s => <Decisions session={s} learner={learner} embedded={embedded} />}
     </DataView>
   )
 }
@@ -221,7 +225,7 @@ function nextOrAway(session: string, seq: number): Promise<Next | Away> {
 }
 
 /** Decision `seq` of the session, asked for by number so a retry returns the same one; each Next asks for the one after. */
-function Decisions({ session, learner }: { session: SessionInfo; learner: LearnerRow }) {
+function Decisions({ session, learner, embedded }: { session: SessionInfo; learner: LearnerRow; embedded?: Embedded }) {
   const [seq, setSeq] = useState(0)
   const queryClient = useQueryClient()
   const decision = useLoad({ queryKey: keys.next(session.id, seq), queryFn: () => nextOrAway(session.id, seq), staleTime: Infinity })
@@ -248,15 +252,17 @@ function Decisions({ session, learner }: { session: SessionInfo; learner: Learne
     <DataView state={decision} isEmpty={() => false} skeleton={<RoundSkeleton />} empty={<EmptyState title="Nothing chosen">The server chose nothing.</EmptyState>}>
       {d =>
         d.action === 'away' ? (
-          <AwayRounds key={seq} session={session} seq={seq} learner={learner} kinds={chosen} onBack={back} />
+          <AwayRounds key={seq} session={session} seq={seq} learner={learner} kinds={chosen} onBack={back} onPlayed={embedded?.onPlayed} />
         ) : (d.action === 'round' || d.action === 'choice') && d.round ? (
           <div className="grid gap-4">
             <Chosen round={d.round} onChosen={m => setChosen(k => [m, ...k.filter(x => x !== m)])} />
-            <Board key={d.id} round={d.round} onNext={onward} onAnswered={a => record(d, d.round as Round, a)} onRated={d.rate ? rated : undefined} />
+            <Board key={d.id} round={d.round} onNext={() => { onward(); embedded?.onPlayed() }} onAnswered={a => record(d, d.round as Round, a)} onRated={d.rate ? rated : undefined} />
             <p className="type-caption text-muted-foreground">Why this round: {d.why}</p>
           </div>
         ) : d.action === 'choice' && d.offers ? (
           <PickOne decision={d} offers={d.offers} onPicked={back} />
+        ) : embedded && (d.action === 'break' || d.action === 'end') ? (
+          <Over onOver={embedded.onOver} />
         ) : d.action === 'break' ? (
           <BreakOffer decision={d} onContinue={onward} />
         ) : (
@@ -265,6 +271,13 @@ function Decisions({ session, learner }: { session: SessionInfo; learner: Learne
       }
     </DataView>
   )
+}
+
+/** The engine ended the sitting in an embedded game: told once, drawn by the embedding screen. */
+function Over({ onOver }: { onOver: () => void }) {
+  const latest = useRef(onOver)
+  useEffect(() => { latest.current() }, [])
+  return null
 }
 
 /** Notes a kind the engine chose and tops up the rounds kept of it, so they are there if the server goes. */
@@ -295,7 +308,7 @@ function takeKept(kinds: readonly Mode[]): Round | null {
  * own as the device's choice (asked "offline", no decision), and after each Next the engine is asked again for the
  * decision Play was waiting for. Once it answers, `onBack` puts that decision on screen and the session goes on.
  */
-function AwayRounds({ session, seq, learner, kinds, onBack }: { session: SessionInfo; seq: number; learner: LearnerRow; kinds: readonly Mode[]; onBack: (n: Next) => void }) {
+function AwayRounds({ session, seq, learner, kinds, onBack, onPlayed }: { session: SessionInfo; seq: number; learner: LearnerRow; kinds: readonly Mode[]; onBack: (n: Next) => void; onPlayed?: () => void }) {
   const [sitting] = useState(newId)
   const [round, setRound] = useState<Round | null>(() => takeKept(kinds))
   const [asking, setAsking] = useState(false)
@@ -315,7 +328,7 @@ function AwayRounds({ session, seq, learner, kinds, onBack }: { session: Session
     )
   return (
     <div className="grid gap-4">
-      <Board key={`${round.mode}-${round.seed}`} round={round} onNext={again} onAnswered={a => record(round, a)} />
+      <Board key={`${round.mode}-${round.seed}`} round={round} onNext={() => { again(); onPlayed?.() }} onAnswered={a => record(round, a)} />
       <p className="type-caption text-muted-foreground">{KEPT}</p>
     </div>
   )
@@ -582,7 +595,7 @@ function Arrange({ round, onNext, onAnswered, onRated }: { round: Round; onNext:
 }
 
 /** Mirrors a round: the heading, the big picture and four tiles. */
-function RoundSkeleton() {
+export function RoundSkeleton() {
   return (
     <div className="grid gap-6" aria-hidden>
       <Skeleton className="h-8 w-64" />

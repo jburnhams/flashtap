@@ -42,6 +42,21 @@ export default defineVisualConfig({
       },
       { name: 'counting', path: '/?mode=counting' },
       {
+        // Play inside another app's frame: no nav, ends after the rounds the link asks for.
+        name: 'break',
+        path: `/break?learner=${FOX}&rounds=1`,
+        states: {
+          ready: [],
+          over: {
+            setup: async page => {
+              await page.getByRole('row', { name: '3', exact: true }).click()
+              await page.getByRole('button', { name: 'Next' }).click()
+              await page.getByText('That’s the break over.', { exact: false }).waitFor()
+            },
+          },
+        },
+      },
+      {
         // The three faces under a finished round, asked every few rounds (Settings, Sessions).
         name: 'rated',
         path: `/?mode=next&learner=${FOX}`,
