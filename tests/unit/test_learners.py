@@ -332,6 +332,7 @@ def test_rebuilding_from_the_log_reproduces_identical_estimates(db_session: Sess
         )
         for i in range(60)
     ]
+    sent.append(attempt(fox, seed=99, at=T0 + timedelta(days=5), session="5e55" + "f" * 28))  # timed: a fresh session
     for a in sent:
         store.record(db_session, a)
     store.strike(db_session, sent[3].event_id, "a sibling")
@@ -351,6 +352,10 @@ def test_rebuilding_from_the_log_reproduces_identical_estimates(db_session: Sess
     assert store.rebuild(older) == [
         f"{older.skills[0].skill}: counted was {older.skills[0].counted}, rebuilt {older.skills[0].counted - 1}"
     ]
+    # One from before 0.12.0 carried no fluency either, though this log has some: it still rebuilds.
+    assert any(s.fluency is not None for s in saved.skills)
+    pre = saved.model_dump(mode="json", exclude={"skills": {"__all__": {"fluency", "suspected", "transfer"}}})
+    assert store.rebuild(store.Export.model_validate({**pre, "format": "flashtap-learner@5"})) == []
     # The same attempts arriving in another order (a queue replayed) give the same estimates.
     owl = store.add_learner(db_session, "Owl", at=T0).id
     shuffled = sent[:]
@@ -358,7 +363,7 @@ def test_rebuilding_from_the_log_reproduces_identical_estimates(db_session: Sess
     for a in shuffled:
         store.record(
             db_session,
-            a.model_copy(update={"learner_id": owl, "event_id": a.event_id[::-1], "session_id": "5e55" + owl[4:]}),
+            a.model_copy(update={"learner_id": owl, "event_id": a.event_id[::-1], "session_id": a.session_id[::-1]}),
         )
     store.strike(db_session, sent[3].event_id[::-1], "a sibling")
     assert store.profile(db_session, owl, SKILLS).skills == saved.skills
