@@ -2,6 +2,20 @@
 
 Newest first, grouped by day. One entry per change, in the same commit or PR as the change.
 
+## 2026-11-26
+
+**First steps: the easiest rounds, where a new learner begins, and every other kind opened by success (0.14.0, branch `claude/project-thread-xk3y90`)**
+
+Asked for: the owner wants to start using Flashtap, but it needs to begin with far simpler rounds, as easy as possible, and progress only gradually and on success. Before this a new learner was probed across every kind (Order and Sounds included) from the first round.
+
+- `src/flashtap/packs/starter.toml` **new** (pack `starter`, version 1, draft): four skills, find the same picture, colour, letter and number, each a strong prerequisite (Flashtap's judgement) of a skill a practice kind assesses; strand `language.matching`.
+- `src/flashtap/packs/maths-number.toml`: version 2. Two judgement edges: counting a set is a strong prerequisite of one more and one less, and of putting numbers in order, so Missing number and Order open after Counting. Rounds and decisions made from version 1 are no longer rebuilt.
+- `src/flashtap/kinds/starter.py` **new**: Same picture (among other kinds of thing), Same colour (from three tiles the right one is another shape of that colour), Same letter (no look-alikes), Same number (one to three, then to five), and their transfer kinds Picture, Colour, Letter and Number twins (`match_pairs`). `src/flashtap/mechanics.py`: the eight kinds. `src/flashtap/rounds.py`: their templates, first in every list, two tiles at the first step and at most four; pictures for the choice tiles. No existing template changed.
+- `src/flashtap/engine/policy.py`: `utility@7`. A kind is set aside `not_yet` until every taught skill it waits on (`needs`: the strong prerequisites of each skill it names, and its secondary and confound skills that a practice kind teaches) is shown, rated known on the learner's own answers or a grown-up's "can do it" (`_shown`); a known gap is named first. The never-stuck fallback opens a `not_yet` kind only when nothing else can be played. `STARTER`, `TAUGHT`, `OPENS_FROM`; `utility@6` and before weigh neither the new kinds nor the rule, and replay.
+- `web/src/api.ts` (`MODES`: the first steps first), `web/src/screens/PlayScreen.tsx` (names), `web/src/mocks/fixtures.ts` (the new kinds, their rounds, every kind's packs), `web/openapi.json` and `web/src/api.generated.ts` regenerated; `web/tests/integration/PlayScreen.test.tsx` (the list, a Same picture round).
+- Tests: `tests/unit/test_rounds.py` (each first step's rules over hundreds of seeds; Number twins in the step check), `test_engine.py` (a new learner gets only first steps at two tiles; kinds open one shown skill at a time and never on misses or the graph; a grown-up's "can do it" opens; a learner right every time opens every practice kind, in order; older policies unchanged; tests of other behaviour now start from the first steps told), `test_mistakes.py`, `test_server.py`, `test_cli.py`, `tests/integration/test_cli_end_to_end.py` (eight packs).
+- `pyproject.toml`, `uv.lock`: 0.14.0. `README.md`, `AGENTS.md`, `docs/content.md` ("First steps", transfer table, files), `docs/implementation-plan.md` (item 11), `docs/progress.md`.
+
 ## 2026-11-24
 
 **A Break screen: Play inside another app's frame, ending by telling the page around it (branch `claude/project-thread-r8f3oj`)**

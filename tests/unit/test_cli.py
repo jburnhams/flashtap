@@ -70,7 +70,7 @@ def test_serve_starts_the_server_on_the_default_port(monkeypatch):
 def test_content_check_passes_on_the_shipped_packs(capsys):
     assert cli.main(["content", "check"]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("ok: 7 packs, ")
+    assert out.startswith("ok: 8 packs, ")
     assert "15 objectives (12 mapped, 3 out of scope)" in out
 
 

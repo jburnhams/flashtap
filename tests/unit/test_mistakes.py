@@ -17,7 +17,7 @@ from flashtap.engine import model, policy, sessions
 from flashtap.engine.model import Knowledge, fold
 from flashtap.engine.policy import Action, Config, Past, Why, decide, explain
 from flashtap.learners import misconceptions, store
-from flashtap.learners.evidence import Event, SkillUse, uses
+from flashtap.learners.evidence import Event, SkillUse, Told, uses
 from flashtap.learners.fluency import AWAY, FRESH, fluency, starts, timed
 from flashtap.learners.misconceptions import MisconceptionStatus as Status
 from flashtap.learners.misconceptions import Tally, observe, tail, tallies
@@ -362,8 +362,13 @@ def test_an_attempt_stores_what_its_first_answer_showed_and_the_evidence_says_it
 # The engine (utility@5)
 
 
+# The numerals matched (utility@7 opens Counting only then), as a grown-up says, a day before.
+MATCHED = Told(id="m" * 32, skill="maths.numerals.same", says="can", observer="parent", at=T0 - timedelta(days=1))
+
+
 def suspicious(*more: Event) -> Knowledge:
-    return fold([*(ev(right=False, tapped="n9", at=T0 - timedelta(hours=1, minutes=i)) for i in range(3)), *more], G)
+    misses = (ev(right=False, tapped="n9", at=T0 - timedelta(hours=1, minutes=i)) for i in range(3))
+    return fold([*misses, *more], G, told=[MATCHED])
 
 
 def counting(c: policy.Choice) -> policy.Candidate:

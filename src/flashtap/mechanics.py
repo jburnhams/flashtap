@@ -62,6 +62,15 @@ class Mode(StrEnum):
     LETTER_BOX = "letter_box"
     SAME_SOUND = "same_sound"
     FIRST_SOUNDS = "first_sounds"
+    # First steps (0.14.0): matching by look, where a new learner begins; then their transfer kinds, held out
+    SAME_PICTURE = "same_picture"
+    SAME_COLOUR = "same_colour"
+    SAME_LETTER = "same_letter"
+    SAME_NUMBER = "same_number"
+    PICTURE_TWINS = "picture_twins"
+    COLOUR_TWINS = "colour_twins"
+    LETTER_TWINS = "letter_twins"
+    NUMBER_TWINS = "number_twins"
     MIXED = "mixed"
 
 

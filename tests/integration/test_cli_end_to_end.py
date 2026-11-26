@@ -19,7 +19,7 @@ def test_a_setting_changed_from_the_cli_reaches_the_api(cli, client):
 
 
 def test_content_check_as_a_process_reads_the_packaged_packs(cli_subprocess, tmp_path):
-    assert cli_subprocess("content", "check").stdout.startswith("ok: 7 packs")
+    assert cli_subprocess("content", "check").stdout.startswith("ok: 8 packs")
     (tmp_path / "cycle.toml").write_text(
         'pack = "cycle"\nversion = 1\ntitle = "Cycle"\nstatus = "draft"\n'
         '[[sources]]\nid = "s.x"\ntitle = "S"\nurl = "https://example.com"\n'

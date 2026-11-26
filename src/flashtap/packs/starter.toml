@@ -1,0 +1,56 @@
+# First steps: the easiest rounds there are, where a new learner begins (0.14.0).
+#
+# Each skill here is matching by look: a picture, a colour, a letter or a number is shown, and the learner taps the
+# one that is the same. Nothing has to be named, counted or heard on its own, so a learner who has none of the words
+# yet can still answer, and a right answer is evidence the next rounds can stand on. Each is a strong prerequisite of
+# a skill a practice round assesses, so the engine opens those rounds only once a learner has shown these (engine/
+# policy.py, "Opening rounds by success"). These edges are Flashtap's judgement, not a source's: matching what is seen
+# comes before finding the thing for a heard word. They are for a teacher to check with the rest (docs/content.md).
+
+pack = "starter"
+version = 1
+title = "First steps: matching by look"
+status = "draft"
+
+[[strands]]
+id = "language.matching"
+domain = "language"
+title = "Matching by look"
+
+[[skills]]
+id = "language.matching.picture"
+title = "Find the same picture"
+strand = "language.matching"
+description = "See a picture and tap the one that is the same, with no word to know."
+edges = [
+  { relation = "prerequisite_strong", to = "language.vocabulary.receptive", confidence = "medium", source = "src.flashtap_judgement", note = "Finding a named picture asks for the matching as well as the word." },
+]
+
+[[skills]]
+id = "language.matching.colour"
+title = "Find the same colour"
+strand = "language.matching"
+description = "See a colour and tap the thing of the same colour, with no colour word to know."
+edges = [
+  { relation = "prerequisite_strong", to = "language.vocabulary.colours", confidence = "medium", source = "src.flashtap_judgement", note = "Telling colours apart by eye comes before their names." },
+]
+
+[[skills]]
+id = "literacy.letters.same"
+title = "Find the same letter"
+strand = "literacy.letters"
+description = "See a letter and tap the same letter among letters that look different, with no name or sound to know."
+dimensions = { letter_case = ["lower"] }
+edges = [
+  { relation = "prerequisite_strong", to = "literacy.letters.identify", confidence = "medium", source = "src.flashtap_judgement", note = "Seeing that two letters are the same comes before telling them apart by name." },
+]
+
+[[skills]]
+id = "maths.numerals.same"
+title = "Find the same number"
+strand = "maths.numerals"
+description = "See a numeral and tap the same numeral, with no number name to know."
+dimensions = { number_range = [1, 5], representation = ["numerals"] }
+edges = [
+  { relation = "prerequisite_strong", to = "maths.numerals.recognise", confidence = "medium", source = "src.flashtap_judgement", note = "Seeing that two numerals are the same comes before reading them." },
+]

@@ -22,6 +22,7 @@ uv run flashtap content list --json              # the shape GET /api/content re
 
 | File | Holds |
 | --- | --- |
+| `starter.toml` | The first steps: the same picture, colour, letter and number, where a new learner begins ([First steps](#first-steps)) |
 | `core.toml` | Sources (with edition and the date someone checked them), domains, parameter dimensions |
 | `maths-number.toml` | Number to 10 and the counting system: verbal count, counting, cardinality, subitising, numerals, comparison, part-whole, patterns; the Shapes round's skill; misconceptions |
 | `literacy-early.toml` | Phonological and phonemic awareness, letter forms, GPCs, decoding, exception words, spelling, comprehension, handwriting; misconceptions |
@@ -64,6 +65,14 @@ Words: `segments` splits the spelling into graphemes from the GPC inventory (`"o
 
 An id used twice (across every kind); an edge, strand, domain, source, skill or stage that does not exist; an edge to itself or written twice; a `prerequisite_strong` or `part_of` cycle; a skill parameter outside its dimension (a range outside its bounds or reversed, a value not in the set); a GPC taught twice in one sequence; a word segment that is not exactly one GPC, segments that do not spell the word, an onset that is not how the word starts, two words with one picture; an objective with both or neither of `skills` and `out_of_scope`; and anything malformed (bad id, unknown key, unknown relation, a source that is not `https`).
 
+## First steps
+
+`starter.toml` (0.14.0) holds the easiest skills there are: find the same picture, the same colour, the same letter, the same number. Each round shows the thing big, says "Find the same one", and lays out two tiles at its first step, never more than four; the wrong tiles are always unlike the right one (another kind of thing, another colour, no look-alike letters, numbers one to three first), because these rounds teach what a round is, not a mix-up. Nothing has to be named, counted or heard on its own.
+
+Each first-steps skill is a strong prerequisite of a skill a practice kind assesses (picture → the words for pictures, colour → the colour words, letter → knowing letters by name, number → reading numerals), and from policy `utility@7` the engine opens a kind only once the learner has **shown** every skill it waits on: the strong prerequisites of each skill the kind names, and each of its secondary or confound skills that another practice kind teaches. Shown means rated known on answers of the learner's own (or a grown-up's "can do it"), never inferred from the graph. So a new learner begins on the four first steps, then opens Matching, Colours, Counting, Quick look, Capitals and Sounds; then Shapes (the colour words), Sort by sound (the words for pictures), Missing number, Order and Give (counting); then Letters and Listen. A learner who gets everything right opens every practice kind in about a hundred rounds (`tests/unit/test_engine.py`); each kind starts at its own easiest step and climbs by its stair.
+
+`maths.number` version 2 adds two `src.flashtap_judgement` edges for that order: counting a set is a strong prerequisite of saying one more (Missing number) and of putting numerals in order (Order). Rounds and decisions made from version 1 are not rebuilt (see "Writing a pack", above, on `version`).
+
 ## Transfer kinds
 
 A skill a learner gets right in the one kind of round that practises it may be that game learnt, not the skill (spec §11, "strong skill in one mechanic only"). So every skill a practice kind assesses has one **transfer kind** (`rounds.TRANSFER`, 0.13.0): the same skill asked another way, held out of practice (Mixed and Play's list never offer it; the engine plays it only to check a skill it rates known; `src/flashtap/learners/transfer.py`). A skill is Generalised only once its latest two answers there are right.
@@ -81,6 +90,10 @@ A skill a learner gets right in the one kind of round that practises it may be t
 | Match capital and small letters | Capitals | Small letters | one capital, its small letter picked among look-alikes; pairs can be matched by elimination |
 | Find a word that starts with a letter's sound | Letters | Letter box | every picture that starts with the letter into its box; not the one picture |
 | Hear the first sound in a word | Sort by sound | Same first sound | no letters at all: a picture that starts like the named one |
+| Find the same picture | Same picture | Picture twins | pairs to put together, not one picture to find |
+| Find the same colour | Same colour | Colour twins | each circle or diamond onto the square of its colour: only the colour matches |
+| Find the same letter | Same letter | Letter twins | pairs to put together |
+| Find the same number | Same number | Number twins | pairs to put together |
 | Find the letters for a sound | Listen, Sounds | First sounds | the sound inside a word, with two-letter sounds (ship on sh), and the first letter of one (s) as the tempting wrong place |
 
 These are judgements about what counts as "the same skill in another form", like the `src.flashtap_judgement` edges, and are for the same review.

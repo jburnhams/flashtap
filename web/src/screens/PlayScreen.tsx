@@ -54,6 +54,10 @@ import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRig
 // waits for the clips list (`voice.ready`), so the first one is in the same voice as the rest.
 
 export const modeLabels: Record<Mode, string> = {
+  same_picture: 'Same picture',
+  same_colour: 'Same colour',
+  same_letter: 'Same letter',
+  same_number: 'Same number',
   matching: 'Matching',
   colours: 'Colours',
   shapes: 'Shapes',
@@ -79,6 +83,10 @@ export const modeLabels: Record<Mode, string> = {
   letter_box: 'Letter box',
   same_sound: 'Same first sound',
   first_sounds: 'First sounds',
+  picture_twins: 'Picture twins',
+  colour_twins: 'Colour twins',
+  letter_twins: 'Letter twins',
+  number_twins: 'Number twins',
   mixed: 'Mixed',
 }
 

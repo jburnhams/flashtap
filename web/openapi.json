@@ -923,6 +923,14 @@
        "letter_box",
        "same_sound",
        "first_sounds",
+       "same_picture",
+       "same_colour",
+       "same_letter",
+       "same_number",
+       "picture_twins",
+       "colour_twins",
+       "letter_twins",
+       "number_twins",
        "mixed"
       ],
       "title": "Mode",
@@ -1570,6 +1578,14 @@
      "letter_box",
      "same_sound",
      "first_sounds",
+     "same_picture",
+     "same_colour",
+     "same_letter",
+     "same_number",
+     "picture_twins",
+     "colour_twins",
+     "letter_twins",
+     "number_twins",
      "mixed"
     ],
     "title": "Mode",
@@ -2374,7 +2390,7 @@
       "title": "Learner Id"
      },
      "policy": {
-      "default": "utility@6",
+      "default": "utility@7",
       "title": "Policy",
       "type": "string"
      },
@@ -2717,7 +2733,8 @@
      "prerequisite_gap",
      "frustration_guard",
      "just_played",
-     "held_out"
+     "held_out",
+     "not_yet"
     ],
     "title": "SetAside",
     "type": "string"
