@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from flashtap import content, mistakes, rounds
 from flashtap import distractors as dx
 from flashtap.engine import model, policy, sessions
-from flashtap.engine.model import Knowledge, fold
+from flashtap.engine.model import Graph, Knowledge, fold
 from flashtap.engine.policy import Action, Config, Past, Why, decide, explain
 from flashtap.learners import misconceptions, store
 from flashtap.learners.evidence import Event, SkillUse, Told, uses
@@ -442,12 +442,12 @@ def test_with_no_seed_offering_the_trap_the_round_is_played_without_a_probe(monk
     assert "maths.misconception.gone" in explain(unknown, {}, Config(choices=4, tries=0), 0)
 
 
-def play(db: Session, learner: str, start: datetime, chooser: policy.Policy | None = None) -> int:
+def play(db: Session, learner: str, start: datetime, g: Graph | None = None) -> int:
     """A session that taps a b, d, p or q for another whenever one is offered: returns the decisions that probed."""
     info = sessions.start(db, learner, Config(choices=4, tries=0, max_rounds=12, break_every=0), at=start)
     at, probes = start, 0
     for seq in range(40):
-        n = sessions.next_decision(db, info.id, seq, G, {}, at=at)
+        n = sessions.next_decision(db, info.id, seq, g or G, {}, at=at)
         if n.action is Action.END:
             break
         r = n.round
@@ -505,7 +505,8 @@ def test_sessions_that_probe_replay_exactly_and_utility_4_ignores_the_tally(
     out = sessions.evaluate(db_session, sessions.ReplayIn(learner_id=fox), G)
     assert (out.reproduced, out.differences) == (out.decisions, [])
     monkeypatch.setattr(sessions, "decide", functools.partial(policy.decide, policy=policy.kept("utility@4")))
-    assert play(db_session, fox, T0 + timedelta(days=1)) == 0
+    # utility@4 decided on the graph before the first steps' skills joined it, as replay remakes it
+    assert play(db_session, fox, T0 + timedelta(days=1), G.without(policy.STARTER_SKILLS)) == 0
     monkeypatch.undo()
     out = sessions.evaluate(db_session, sessions.ReplayIn(learner_id=fox), G)
     assert (out.reproduced, out.differences) == (out.decisions, [])

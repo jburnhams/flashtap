@@ -92,6 +92,13 @@ class Graph:
         """The longest chain of prerequisites under `skill`: 0 for a skill that needs none."""
         return max((self.depth(q) + 1 for q in self.before.get(skill, frozenset())), default=0)
 
+    def without(self, gone: Iterable[str]) -> "Graph":
+        """The graph as it was before `gone` joined it: those skills and every link to them left out. Exact for
+        skills that are only ever prerequisites (the first steps), whose removal shortens no other chain."""
+        out = frozenset(gone)
+        keep = tuple(s for s in self.skills if s not in out)
+        return Graph(keep, {s: self.before[s] - out for s in keep}, {s: self.after[s] - out for s in keep})
+
 
 def graph(registry: Registry | None = None, skills: Iterable[str] | None = None) -> Graph:
     r = registry or content.load()

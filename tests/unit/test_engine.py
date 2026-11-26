@@ -484,7 +484,13 @@ def answer(db: Session, n: sessions.Next, learner: str, *, right: bool, at: date
 
 
 def play_session(
-    db: Session, learner: str, config: Config, start: datetime, rights: float = 0.7, seed: int = 0
+    db: Session,
+    learner: str,
+    config: Config,
+    start: datetime,
+    rights: float = 0.7,
+    seed: int = 0,
+    g: Graph | None = None,
 ) -> list[sessions.Next]:
     """Ask for decisions until the session ends, answering each round (right with chance `rights`)."""
     rng = random.Random(seed)
@@ -492,7 +498,7 @@ def play_session(
     out: list[sessions.Next] = []
     at = start
     for seq in range(100):
-        n = sessions.next_decision(db, info.id, seq, G, TITLES, at=at)
+        n = sessions.next_decision(db, info.id, seq, g or G, TITLES, at=at)
         out.append(n)
         if n.action is Action.END:
             break
@@ -624,6 +630,21 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
         0,
         [f"decision {d.seq} of session {d.session_id}: made from {was}, which are not kept (now {now})"],
     )
+
+
+def test_a_decision_from_before_the_first_steps_is_remade_on_the_graph_it_was_made_on() -> None:
+    """utility@6 decided on a graph with no first-steps skills; their edges change Matching's readiness and reach, so
+    a replay on today's graph alone would differ (Codex on #59)."""
+    old = G.without(policy.STARTER_SKILLS)
+    assert old.before["language.vocabulary.receptive"] == frozenset()
+    assert "language.matching.picture" in G.before["language.vocabulary.receptive"]
+    assert not set(old.skills) & policy.STARTER_SKILLS
+    at = T0 + timedelta(minutes=1)
+    config = CONFIG.model_copy(update={"max_rounds": 20})
+    made = decide(Knowledge(old), Past(started=T0), config, "s:0", at, policy.kept("utility@6"))
+    assert made != decide(Knowledge(G), Past(started=T0), config, "s:0", at, policy.kept("utility@6"))
+    d = policy.Logged(**made.model_dump(), id="d" * 32, session_id="s", seq=0, at=at)
+    assert replay.remake(d, [], [d], T0, config, G).model_dump() == made.model_dump()
 
 
 def test_the_log_as_it_stood_counts_only_what_was_received_and_struck_by_then() -> None:
@@ -931,9 +952,11 @@ def test_decisions_logged_by_utility_1_are_remade_by_the_current_policy(
     db_session: Session, fox: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A 0.6.0 or 0.7.0 database: decisions by utility@1 (which had no Sounds round), candidates without `liked`, a
-    session config without the choice and rating cadence. The current code remakes each exactly."""
+    session config without the choice and rating cadence, made on the graph before the first steps' skills joined it.
+    The current code remakes each exactly."""
     monkeypatch.setattr(sessions, "decide", functools.partial(policy.decide, policy=policy.kept("utility@1")))
-    play_session(db_session, fox, Config(choices=4, tries=0, max_rounds=6, break_every=3), T0)
+    before = G.without(policy.STARTER_SKILLS)
+    play_session(db_session, fox, Config(choices=4, tries=0, max_rounds=6, break_every=3), T0, g=before)
     monkeypatch.undo()
     for d in db_session.scalars(select(Decision)):
         assert d.policy == "utility@1"

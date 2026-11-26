@@ -34,6 +34,7 @@ from typing import Any, ClassVar
 from sqlalchemy import JSON, DateTime, ForeignKey, Index, MetaData, String, UniqueConstraint, false
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column
 from strata_python.db import NAMING_CONVENTION
+from strata_python.tasks.queue import jobs_table
 
 ID_LENGTH = 36  # a UUID as text, the longest id the browser sends; ours are 32 hex digits
 NICKNAME_LENGTH = 40
@@ -189,3 +190,9 @@ class Tombstone(Base):
     event_id: Mapped[str] = mapped_column(ForeignKey("attempts.event_id", ondelete="CASCADE"), primary_key=True)
     reason: Mapped[str] = mapped_column(String(200))
     at: Mapped[datetime]
+
+
+# Background work (0.14.0, `flashtap.jobs`): strata-python's job queue, a table in this schema so its migrations make
+# it and it lives where the records do (SQLite in a checkout, the shared Postgres when deployed). It holds what the
+# server does on its own, such as making the voice's clips, and nothing about a learner.
+JOBS = jobs_table(Base.metadata)

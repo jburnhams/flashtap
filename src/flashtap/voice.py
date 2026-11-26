@@ -35,7 +35,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 from strata_python import files, oslib
-from strata_python.clients.models import RoleSettings
+from strata_python.clients.models import RoleSettings, Unavailable, role_settings
 from strata_python.contracts import ApiModel
 from strata_python.wav import read_wav
 
@@ -277,6 +277,7 @@ class Built(BaseModel):
     kept: list[str] = []  # already there in this voice and settings (or recorded)
     to_record: list[str] = []  # consonant sounds: a person records them
     failed: dict[str, str] = {}
+    left: list[str] = []  # not reached: asked to stop first (a job cancelled, or the server shutting down)
 
 
 Speak = Callable[..., tuple[dict[str, Any], Any]]  # clients.models.run_with_provenance's shape
@@ -298,6 +299,18 @@ def _stale(c: Clip, now: RoleSettings | None) -> bool:
     return bool(c.settings_hash and now.settings_hash and c.settings_hash != now.settings_hash)
 
 
+def speak_settings(model: str | None = None) -> RoleSettings | None:
+    """What made clips are compared with: the speak role's model and settings now, or the model `model` names (whose
+    settings the registry does not report, so only the model is compared). With the service out of reach, None: each
+    line then fails on its own and is named, as it would without this read."""
+    if model:
+        return RoleSettings(model, None)
+    try:
+        return role_settings("speak")
+    except Unavailable:
+        return None
+
+
 def build(
     store: Store,
     wanted: Iterable[str],
@@ -308,14 +321,20 @@ def build(
     now: RoleSettings | None = None,
     speak: Speak = _speak_default,
     say: Callable[[str], None] = lambda _: None,
+    stop: Callable[[], bool] = lambda: False,
 ) -> Built:
     """Make the missing clips of `wanted` with strata-models. A clip is remade when it is in another voice, from another
     model or other model settings than `now` (the speak role's as the service reports them, `models.role_settings`), or
     `force`; a recording never is. Without `now` (the service out of reach, or older) only the voice is compared.
-    Consonant sounds are listed to record, not made."""
+    Consonant sounds are listed to record, not made. `stop` is asked before each line; once it says yes the rest are
+    `left`, so a job stops between clips, never inside one."""
     out = Built()
     have = store.read().clips
-    for line in wanted:
+    todo = list(wanted)
+    for i, line in enumerate(todo):
+        if stop():
+            out.left = todo[i:]
+            break
         old = have.get(line)
         if old is not None and old.source == "recorded":
             out.kept.append(line)

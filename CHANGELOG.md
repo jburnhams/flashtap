@@ -4,6 +4,25 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-26
 
+**Review fix (Codex on #59): decisions from before the first steps are remade on the graph they were made on (branch `claude/project-thread-xk3y90`)**
+
+Codex found that leaving the starter kinds out of an older policy's offer was not enough: the starter skills' edges also change the readiness and reach of the kinds they open, so an older decision replayed on today's graph differed.
+
+- `src/flashtap/engine/model.py`: `Graph.without(gone)`, the graph with those skills and their links left out. `engine/policy.py`: `STARTER_SKILLS`. `engine/replay.py`: a decision made before `utility@7` is remade on `g.without(STARTER_SKILLS)`; `maths.number` version 2's two new edges are a pack change and show as differences, as any pack change does.
+- `tests/unit/test_engine.py`: a decision from before the first steps is remade exactly on its own graph; the utility@1 replay test plays its old sessions on that graph, as an old database was made. `tests/unit/test_mistakes.py`: the same for the utility@4 sessions.
+
+**The voice is built by the server itself, on strata-python's job queue (0.14.0, branch `claude/project-thread-xk3y90`)**
+
+Asked for: "voice build should happen automatically using strata-python job queue". Before this, someone had to run `flashtap voice build` on the server after any release that added sentences (the first steps did).
+
+- `src/flashtap/jobs.py` **new**: the `voice_build` job (every line missing or stale, or the first `limit`; `RetryLater` after 15 minutes while lines are left unmade, up to 8 tries; stopped between clips, the rest queued again at once); `queue`, `start` (queue one build, deduped, holding the `voice` resource, and start a worker at idle priority).
+- `src/flashtap/learners/models.py`: `JOBS`, the queue's table in the learner schema. `src/flashtap/migrations/20261126_c6263d1db252_jobs_queue_for_background_work.py` **new**.
+- `src/flashtap/server/app.py`: `add_jobs` routes (`GET /api/jobs`, counts, one, cancel, retry); `job_queue(app)`; `run_jobs(app)` wraps the lifespan to start the worker and stop it with the server. Only `main` (`flashtap serve`) runs it, so an app made in a test or by `openapi` starts nothing. A served app now opens its database at start.
+- `src/flashtap/voice.py`: `build(stop=)`, asked before each line, and `Built.left`; `speak_settings` moved here from `cli.py` so the job and the command share it.
+- `pyproject.toml`, `uv.lock`: strata-python 0.2.22 (`tasks.web.add_jobs`), floor raised to it. `web/openapi.json`, `web/src/api.generated.ts` regenerated.
+- Tests: `tests/unit/test_jobs.py` **new** (a short build makes and then keeps; lines left unmade run again later; a stop leaves the rest; the served app queues a build and stops its worker), `tests/integration/test_jobs.py` **new** (a served app starts a build through the strata-models stand-in over HTTP; a restart finds it queued).
+- `README.md`, `AGENTS.md`, `docs/deploying.md`.
+
 **First steps: the easiest rounds, where a new learner begins, and every other kind opened by success (0.14.0, branch `claude/project-thread-xk3y90`)**
 
 Asked for: the owner wants to start using Flashtap, but it needs to begin with far simpler rounds, as easy as possible, and progress only gradually and on success. Before this a new learner was probed across every kind (Order and Sounds included) from the first round.

@@ -347,6 +347,9 @@ STEPS_FROM = 4  # the first version that chooses a step of difficulty
 PROBES_FROM = 5  # the first version that checks misconceptions
 TRANSFER_FROM = 6  # the first version that checks transfer
 OPENS_FROM = 7  # the first version that opens kinds by success
+# The first steps' skills: in the graph from utility@7 on, so an older decision is remade on the graph without them
+# (replay.py), as it was made; they are only ever prerequisites, so leaving them out restores it exactly.
+STARTER_SKILLS = frozenset(s.primary for s in SHAPES if s.mode in STARTER)
 # The skills a practice kind is written to assess: the ones a learner can show, and so the only ones a kind waits on
 # (a skill no practice kind teaches, such as reading a numeral, could never be shown and would close a kind for good).
 TAUGHT = frozenset(s.primary for s in SHAPES if s.mode not in rounds.HELD_OUT)

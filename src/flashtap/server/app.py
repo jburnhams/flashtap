@@ -25,21 +25,26 @@ The recorded voice (src/flashtap/voice.py): GET /api/v1/voice (each line with a 
 clip or none); GET /api/v1/voice/clips/{name} (a clip, cached for good: named by its content); PUT
 /api/v1/voice/recordings?line=/ʃ/ (a WAV body: a person's recording of a sound, kept over any made one); DELETE
 /api/v1/voice/recordings?line=/ʃ/.
+Background work (src/flashtap/jobs.py, strata_python.tasks.web): GET /api/jobs, /api/jobs/counts, /api/jobs/{id};
+POST /api/jobs/{id}/cancel, /api/jobs/{id}/retry. `flashtap serve` queues a voice build at every start.
 Every other path serves the web app (`src/flashtap/server/static/index.html` when built with `cd web && npm run build`,
 else the plain stand-in `landing.html`), so a reload or a shared link opens that screen: the app routes in the browser."""
 
 import os
 import re
-from collections.abc import Sequence
-from typing import Annotated
+from collections.abc import AsyncGenerator, Sequence
+from contextlib import asynccontextmanager
+from typing import Annotated, Any
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from strata_python import web
-from strata_python.db.web import DbSession, add_database
+from strata_python.db.web import DbSession, add_database, database
+from strata_python.tasks.queue import Queue
+from strata_python.tasks.web import add_jobs
 
-from flashtap import __version__, content, rounds, settings, voice
+from flashtap import __version__, content, jobs, rounds, settings, voice
 from flashtap.engine import model, sessions
 from flashtap.engine.policy import Config
 from flashtap.learners import db as learner_db
@@ -128,6 +133,7 @@ def create_app() -> FastAPI:
     )
     add_engine_routes(app, model.graph(registry), {s.id: s.title for s in summary.skills})
     add_voice_routes(app, voice.Store(voice.home()))
+    add_jobs(app, lambda: job_queue(app))
 
     web.add_web(app, STATIC, LANDING)
     return app
@@ -270,5 +276,32 @@ def add_voice_routes(app: FastAPI, store: voice.Store) -> None:
         return Response(status_code=204)
 
 
+def job_queue(app: FastAPI) -> Queue:
+    """The app's job queue, on its database, made on first use (the routes' first request, or `run_jobs` at start)."""
+    q: Queue | None = getattr(app.state, "jobs", None)
+    if q is None:
+        q = app.state.jobs = jobs.queue(database(app).engine())
+    return q
+
+
+def run_jobs(app: FastAPI, *, isolate: bool = True) -> FastAPI:
+    """Run the background work while `app` serves: at start-up, queue a voice build and start the worker (which opens
+    the database, so a served app always has one); at shutdown, stop it. Only `main` (`flashtap serve`) asks for it,
+    so an app made in a test or by `openapi` starts no worker and asks strata-models for nothing."""
+    inner = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan(a: Any) -> AsyncGenerator[Any]:
+        async with inner(a) as state:
+            worker = jobs.start(job_queue(app), isolate=isolate)
+            try:
+                yield state
+            finally:
+                worker.stop()
+
+    app.router.lifespan_context = lifespan
+    return app
+
+
 def main(argv: Sequence[str] | None = None) -> None:
-    web.serve(create_app(), argv, default_port=PORT, banner=f"settings: {settings.SETTINGS.path()}")
+    web.serve(run_jobs(create_app()), argv, default_port=PORT, banner=f"settings: {settings.SETTINGS.path()}")
