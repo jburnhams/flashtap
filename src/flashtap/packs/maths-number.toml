@@ -3,7 +3,7 @@
 # join as more [[skills]] here or in a new pack, with edges back to these.
 
 pack = "maths.number"
-version = 1
+version = 2
 title = "Number: counting, cardinality, subitising, numerals, comparison, composition"
 status = "draft"
 
@@ -79,6 +79,7 @@ description = "Name the number after or before a given number without counting f
 dimensions = { number_range = [0, 20] }
 edges = [
   { relation = "prerequisite_strong", from = "maths.verbal_count.forwards", confidence = "high", source = "src.ncetm_cardinality" },
+  { relation = "prerequisite_strong", from = "maths.counting.objects", confidence = "medium", source = "src.flashtap_judgement", note = "One more is the next count: a learner who cannot yet count a set has nothing to add one to (version 2)." },
 ]
 
 # Counting objects
@@ -207,6 +208,7 @@ dimensions = { number_range = [0, 10], representation = ["numerals", "objects"] 
 edges = [
   { relation = "facilitates", from = "maths.comparison.more_fewer", confidence = "medium", source = "src.learning_trajectories" },
   { relation = "facilitates", from = "maths.verbal_count.one_more", confidence = "medium", source = "src.learning_trajectories" },
+  { relation = "prerequisite_strong", from = "maths.counting.objects", confidence = "medium", source = "src.flashtap_judgement", note = "Putting numerals in order leans on the count sequence a learner shows by counting (version 2)." },
 ]
 
 # Part-whole

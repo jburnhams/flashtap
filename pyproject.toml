@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flashtap"
-version = "0.13.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
+version = "0.14.0"        # the single source of truth: `flashtap.__version__` reads it back with importlib.metadata
 description = "Flashtap: learning games that progress by ability, a FastAPI + strata-react web app"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
-    "strata-python[db]>=0.2.12,<0.3",   # brings FastAPI, uvicorn, pydantic and pytest; [db] SQLAlchemy, Alembic and psycopg for the learner records. While 0.x, capped below the next minor
+    "strata-python[db]>=0.2.22,<0.3",   # brings FastAPI, uvicorn, pydantic and pytest; [db] SQLAlchemy, Alembic and psycopg for the learner records. While 0.x, capped below the next minor
 ]
 
 [project.scripts]

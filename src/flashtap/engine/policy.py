@@ -59,6 +59,18 @@ one decision: a round, a choice between two rounds for the learner to pick, an o
    and comes back after more practice like any other candidate. The never-stuck fallback never opens a held-out kind.
    `utility@5` and before do not weigh the transfer kinds at all, and still replay.
 
+11. **Opening rounds by success** (§13 "progress when mastery evidence ... is sufficient", from `utility@7`): a kind
+   of round is set aside (`not_yet`) until the learner has shown, by answers of their own or a grown-up's "can do
+   it", every skill it needs that another practice kind teaches: the strong prerequisites of each skill it names, and
+   each secondary or confound skill that is some practice kind's primary (Shapes needs the colour words, Counting
+   needs the numerals matched). Shown means rated known (`MASTERED`) with evidence of its own, never inferred from the
+   graph, so a learner moves up only by succeeding. The first-steps kinds (`packs/starter.toml`: same picture, colour,
+   letter, number) need nothing, so a new learner begins there, at two tiles, and every other kind opens one
+   prerequisite at a time, at its own easiest step. Answers in a kind's own skill do not open it: a learner who
+   played it by hand, or before 0.14.0, or answered its skill in another kind (Sounds and Listen share theirs), still
+   shows what it waits on first, which a learner who can is quick to do. The never-stuck fallback opens a `not_yet`
+   kind only when nothing else at all can be played. `utility@6` and before neither weigh the first-steps kinds nor close any kind.
+
 **Diagnostic contrasts** (§12): after a missed round, a candidate that shares a skill with it but leaves out another
 (Missing number after Counting: the numerals without the counting) isolates a cause; it gets a bonus for how uncertain
 the shared skills still are, and the rationale says so. A frustrated learner gets a break first, never more diagnosis.
@@ -78,7 +90,7 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 from flashtap import content, mistakes, rounds
-from flashtap.engine.model import SHAPES, Knowledge, RoundShape
+from flashtap.engine.model import SHAPES, Graph, Knowledge, RoundShape
 from flashtap.learners.misconceptions import MisconceptionStatus as Status
 from flashtap.mechanics import SEED_LIMIT, Mode
 
@@ -126,6 +138,7 @@ class SetAside(StrEnum):
     FRUSTRATION = "frustration_guard"
     REPEAT = "just_played"
     HELD_OUT = "held_out"  # a transfer kind whose skill is not due a check (utility@6 on)
+    NOT_YET = "not_yet"  # a skill it needs has not been shown yet (utility@7 on)
 
 
 class Config(BaseModel):
@@ -287,7 +300,8 @@ class Policy:
     # 4 (0.11.0): steps of difficulty. 3 and before lay out the grown-up's number of choices at no step, so they replay.
     # 5 (0.12.0): checking misconceptions. 4 and before give no probe bonus and draw no probe seed, so they replay.
     # 6 (0.13.0): transfer kinds and probes. 5 and before weigh only the practice kinds (`OFFERS`), so they replay.
-    version: int = 6
+    # 7 (0.14.0): the first-steps kinds, and kinds opened by success. 6 and before weigh neither (`OFFERS`, `OPENS_FROM`).
+    version: int = 7
     weights: Weights = field(default_factory=Weights)
     tau: float = 0.15  # softmax temperature: lower picks the best more often
     epsilon: float = 0.1  # share of every pick that is uniform over the eligible candidates
@@ -305,7 +319,20 @@ class Policy:
 # The kinds each version weighs. A new kind changes every decision's candidates and chances, so it comes with a new
 # version, and a logged decision is remade against the kinds its own version had.
 _ALL = frozenset(s.mode for s in SHAPES)
-_PRACTICE = _ALL - set(rounds.HELD_OUT)
+STARTER = frozenset(  # the first-steps kinds and their transfer kinds (0.14.0)
+    {
+        Mode.SAME_PICTURE,
+        Mode.SAME_COLOUR,
+        Mode.SAME_LETTER,
+        Mode.SAME_NUMBER,
+        Mode.PICTURE_TWINS,
+        Mode.COLOUR_TWINS,
+        Mode.LETTER_TWINS,
+        Mode.NUMBER_TWINS,
+    }
+)
+_BEFORE_STARTER = _ALL - STARTER
+_PRACTICE = _BEFORE_STARTER - set(rounds.HELD_OUT)
 _BEFORE_SOUNDS = _PRACTICE - {Mode.SOUNDS}
 OFFERS: dict[str, frozenset[Mode]] = {
     "utility@1": _BEFORE_SOUNDS,
@@ -313,11 +340,19 @@ OFFERS: dict[str, frozenset[Mode]] = {
     "utility@3": _PRACTICE,
     "utility@4": _PRACTICE,
     "utility@5": _PRACTICE,
-    "utility@6": _ALL,
+    "utility@6": _BEFORE_STARTER,
+    "utility@7": _ALL,
 }
 STEPS_FROM = 4  # the first version that chooses a step of difficulty
 PROBES_FROM = 5  # the first version that checks misconceptions
 TRANSFER_FROM = 6  # the first version that checks transfer
+OPENS_FROM = 7  # the first version that opens kinds by success
+# The first steps' skills: in the graph from utility@7 on, so an older decision is remade on the graph without them
+# (replay.py), as it was made; they are only ever prerequisites, so leaving them out restores it exactly.
+STARTER_SKILLS = frozenset(s.primary for s in SHAPES if s.mode in STARTER)
+# The skills a practice kind is written to assess: the ones a learner can show, and so the only ones a kind waits on
+# (a skill no practice kind teaches, such as reading a numeral, could never be shown and would close a kind for good).
+TAUGHT = frozenset(s.primary for s in SHAPES if s.mode not in rounds.HELD_OUT)
 
 POLICY = Policy()
 REPLAYS = frozenset(OFFERS)  # logged policies the current code remakes exactly
@@ -364,9 +399,12 @@ def decide(
         _candidate(k, s, past, config, now, policy, misses, failed, liked.get(s.mode.value, 0.0)) for s in policy.shapes
     ]
     open_ = [c for c in cands if c.set_aside is None]
-    if not open_:  # never stuck: drop the softer filters first, the prerequisite gap last, a held-out kind never
+    if (
+        not open_
+    ):  # never stuck: drop the softer filters first, the prerequisite gap, then not yet, a held-out kind never
         playable = [c for c in cands if c.set_aside is not SetAside.HELD_OUT]
-        open_ = [c for c in playable if c.set_aside is not SetAside.PREREQUISITE] or playable
+        opened = [c for c in playable if c.set_aside is not SetAside.NOT_YET]
+        open_ = [c for c in opened if c.set_aside is not SetAside.PREREQUISITE] or opened or playable
     best = max(c.utility for c in open_)
     weights = [math.exp((c.utility - best) / policy.tau) for c in open_]
     total = sum(weights)
@@ -535,7 +573,9 @@ def _candidate(
     if held and not due:
         set_aside = SetAside.HELD_OUT
     elif any((k.state(q).own >= 2 or k.state(q).told) and k.p(q) < 0.3 for q in before):
-        set_aside = SetAside.PREREQUISITE
+        set_aside = SetAside.PREREQUISITE  # a known gap says more than not yet shown, so it is named first
+    elif policy.version >= OPENS_FROM and not all(_shown(k, q) for q in needs(shape, g)):
+        set_aside = SetAside.NOT_YET
     elif misses >= GUARDED and p_right < 0.6:
         set_aside = SetAside.FRUSTRATION
     elif played[-2:] == [shape.mode, shape.mode]:
@@ -574,6 +614,22 @@ def _candidate(
         probability=0.0,
         set_aside=set_aside,
     )
+
+
+def needs(shape: RoundShape, g: Graph) -> frozenset[str]:
+    """The taught skills a kind waits on (utility@7): each named skill's strong prerequisites, and every named skill
+    but its primary that a practice kind teaches."""
+    need: set[str] = set()
+    for s in shape.skills:
+        if s != shape.primary:
+            need.add(s)
+        need |= g.before.get(s, frozenset())
+    return frozenset(need & TAUGHT) - {shape.primary}
+
+
+def _shown(k: Knowledge, skill: str) -> bool:
+    """Shown by success: rated known on evidence of its own (answers or a grown-up), never on the graph's say-so."""
+    return k.state(skill).seen and k.p(skill) >= MASTERED
 
 
 def _probe(k: Knowledge, mode: Mode, level: int | None) -> tuple[str | None, float]:

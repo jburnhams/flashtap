@@ -1,5 +1,14 @@
 # Progress log
 
+## 2026-11-26: first steps, and kinds opened by success (0.14.0)
+
+- Asked for: the owner wants to start using Flashtap, but even the easiest rounds were too hard to begin on; it should start as easy as possible and move on only gradually, on success.
+- Before this, a new learner's first rounds were placement probes over every practice kind (Order, Missing number and Sounds among them), because the prerequisite filter set a kind aside only on evidence of a gap, and the graph had almost no edges between the skills the rounds assess (only Letters after Sort by sound and Give after Counting).
+- Four first-steps kinds (matching by look: picture, colour, letter, number) at two tiles. Matching asks nothing of words, so a right answer is possible for a learner with none, and a run of them is evidence the next rounds can stand on.
+- The engine (`utility@7`) opens a kind only once every taught skill it waits on is shown: rated known (0.85) on the learner's own evidence or a grown-up's override, never inferred from the graph, so moving up needs success. "Waits on" covers the strong prerequisites of every skill a kind names and its secondary and confound skills that another kind teaches, which orders Shapes after Colours without a new edge. Only skills a practice kind teaches count, since a skill no kind is written for could never be shown.
+- At two tiles a guess is right half the time, so BKT needs four or five right answers to rate a first-steps skill known: gradual by itself. A learner answering everything right opens the first new kinds after about ten rounds and every practice kind within a hundred; the simulated learners still learn more under the engine than at random (13.5 against 12.8 skills, 100 learners, 6 sessions, seed 1).
+- Dropped on the way: keeping a kind open when its skill already had answers of its own. Sounds and Listen share a skill, so answering Sounds opened Listen before Sort by sound; and the point is that moving up is by what the kind waits on.
+
 ## 2026-11-24: transfer rounds (0.13.0)
 
 - Asked for: the next spec gap, transfer probes (§13 "progress when ... transfer probes pass"; §9 "holdout families for transfer evaluation"; §11 "strong skill in one mechanic only").

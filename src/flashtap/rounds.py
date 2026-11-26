@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from functools import cache
 
 from flashtap import content
-from flashtap.kinds import Body, choose, place
+from flashtap.kinds import Body, choose, place, starter
 from flashtap.mechanics import (
     PLACE,
     SEED_LIMIT,
@@ -127,6 +127,25 @@ class Template:
 TEMPLATES: dict[Mode, Template] = {
     t.mode: t
     for t in (
+        # First steps (0.14.0, packs/starter.toml): the easiest rounds, first in every list, where a new learner
+        # begins. Two tiles at the first step, never more than four: the engine opens the other kinds only once these
+        # are shown (engine/policy.py, "Opening rounds by success").
+        Template(
+            Mode.SAME_PICTURE, 1, Mechanic.SELECT_ONE, "Same picture", "See a picture and tap the same one",
+            (("language.matching.picture", P),), _plain(starter.same_picture), _picks(2, 3, 4),
+        ),
+        Template(
+            Mode.SAME_COLOUR, 1, Mechanic.SELECT_ONE, "Same colour", "See a colour and tap the one of the same colour",
+            (("language.matching.colour", P),), _plain(starter.same_colour), _picks(2, 3, 4),
+        ),
+        Template(
+            Mode.SAME_LETTER, 1, Mechanic.SELECT_ONE, "Same letter", "See a letter and tap the same letter",
+            (("literacy.letters.same", P),), _plain(starter.same_letter), _picks(2, 3, 4),
+        ),
+        Template(
+            Mode.SAME_NUMBER, 1, Mechanic.SELECT_ONE, "Same number", "See a number and tap the same number",
+            (("maths.numerals.same", P),), starter.same_number, _numbers((2, 3), (3, 3), (3, 5), (4, 5)),
+        ),
         Template(
             Mode.MATCHING, 1, Mechanic.SELECT_ONE, "Matching", "Find the animal, food or vehicle that was named",
             (("language.vocabulary.receptive", P),), _plain(choose.matching), _picks(2, 3, 4, 6, 8),
@@ -252,6 +271,27 @@ TEMPLATES: dict[Mode, Template] = {
             (("literacy.gpc.grapheme_from_sound", P), ("literacy.phonemic.initial_sound", S), ("language.vocabulary.receptive", C)),
             _plain(place.first_sounds), tuple(Level(n, f"{n} pairs") for n in (2, 3, 4)), held_out=True,
         ),
+        # The first steps' transfer kinds (0.14.0): the same matching by look, as pairs to put together.
+        Template(
+            Mode.PICTURE_TWINS, 1, Mechanic.MATCH_PAIRS, "Picture twins", "Put each picture on the same picture",
+            (("language.matching.picture", P),), _plain(starter.picture_twins),
+            tuple(Level(n, f"{n} pairs") for n in (2, 3)), held_out=True,
+        ),
+        Template(
+            Mode.COLOUR_TWINS, 1, Mechanic.MATCH_PAIRS, "Colour twins", "Put each shape on the square of its colour",
+            (("language.matching.colour", P),), _plain(starter.colour_twins),
+            tuple(Level(n, f"{n} pairs") for n in (2, 3)), held_out=True,
+        ),
+        Template(
+            Mode.LETTER_TWINS, 1, Mechanic.MATCH_PAIRS, "Letter twins", "Put each letter on the same letter",
+            (("literacy.letters.same", P),), _plain(starter.letter_twins),
+            tuple(Level(n, f"{n} pairs") for n in (2, 3)), held_out=True,
+        ),
+        Template(
+            Mode.NUMBER_TWINS, 1, Mechanic.MATCH_PAIRS, "Number twins", "Put each number on the same number",
+            (("maths.numerals.same", P),), starter.number_twins,
+            (Level(2, "2 pairs, numbers to 3", 3), Level(3, "3 pairs, numbers to 5", 5)), held_out=True,
+        ),
     )
 }  # fmt: skip
 
@@ -266,6 +306,14 @@ TRANSFER: dict[str, Mode] = {s: m for m, s in HELD_OUT.items()}
 # One picture per kind, for the tiles a learner picks between when offered a choice of two (engine/policy.py): what
 # the round looks like, since a learner who cannot read yet picks by the picture and the spoken name.
 PICTURES: dict[Mode, str] = {
+    Mode.SAME_PICTURE: "\U0001f436",  # dog face
+    Mode.SAME_COLOUR: "\U0001f534",  # red circle
+    Mode.SAME_LETTER: "\U0001f170\ufe0f",  # A button
+    Mode.SAME_NUMBER: "1\ufe0f\u20e3",  # keycap 1
+    Mode.PICTURE_TWINS: "\U0001f46f",  # people with bunny ears: a pair
+    Mode.COLOUR_TWINS: "\U0001f308",  # rainbow
+    Mode.LETTER_TWINS: "\U0001f4dd",  # memo
+    Mode.NUMBER_TWINS: "\U0001f3b2",  # die
     Mode.MATCHING: "\U0001f404",  # cow
     Mode.COLOURS: "\U0001f3a8",  # palette
     Mode.SHAPES: "\U0001f53a",  # red triangle

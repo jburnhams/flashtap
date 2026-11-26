@@ -29,6 +29,16 @@ LAST = "maths.cardinality.last_number"
 GIVE = "maths.cardinality.give_n"
 NUMERAL = "maths.numerals.recognise"
 ONE_TO_ONE = "maths.counting.one_to_one"
+FIRST_STEPS = ("language.matching.picture", "language.matching.colour", "literacy.letters.same", "maths.numerals.same")
+
+
+def started(*more: str) -> list[Told]:
+    """A grown-up's "can do it" on the first-steps skills (and `more`), a day before T0: the rounds they open
+    (utility@7) are then open, for a test of something other than opening."""
+    return [
+        Told(id=f"{i:032x}", skill=s, says="can", observer="parent", at=T0 - timedelta(days=1))
+        for i, s in enumerate((*FIRST_STEPS, *more))
+    ]
 
 
 def event(
@@ -228,7 +238,7 @@ def test_a_known_gap_in_a_prerequisite_sets_a_round_aside() -> None:
         *(event(Mode.CAPITALS, right=False, at=T0 + timedelta(minutes=i)) for i in range(1, 4)),
     ]
     log += [event(Mode.SORT_SOUNDS, right=False, at=T0 + timedelta(minutes=9))]
-    k = fold(log, G)
+    k = fold(log, G, told=started())
     k.state("literacy.letters.identify").own = 2  # as if seen twice and still not known
     k.state("literacy.letters.identify").p = 0.1
     cands = {x.mode: x for x in decide(k, past(), CONFIG, "s:0", T0).candidates}
@@ -239,7 +249,7 @@ def test_a_known_gap_in_a_prerequisite_sets_a_round_aside() -> None:
 
 def test_after_two_misses_only_likely_rounds_are_offered_and_never_the_same_three_times() -> None:
     log = [event(Mode.MATCHING, at=T0 + timedelta(minutes=i)) for i in range(5)]
-    k = fold(log, G)
+    k = fold(log, G, told=started(COUNT))
     two = past((Mode.COUNTING, False), (Mode.COUNTING, False))
     c = decide(k, two, CONFIG, "s:2", T0)
     assert Why.EASIER in c.rationale
@@ -262,10 +272,75 @@ def test_when_every_round_is_set_aside_the_softer_filters_give_way() -> None:
     assert c.action is Action.ROUND
     assert sum(x.probability for x in c.candidates) == pytest.approx(1.0)
     assert all(x.probability == 0 for x in c.candidates if x.set_aside is SetAside.HELD_OUT)  # never opened
+    assert all(x.probability == 0 for x in c.candidates if x.set_aside is SetAside.NOT_YET)  # while others can be
+
+
+def test_a_new_learner_starts_on_the_first_steps_at_two_tiles() -> None:
+    k = Knowledge(G)
+    c = decide(k, past(), CONFIG, "s:0", T0)
+    assert c.mode in policy.STARTER
+    assert (c.level, c.choices) == (0, 2)
+    cands = {x.mode: x for x in c.candidates}
+    for m in rounds.PRACTICE:
+        assert (cands[m].set_aside is None) == (m in policy.STARTER), m
+        if m not in policy.STARTER:
+            assert cands[m].set_aside is SetAside.NOT_YET
+            assert cands[m].probability == 0
+    # decision after decision, nothing but the first steps while none of them is shown
+    assert {decide(k, past(), CONFIG, f"s:{i}", T0).mode for i in range(100)} <= policy.STARTER
+
+
+def test_rounds_open_one_shown_skill_at_a_time_and_only_by_success() -> None:
+    def open_(k: Knowledge) -> set[Mode]:
+        return {x.mode for x in decide(k, past(), CONFIG, "s:0", T0).candidates if x.set_aside is None}
+
+    start = open_(Knowledge(G))
+    rights = [event(Mode.SAME_NUMBER, at=T0 - timedelta(minutes=10 - i)) for i in range(6)]
+    k = fold(rights, G)
+    assert k.p("maths.numerals.same") >= policy.MASTERED
+    after = open_(k)
+    assert {Mode.COUNTING, Mode.QUICK_LOOK} <= after - start  # they needed only the numerals matched
+    assert Mode.MISSING not in after  # Missing number waits on counting too
+    assert Mode.MATCHING not in after  # and nothing on the other side opens
+    # Misses never open anything: a skill is shown by its own answers rated known, not by the graph
+    missed = fold([event(Mode.SAME_NUMBER, right=False, at=T0 - timedelta(minutes=i)) for i in range(6)], G)
+    assert open_(missed) == start
+    counted = fold([*rights, *(event(Mode.COUNTING, at=T0 - timedelta(minutes=3 - i / 2)) for i in range(6))], G)
+    assert {Mode.MISSING, Mode.ORDER, Mode.GIVE} <= open_(counted)
+    # A grown-up's "can do it" opens what it is the prerequisite of, as answers would
+    assert Mode.MATCHING in open_(fold([], G, told=started()))
+    # Answers in a kind's own skill do not open it: what it waits on is shown first
+    assert Mode.LETTERS not in open_(fold([event(Mode.LETTERS)], G))
+    assert policy.needs(model.SHAPE[Mode.SHAPES], G) == {"language.matching.colour", "language.vocabulary.colours"}
+    assert all(not policy.needs(model.SHAPE[m], G) for m in policy.STARTER)
+
+
+def test_a_learner_who_gets_everything_right_opens_every_kind_gradually() -> None:
+    """Nothing waits on itself: answering every round right opens every practice kind, a few at a time."""
+    k, answers, opened = Knowledge(G), list[tuple[Mode, bool]](), dict[Mode, int]()
+    endless = Config(choices=4, tries=0, max_rounds=999, max_minutes=999, break_every=0)
+    for n in range(100):
+        now = T0 + timedelta(minutes=n)
+        so_far = Past(started=T0, decisions=[(Action.ROUND, m) for m, _ in answers], answers=answers)
+        c = decide(k, so_far, endless, f"w:{n}", now)
+        assert c.mode is not None
+        opened |= {x.mode: n for x in c.candidates if x.set_aside is None and x.mode not in opened}
+        k.observe(event(c.mode, at=now, level=c.level))
+        answers.append((c.mode, True))
+    assert set(rounds.PRACTICE) <= set(opened)
+    assert {m for m, n in opened.items() if n == 0} == policy.STARTER - set(rounds.HELD_OUT)
+    assert opened[Mode.MISSING] > opened[Mode.COUNTING] > 0
+    assert opened[Mode.LETTERS] > opened[Mode.SORT_SOUNDS] > opened[Mode.MATCHING] > 0
+
+
+def test_policies_before_7_neither_offer_the_first_steps_nor_hold_a_kind_back() -> None:
+    c = decide(Knowledge(G), past(), CONFIG, "s:0", T0, policy.kept("utility@6"))
+    assert not {x.mode for x in c.candidates} & policy.STARTER
+    assert all(x.set_aside is not SetAside.NOT_YET for x in c.candidates)
 
 
 def test_a_missed_round_is_followed_by_contrasts_that_leave_part_of_it_out() -> None:
-    k = Knowledge(G)
+    k = fold([], G, told=started(COUNT))
     failed = past((Mode.COUNTING, False))
     cands = {x.mode: x for x in decide(k, failed, CONFIG, "s:1", T0).candidates}
     assert cands[Mode.MISSING].contrast  # shares reading the numeral, leaves out counting
@@ -409,7 +484,13 @@ def answer(db: Session, n: sessions.Next, learner: str, *, right: bool, at: date
 
 
 def play_session(
-    db: Session, learner: str, config: Config, start: datetime, rights: float = 0.7, seed: int = 0
+    db: Session,
+    learner: str,
+    config: Config,
+    start: datetime,
+    rights: float = 0.7,
+    seed: int = 0,
+    g: Graph | None = None,
 ) -> list[sessions.Next]:
     """Ask for decisions until the session ends, answering each round (right with chance `rights`)."""
     rng = random.Random(seed)
@@ -417,7 +498,7 @@ def play_session(
     out: list[sessions.Next] = []
     at = start
     for seq in range(100):
-        n = sessions.next_decision(db, info.id, seq, G, TITLES, at=at)
+        n = sessions.next_decision(db, info.id, seq, g or G, TITLES, at=at)
         out.append(n)
         if n.action is Action.END:
             break
@@ -530,7 +611,7 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
     assert replay.replay(log, retired, {}, G) == (
         0,
         [
-            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3, utility@4, utility@5, utility@6)"
+            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3, utility@4, utility@5, utility@6, utility@7)"
         ],
     )
     assert replay.replay(log, old[:1], {}, G)[1] == [
@@ -549,6 +630,21 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
         0,
         [f"decision {d.seq} of session {d.session_id}: made from {was}, which are not kept (now {now})"],
     )
+
+
+def test_a_decision_from_before_the_first_steps_is_remade_on_the_graph_it_was_made_on() -> None:
+    """utility@6 decided on a graph with no first-steps skills; their edges change Matching's readiness and reach, so
+    a replay on today's graph alone would differ (Codex on #59)."""
+    old = G.without(policy.STARTER_SKILLS)
+    assert old.before["language.vocabulary.receptive"] == frozenset()
+    assert "language.matching.picture" in G.before["language.vocabulary.receptive"]
+    assert not set(old.skills) & policy.STARTER_SKILLS
+    at = T0 + timedelta(minutes=1)
+    config = CONFIG.model_copy(update={"max_rounds": 20})
+    made = decide(Knowledge(old), Past(started=T0), config, "s:0", at, policy.kept("utility@6"))
+    assert made != decide(Knowledge(G), Past(started=T0), config, "s:0", at, policy.kept("utility@6"))
+    d = policy.Logged(**made.model_dump(), id="d" * 32, session_id="s", seq=0, at=at)
+    assert replay.remake(d, [], [d], T0, config, G).model_dump() == made.model_dump()
 
 
 def test_the_log_as_it_stood_counts_only_what_was_received_and_struck_by_then() -> None:
@@ -727,6 +823,8 @@ def play_choosing(
 
 def test_every_nth_round_is_a_choice_of_two_kinds_of_different_mechanics(db_session: Session, fox: str) -> None:
     config = Config(choices=4, tries=0, max_rounds=9, break_every=0, choice_every=3, rate_every=2)
+    for t in started(COUNT):  # rounds of more than one mechanic open (utility@7)
+        store.tell(db_session, fox, store.OverrideIn(skill=t.skill, says="can", observer="parent"), {t.skill}, at=t.at)
     made = play_choosing(db_session, fox, config, T0)
     assert [n.action for n in made] == [Action.ROUND, Action.ROUND, Action.CHOICE] * 3 + [Action.END]
     assert Action.BREAK not in [n.action for n in made]  # break_every 0: no regular breaks
@@ -780,7 +878,7 @@ def test_a_pick_is_kept_once_and_only_while_the_choice_is_the_latest(db_session:
 
 
 def test_what_a_learner_likes_nudges_the_kinds_offered(db_session: Session, fox: str) -> None:
-    k = Knowledge(G)
+    k = fold([], G, told=started())
     plain = {x.mode: x for x in decide(k, past(), CONFIG, "s:0", T0).candidates}
     liked = {x.mode: x for x in decide(k, past(), CONFIG, "s:0", T0, likes={"counting": 1.0}).candidates}
     assert liked[Mode.COUNTING].liked == 1.0
@@ -854,9 +952,11 @@ def test_decisions_logged_by_utility_1_are_remade_by_the_current_policy(
     db_session: Session, fox: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A 0.6.0 or 0.7.0 database: decisions by utility@1 (which had no Sounds round), candidates without `liked`, a
-    session config without the choice and rating cadence. The current code remakes each exactly."""
+    session config without the choice and rating cadence, made on the graph before the first steps' skills joined it.
+    The current code remakes each exactly."""
     monkeypatch.setattr(sessions, "decide", functools.partial(policy.decide, policy=policy.kept("utility@1")))
-    play_session(db_session, fox, Config(choices=4, tries=0, max_rounds=6, break_every=3), T0)
+    before = G.without(policy.STARTER_SKILLS)
+    play_session(db_session, fox, Config(choices=4, tries=0, max_rounds=6, break_every=3), T0, g=before)
     monkeypatch.undo()
     for d in db_session.scalars(select(Decision)):
         assert d.policy == "utility@1"
@@ -876,8 +976,10 @@ def test_each_policy_version_weighs_the_kinds_it_had() -> None:
     assert Mode.SOUNDS not in {s.mode for s in policy.kept("utility@2").shapes}
     assert policy.kept("utility@1").shapes == policy.kept("utility@2").shapes
     assert {s.mode for s in POLICY.shapes} == set(rounds.TEMPLATES)
-    assert {s.mode for s in policy.kept("utility@5").shapes} == set(rounds.PRACTICE)  # no transfer kinds before 6
-    assert set(policy.REPLAYS) == {"utility@1", "utility@2", "utility@3", "utility@4", "utility@5", POLICY.id}
+    # no transfer kinds before 6, no first steps before 7
+    assert {s.mode for s in policy.kept("utility@5").shapes} == set(rounds.PRACTICE) - policy.STARTER
+    assert {s.mode for s in policy.kept("utility@6").shapes} == set(rounds.TEMPLATES) - policy.STARTER
+    assert set(policy.REPLAYS) == {f"utility@{n}" for n in range(1, 7)} | {POLICY.id}
 
 
 def test_deleting_a_learner_deletes_their_ratings_and_overrides(db_session: Session, fox: str) -> None:
@@ -894,7 +996,7 @@ def test_deleting_a_learner_deletes_their_ratings_and_overrides(db_session: Sess
 
 
 def steps(mode: Mode, *answers: tuple[int, bool]) -> Knowledge:
-    k = Knowledge(G)
+    k = fold([], G, told=started(COUNT))  # every kind these tests step through open (utility@7)
     for i, (level, right) in enumerate(answers):
         k.observe(event(mode, right=right, level=level, at=T0 + timedelta(minutes=i)))
     return k

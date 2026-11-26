@@ -923,6 +923,14 @@
        "letter_box",
        "same_sound",
        "first_sounds",
+       "same_picture",
+       "same_colour",
+       "same_letter",
+       "same_number",
+       "picture_twins",
+       "colour_twins",
+       "letter_twins",
+       "number_twins",
        "mixed"
       ],
       "title": "Mode",
@@ -1570,6 +1578,14 @@
      "letter_box",
      "same_sound",
      "first_sounds",
+     "same_picture",
+     "same_colour",
+     "same_letter",
+     "same_number",
+     "picture_twins",
+     "colour_twins",
+     "letter_twins",
+     "number_twins",
      "mixed"
     ],
     "title": "Mode",
@@ -2064,6 +2080,46 @@
     "title": "PackRow",
     "type": "object"
    },
+   "Page_Task_": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/Task"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "next": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next"
+     },
+     "total": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Total"
+     }
+    },
+    "required": [
+     "items",
+     "next",
+     "total"
+    ],
+    "title": "Page[Task]",
+    "type": "object"
+   },
    "PhonicsRow": {
     "properties": {
      "dialect": {
@@ -2255,6 +2311,64 @@
     "title": "Profile",
     "type": "object"
    },
+   "Progress": {
+    "description": "How far a task has got. `total` None means not known yet; `text` is the line a person reads (\"Page 3 of 40\").",
+    "properties": {
+     "at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "At"
+     },
+     "done": {
+      "default": 0,
+      "title": "Done",
+      "type": "number"
+     },
+     "stage": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Stage"
+     },
+     "text": {
+      "default": "",
+      "title": "Text",
+      "type": "string"
+     },
+     "total": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Total"
+     }
+    },
+    "required": [
+     "done",
+     "total",
+     "text",
+     "stage",
+     "at"
+    ],
+    "title": "Progress",
+    "type": "object"
+   },
    "QRole": {
     "enum": [
      "primary",
@@ -2374,7 +2488,7 @@
       "title": "Learner Id"
      },
      "policy": {
-      "default": "utility@6",
+      "default": "utility@7",
       "title": "Policy",
       "type": "string"
      },
@@ -2717,7 +2831,8 @@
      "prerequisite_gap",
      "frustration_guard",
      "just_played",
-     "held_out"
+     "held_out",
+     "not_yet"
     ],
     "title": "SetAside",
     "type": "string"
@@ -3129,6 +3244,121 @@
     "title": "StrikeIn",
     "type": "object"
    },
+   "Task": {
+    "description": "A job or task row as an API answers it.",
+    "properties": {
+     "attempts": {
+      "default": 0,
+      "title": "Attempts",
+      "type": "integer"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "domain": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Domain"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "finished_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Finished At"
+     },
+     "id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "title": "Id"
+     },
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "progress": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Progress"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "result": {
+      "title": "Result"
+     },
+     "started_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Started At"
+     },
+     "state": {
+      "enum": [
+       "queued",
+       "running",
+       "done",
+       "failed",
+       "cancelled"
+      ],
+      "title": "State",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "kind",
+     "state",
+     "created_at",
+     "started_at",
+     "finished_at",
+     "error",
+     "result",
+     "progress",
+     "attempts",
+     "domain"
+    ],
+    "title": "Task",
+    "type": "object"
+   },
    "Told": {
     "description": "A grown-up's observation of one skill, as the log keeps it and an export carries it.",
     "properties": {
@@ -3484,6 +3714,276 @@
      }
     },
     "summary": "Get Health"
+   }
+  },
+  "/api/jobs": {
+   "get": {
+    "operationId": "list_jobs_api_jobs_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "state",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "items": {
+          "enum": [
+           "queued",
+           "running",
+           "done",
+           "failed",
+           "cancelled"
+          ],
+          "type": "string"
+         },
+         "type": "array"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "State"
+      }
+     },
+     {
+      "in": "query",
+      "name": "kind",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Kind"
+      }
+     },
+     {
+      "in": "query",
+      "name": "domain",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Domain"
+      }
+     },
+     {
+      "in": "query",
+      "name": "after",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "After"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Page_Task_"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Jobs",
+    "tags": [
+     "jobs"
+    ]
+   }
+  },
+  "/api/jobs/counts": {
+   "get": {
+    "operationId": "job_counts_api_jobs_counts_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": {
+          "type": "integer"
+         },
+         "title": "Response Job Counts Api Jobs Counts Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Job Counts",
+    "tags": [
+     "jobs"
+    ]
+   }
+  },
+  "/api/jobs/{job_id}": {
+   "get": {
+    "operationId": "get_job_api_jobs__job_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Task"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Job",
+    "tags": [
+     "jobs"
+    ]
+   }
+  },
+  "/api/jobs/{job_id}/cancel": {
+   "post": {
+    "operationId": "cancel_job_api_jobs__job_id__cancel_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Task"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Cancel Job",
+    "tags": [
+     "jobs"
+    ]
+   }
+  },
+  "/api/jobs/{job_id}/retry": {
+   "post": {
+    "operationId": "retry_job_api_jobs__job_id__retry_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Task"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Retry Job",
+    "tags": [
+     "jobs"
+    ]
    }
   },
   "/api/learners": {

@@ -2,6 +2,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from flashtap import distractors as dx
 from flashtap import lexicon, rounds
 from flashtap import mechanics as mx
 from flashtap.mechanics import (
@@ -388,7 +389,7 @@ def _asked(r: Round) -> int:
     """The number a number round is about: the right numeral, how many go in the basket, or the largest to order."""
     if r.mechanic is Mechanic.GIVE_N:
         return r.places[0].holds
-    if r.mechanic is Mechanic.SEQUENCE:
+    if r.mechanic in (Mechanic.SEQUENCE, Mechanic.MATCH_PAIRS):  # Number twins: the largest numeral to pair
         return max(int(p.word) for p in r.pieces)
     return int(next(o.word for o in r.options if o.correct))
 
@@ -567,3 +568,67 @@ def test_first_sounds_always_has_a_two_letter_sound_and_tempts_with_its_first_le
         assert any(len(g) == 2 for g in graphemes)
         lured += any(len(g) == 2 and g[0] in graphemes for g in graphemes)
     assert lured > 200
+
+
+# First steps (0.14.0): matching by look, with wrong options that are always unlike the right one
+
+
+FIRST_STEPS = (Mode.SAME_PICTURE, Mode.SAME_COLOUR, Mode.SAME_LETTER, Mode.SAME_NUMBER)
+
+
+@pytest.mark.parametrize("mode", FIRST_STEPS)
+def test_first_steps_start_at_two_tiles_and_never_go_past_four(mode):
+    levels = TEMPLATES[mode].levels
+    assert levels[0].choices == 2
+    assert max(x.choices for x in levels) <= 4
+    assert not TEMPLATES[mode].held_out
+    assert rounds.TRANSFER[TEMPLATES[mode].skills[0][0]] in rounds.HELD_OUT  # each has its twins kind
+
+
+def test_same_picture_shows_the_answer_among_other_kinds_of_thing():
+    things = {t.id: t for t in lexicon.words().everything}
+    for seed in range(300):
+        r = rounds.at_level(Mode.SAME_PICTURE, 2, seed)
+        right = things[r.answer]
+        assert r.show == right.picture
+        assert all(things[o.id].category != right.category for o in r.options if not o.correct)
+
+
+def test_same_colour_asks_for_the_colour_not_the_picture_from_three_tiles():
+    things = {t.id: t for t in lexicon.words().shapes}
+    other_shape = 0
+    for seed in range(300):
+        two = rounds.at_level(Mode.SAME_COLOUR, 0, seed)
+        assert next(o for o in two.options if o.correct).picture == two.show  # two tiles: the same picture
+        r = rounds.at_level(Mode.SAME_COLOUR, 2, seed)
+        colour = next(t.colour for t in things.values() if t.picture == r.show)
+        assert [o.id for o in r.options if things[o.id].colour == colour] == [r.answer]
+        assert len({things[o.id].colour for o in r.options}) == len(r.options)  # a colour per tile
+        other_shape += next(o for o in r.options if o.correct).picture != r.show
+    assert other_shape > 150  # red square for a red circle, whenever the colour comes in two shapes
+
+
+@pytest.mark.parametrize("mode", [Mode.SAME_LETTER, Mode.LETTER_TWINS])
+def test_letter_matching_never_puts_look_alikes_together(mode):
+    for seed in range(300):
+        r = rounds.generate(mode, 4, seed)
+        shown = [o.picture for o in r.options] or [p.picture for p in r.pieces]
+        assert all(b not in dx.confusable_graphemes(a) for a in shown for b in shown)
+
+
+def test_same_number_starts_with_one_to_three():
+    for seed in range(300):
+        r = rounds.at_level(Mode.SAME_NUMBER, 0, seed)
+        assert {int(o.picture) for o in r.options} <= {1, 2, 3}
+        assert next(o for o in r.options if o.correct).picture == r.show
+
+
+def test_colour_twins_puts_each_shape_on_the_square_of_its_colour():
+    things = {t.id: t for t in lexicon.words().shapes}
+    for seed in range(200):
+        r = rounds.generate(Mode.COLOUR_TWINS, 3, seed)
+        for place in r.places:
+            (piece,) = place.takes
+            assert things[place.id].shape == "square"
+            assert things[piece].shape != "square"
+            assert things[piece].colour == things[place.id].colour

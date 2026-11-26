@@ -2,6 +2,39 @@
 
 Newest first, grouped by day. One entry per change, in the same commit or PR as the change.
 
+## 2026-11-26
+
+**Review fix (Codex on #59): decisions from before the first steps are remade on the graph they were made on (branch `claude/project-thread-xk3y90`)**
+
+Codex found that leaving the starter kinds out of an older policy's offer was not enough: the starter skills' edges also change the readiness and reach of the kinds they open, so an older decision replayed on today's graph differed.
+
+- `src/flashtap/engine/model.py`: `Graph.without(gone)`, the graph with those skills and their links left out. `engine/policy.py`: `STARTER_SKILLS`. `engine/replay.py`: a decision made before `utility@7` is remade on `g.without(STARTER_SKILLS)`; `maths.number` version 2's two new edges are a pack change and show as differences, as any pack change does.
+- `tests/unit/test_engine.py`: a decision from before the first steps is remade exactly on its own graph; the utility@1 replay test plays its old sessions on that graph, as an old database was made. `tests/unit/test_mistakes.py`: the same for the utility@4 sessions.
+
+**The voice is built by the server itself, on strata-python's job queue (0.14.0, branch `claude/project-thread-xk3y90`)**
+
+Asked for: "voice build should happen automatically using strata-python job queue". Before this, someone had to run `flashtap voice build` on the server after any release that added sentences (the first steps did).
+
+- `src/flashtap/jobs.py` **new**: the `voice_build` job (every line missing or stale, or the first `limit`; `RetryLater` after 15 minutes while lines are left unmade, up to 8 tries; stopped between clips, the rest queued again at once); `queue`, `start` (queue one build, deduped, holding the `voice` resource, and start a worker at idle priority).
+- `src/flashtap/learners/models.py`: `JOBS`, the queue's table in the learner schema. `src/flashtap/migrations/20261126_c6263d1db252_jobs_queue_for_background_work.py` **new**.
+- `src/flashtap/server/app.py`: `add_jobs` routes (`GET /api/jobs`, counts, one, cancel, retry); `job_queue(app)`; `run_jobs(app)` wraps the lifespan to start the worker and stop it with the server. Only `main` (`flashtap serve`) runs it, so an app made in a test or by `openapi` starts nothing. A served app now opens its database at start.
+- `src/flashtap/voice.py`: `build(stop=)`, asked before each line, and `Built.left`; `speak_settings` moved here from `cli.py` so the job and the command share it.
+- `pyproject.toml`, `uv.lock`: strata-python 0.2.22 (`tasks.web.add_jobs`), floor raised to it. `web/openapi.json`, `web/src/api.generated.ts` regenerated.
+- Tests: `tests/unit/test_jobs.py` **new** (a short build makes and then keeps; lines left unmade run again later; a stop leaves the rest; the served app queues a build and stops its worker), `tests/integration/test_jobs.py` **new** (a served app starts a build through the strata-models stand-in over HTTP; a restart finds it queued).
+- `README.md`, `AGENTS.md`, `docs/deploying.md`.
+
+**First steps: the easiest rounds, where a new learner begins, and every other kind opened by success (0.14.0, branch `claude/project-thread-xk3y90`)**
+
+Asked for: the owner wants to start using Flashtap, but it needs to begin with far simpler rounds, as easy as possible, and progress only gradually and on success. Before this a new learner was probed across every kind (Order and Sounds included) from the first round.
+
+- `src/flashtap/packs/starter.toml` **new** (pack `starter`, version 1, draft): four skills, find the same picture, colour, letter and number, each a strong prerequisite (Flashtap's judgement) of a skill a practice kind assesses; strand `language.matching`.
+- `src/flashtap/packs/maths-number.toml`: version 2. Two judgement edges: counting a set is a strong prerequisite of one more and one less, and of putting numbers in order, so Missing number and Order open after Counting. Rounds and decisions made from version 1 are no longer rebuilt.
+- `src/flashtap/kinds/starter.py` **new**: Same picture (among other kinds of thing), Same colour (from three tiles the right one is another shape of that colour), Same letter (no look-alikes), Same number (one to three, then to five), and their transfer kinds Picture, Colour, Letter and Number twins (`match_pairs`). `src/flashtap/mechanics.py`: the eight kinds. `src/flashtap/rounds.py`: their templates, first in every list, two tiles at the first step and at most four; pictures for the choice tiles. No existing template changed.
+- `src/flashtap/engine/policy.py`: `utility@7`. A kind is set aside `not_yet` until every taught skill it waits on (`needs`: the strong prerequisites of each skill it names, and its secondary and confound skills that a practice kind teaches) is shown, rated known on the learner's own answers or a grown-up's "can do it" (`_shown`); a known gap is named first. The never-stuck fallback opens a `not_yet` kind only when nothing else can be played. `STARTER`, `TAUGHT`, `OPENS_FROM`; `utility@6` and before weigh neither the new kinds nor the rule, and replay.
+- `web/src/api.ts` (`MODES`: the first steps first), `web/src/screens/PlayScreen.tsx` (names), `web/src/mocks/fixtures.ts` (the new kinds, their rounds, every kind's packs), `web/openapi.json` and `web/src/api.generated.ts` regenerated; `web/tests/integration/PlayScreen.test.tsx` (the list, a Same picture round).
+- Tests: `tests/unit/test_rounds.py` (each first step's rules over hundreds of seeds; Number twins in the step check), `test_engine.py` (a new learner gets only first steps at two tiles; kinds open one shown skill at a time and never on misses or the graph; a grown-up's "can do it" opens; a learner right every time opens every practice kind, in order; older policies unchanged; tests of other behaviour now start from the first steps told), `test_mistakes.py`, `test_server.py`, `test_cli.py`, `tests/integration/test_cli_end_to_end.py` (eight packs).
+- `pyproject.toml`, `uv.lock`: 0.14.0. `README.md`, `AGENTS.md`, `docs/content.md` ("First steps", transfer table, files), `docs/implementation-plan.md` (item 11), `docs/progress.md`.
+
 ## 2026-11-24
 
 **A Break screen: Play inside another app's frame, ending by telling the page around it (branch `claude/project-thread-r8f3oj`)**

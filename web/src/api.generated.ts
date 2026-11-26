@@ -88,6 +88,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Jobs */
+        get: operations["list_jobs_api_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Job Counts */
+        get: operations["job_counts_api_jobs_counts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job */
+        get: operations["get_job_api_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Job */
+        post: operations["cancel_job_api_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Job */
+        post: operations["retry_job_api_jobs__job_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/learners": {
         parameters: {
             query?: never;
@@ -759,7 +844,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "hear_find" | "colour_box" | "shape_box" | "which_group" | "quick_dots" | "one_more" | "biggest" | "number_card" | "small_letters" | "letter_box" | "same_sound" | "first_sounds" | "mixed";
+            mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "hear_find" | "colour_box" | "shape_box" | "which_group" | "quick_dots" | "one_more" | "biggest" | "number_card" | "small_letters" | "letter_box" | "same_sound" | "first_sounds" | "same_picture" | "same_colour" | "same_letter" | "same_number" | "picture_twins" | "colour_twins" | "letter_twins" | "number_twins" | "mixed";
             /** Rate Every */
             rate_every: number;
             /** Session Minutes */
@@ -971,7 +1056,7 @@ export interface components {
          *     saved settings still name them).
          * @enum {string}
          */
-        Mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "hear_find" | "colour_box" | "shape_box" | "which_group" | "quick_dots" | "one_more" | "biggest" | "number_card" | "small_letters" | "letter_box" | "same_sound" | "first_sounds" | "mixed";
+        Mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "hear_find" | "colour_box" | "shape_box" | "which_group" | "quick_dots" | "one_more" | "biggest" | "number_card" | "small_letters" | "letter_box" | "same_sound" | "first_sounds" | "same_picture" | "same_colour" | "same_letter" | "same_number" | "picture_twins" | "colour_twins" | "letter_twins" | "number_twins" | "mixed";
         /** ModeInfo */
         ModeInfo: {
             /** Description */
@@ -1160,6 +1245,15 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** Page[Task] */
+        Page_Task_: {
+            /** Items */
+            items: components["schemas"]["Task"][];
+            /** Next */
+            next: string | null;
+            /** Total */
+            total: number | null;
+        };
         /** PhonicsRow */
         PhonicsRow: {
             /** Dialect */
@@ -1226,6 +1320,28 @@ export interface components {
             skills: components["schemas"]["SkillReport"][];
             /** Struck */
             struck: number;
+        };
+        /**
+         * Progress
+         * @description How far a task has got. `total` None means not known yet; `text` is the line a person reads ("Page 3 of 40").
+         */
+        Progress: {
+            /** At */
+            at: string | null;
+            /**
+             * Done
+             * @default 0
+             */
+            done: number;
+            /** Stage */
+            stage: string | null;
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /** Total */
+            total: number | null;
         };
         /**
          * QRole
@@ -1298,7 +1414,7 @@ export interface components {
             learner_id?: string | null;
             /**
              * Policy
-             * @default utility@6
+             * @default utility@7
              */
             policy: string;
             simulated?: components["schemas"]["SimulatedIn"] | null;
@@ -1425,7 +1541,7 @@ export interface components {
          * SetAside
          * @enum {string}
          */
-        SetAside: "prerequisite_gap" | "frustration_guard" | "just_played" | "held_out";
+        SetAside: "prerequisite_gap" | "frustration_guard" | "just_played" | "held_out" | "not_yet";
         /** SimReport */
         SimReport: {
             /** Attempts */
@@ -1563,6 +1679,42 @@ export interface components {
              * @default
              */
             reason: string;
+        };
+        /**
+         * Task
+         * @description A job or task row as an API answers it.
+         */
+        Task: {
+            /**
+             * Attempts
+             * @default 0
+             */
+            attempts: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Domain */
+            domain: string | null;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Id */
+            id: number | string;
+            /** Kind */
+            kind: string;
+            progress: components["schemas"]["Progress"] | null;
+            /** Result */
+            result: unknown;
+            /** Started At */
+            started_at: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "done" | "failed" | "cancelled";
         };
         /**
          * Told
@@ -1787,6 +1939,156 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    list_jobs_api_jobs_get: {
+        parameters: {
+            query?: {
+                state?: ("queued" | "running" | "done" | "failed" | "cancelled")[] | null;
+                kind?: string | null;
+                domain?: string | null;
+                after?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_Task_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    job_counts_api_jobs_counts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number;
+                    };
+                };
+            };
+        };
+    };
+    get_job_api_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_job_api_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_job_api_jobs__job_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

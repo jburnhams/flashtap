@@ -15,7 +15,9 @@ What else the decision could see is rebuilt the same way: the grown-ups' overrid
 (`likes_as_of`). A pick is refused once a later decision in its session exists (sessions.pick), so the pick a replay
 sees is the one the next decision saw. Older policies' decisions (`utility@1`, `@2`) are remade by the current code
 over the kinds of round their version weighed (policy.OFFERS); it decides as 1 did when there are no choices, ratings
-or overrides (policy.REPLAYS).
+or overrides (policy.REPLAYS). A decision before `utility@7` is remade on the skill graph without the first steps'
+skills, which joined it then (`Graph.without`): their edges change the readiness and reach of the kinds they open.
+`maths.number` version 2's two edges are a pack change like any other and show as differences in the candidates.
 """
 
 from collections.abc import Sequence
@@ -23,7 +25,18 @@ from datetime import datetime
 
 from flashtap import rounds
 from flashtap.engine.model import Graph, Params, fold
-from flashtap.engine.policy import REPLAYS, Action, Choice, Config, Logged, Past, decide, kept
+from flashtap.engine.policy import (
+    OPENS_FROM,
+    REPLAYS,
+    STARTER_SKILLS,
+    Action,
+    Choice,
+    Config,
+    Logged,
+    Past,
+    decide,
+    kept,
+)
 from flashtap.learners.engagement import Pick, Rated, as_of_ratings, preferences
 from flashtap.learners.evidence import Event, Told, ordered, told_as_of
 from flashtap.mechanics import Mode
@@ -90,10 +103,13 @@ def remake(
     ratings: Sequence[Rated] = (),
     told: Sequence[Told] = (),
 ) -> Choice:
+    policy = kept(d.policy)
+    if policy.version < OPENS_FROM:  # made before the first steps' skills joined the graph: remade without them
+        g = g.without(STARTER_SKILLS)
     k = fold(as_of(events, d.at), g, Params(), told_as_of(told, d.at))
     past = past_of(started, decisions, events, d.session_id, d.at, d.seq)
     likes = likes_as_of(ratings, decisions, d.at)
-    return decide(k, past, config, f"{d.session_id}:{d.seq}", d.at, policy=kept(d.policy), likes=likes)
+    return decide(k, past, config, f"{d.session_id}:{d.seq}", d.at, policy=policy, likes=likes)
 
 
 def _fields(c: Choice) -> dict[str, object]:

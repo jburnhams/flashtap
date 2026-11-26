@@ -121,8 +121,16 @@ describe('Play, the new kinds of round', () => {
     openApp('/')
     const kind = await screen.findByRole('combobox', { name: 'Kind of round' })
     expect(within(kind).getAllByRole('option').map(o => o.textContent)).toEqual([
-      'Chosen for them', 'Matching', 'Colours', 'Shapes', 'Letters', 'Counting', 'Missing number', 'Quick look', 'Listen', 'Give a number', 'Order', 'Capitals', 'Sort by sound', 'Sounds', 'Mixed',
+      'Chosen for them', 'Same picture', 'Same colour', 'Same letter', 'Same number', 'Matching', 'Colours', 'Shapes', 'Letters', 'Counting', 'Missing number', 'Quick look', 'Listen', 'Give a number', 'Order', 'Capitals', 'Sort by sound', 'Sounds', 'Mixed',
     ])
+  })
+
+  it('shows a first-steps picture big and takes the same one', async () => {
+    const { user } = openApp('/?mode=same_picture')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Find the same one.' })).toBeInTheDocument()
+    expect(tiles().map(t => t.getAttribute('aria-label'))).toEqual(['tiger', 'log', 'bell', 'banana'])
+    await user.click(screen.getByRole('row', { name: tile('tiger') }))
+    expect(screen.getByText('That’s right.')).toBeInTheDocument()
   })
 
   it('shows a run with a gap and takes the missing number', async () => {
