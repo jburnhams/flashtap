@@ -4,6 +4,13 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-27
 
+**Screenshots of Play no longer depend on when they are taken (strata-react 2.0.1, branch `claude/project-thread-fwkjyk`)**
+
+CI's visual check failed at random on the phone Play shots: the pulse is frozen in a screenshot, but the lit tile's border was not, and a shot that took longer than one beat caught a random tile lit (rewriting the baselines on the runner did not help; the next run differed again). strata-react 2.0.1 (#403) lights nothing under reduced motion, which the screenshots use; 2.0.0 is only a test dependency bump there.
+
+- `web/package.json`, `web/package-lock.json`: strata-react `^2.0.1`.
+- Visual baselines: the six phone Play, Counting and Give shots show no lit tile; `screens-play--sort-by-sound--dark` and `sounds--record--wide--dark` rewritten on the merged code. Three runs in a row match all 216.
+
 **The Play screen fills the window, its tiles take turns to pulse, and the picture to match is larger (branch `claude/project-thread-fwkjyk`)**
 
 Asked for: "arrange screen better - grow with viewport to fill (tho with extra padding). Centre content. Pulse randomly alternately the answer buttons to make clearer which to press, with item to match slightly larger", and "Add and improve components to strata react as required". The stretching and the pulse are strata-react's (#400, 1.3.28: `ChoiceGrid` and `PlaceBoard` `stretch` and `beckon`, tile pictures sized to the tile), not built here.
