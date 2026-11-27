@@ -7,6 +7,7 @@
 // The total is the server's (GET /api/learners/{id}/score, the attempt log counted, struck rounds left out), read once
 // when the learner sits down, plus each answer this visit keeps: those are counted the moment they are kept, whether
 // the server has them yet or they wait on the device (api.ts `answers`), so an answer given offline counts at once.
+// Play waits for that read (`ScoreRead`), so no answer can be both in the total and counted here.
 // One the server refuses, at once or later, is taken off again. Reading the total again mid-visit would count this visit's answers twice
 // (they reach the server one by one), so it is read once per visit (`keys.score`, outside ['learners'], which the
 // shell refreshes on every send). An answer an earlier visit left waiting on the device joins the total once it lands
@@ -60,6 +61,16 @@ export function Scored({ learner, children }: { learner: LearnerRow | null; chil
   }, [sat.counted, gone.join()])
   const running = useMemo(() => ({ scored: id !== '', tally, read, added }), [id, tally, read, added])
   return <RunningContext.Provider value={running}>{children}</RunningContext.Provider>
+}
+
+/**
+ * Holds play back until the learner's total is read (or could not be): an answer given while the read was still on its
+ * way could be in the total the server sends and in this visit's count too (Codex on #61). The round is fetched from
+ * the same server, so this rarely adds a wait; offline the read fails at once and play goes on, counting this visit.
+ */
+export function ScoreRead({ skeleton, children }: { skeleton: ReactNode; children: ReactNode }) {
+  const running = useContext(RunningContext) as Running
+  return <>{running.scored && running.read.status === 'loading' ? skeleton : children}</>
 }
 
 /** The running score of the learner `Scored` keeps; nothing when nobody is scored. */

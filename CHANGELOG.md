@@ -4,6 +4,12 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-27
 
+**Review fix (Codex on #61): play waits for the learner's total before the first round (branch `claude/project-thread-fwkjyk`)**
+
+Codex found that an answer given while the total was still being read could be counted by the server's total and by this visit's count, for the rest of the visit.
+
+- `web/src/score.tsx`: `ScoreRead` shows the round's skeleton until the total is read or could not be; `web/src/screens/PlayScreen.tsx`, `BreakScreen.tsx` wrap the game in it. `web/tests/integration/PlayScreen.test.tsx`: no round is fetched while the total is on its way.
+
 **On to the next round by itself, and a running score in green and red (0.16.0, branch `claude/project-thread-fwkjyk`)**
 
 Asked for: "Once a question done then it should do next automatically after a short pause (count down on button from 3). Store a running score per user and display at all times - green correct and red wrong counts". Read as: the score is per learner and all time (not per sitting), and counts answers given offline. It goes against the spec's "no streak pressure" (§11, §17), which Play followed with no score at all; there is still no streak.

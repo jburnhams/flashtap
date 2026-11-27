@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AttemptIn } from '../../src/api'
 import { rounds } from '../../src/mocks/fixtures'
-import { attemptRefused, attemptUnreachable, decisionFor, handlers, learnersError, nextChoice, nextError, nextUnreachable, pickFails, quickLookGoes, ratingRefused, roundError, roundUnreachable, scoreError, SESSION, sessionError, voiceLoading } from '../../src/mocks/handlers'
+import { attemptRefused, attemptUnreachable, decisionFor, handlers, learnersError, nextChoice, nextError, nextUnreachable, pickFails, quickLookGoes, ratingRefused, roundError, roundUnreachable, scoreError, scoreLoading, SESSION, sessionError, voiceLoading } from '../../src/mocks/handlers'
 import { openApp, screen, waitFor, within } from '../utils/render'
 import { mock, server } from '../utils/server'
 import { expectOneFilledButton, installFakeSpeech } from 'strata-react/testing'
@@ -723,6 +723,15 @@ describe('Play, the running score', () => {
     expect(score()).toEqual(['0 right', '0 wrong'])
     await user.click(await screen.findByRole('row', { name: tile('cow') }))
     expect(score()).toEqual(['1 right', '0 wrong'])
+  })
+
+  it('waits for the total before the round, so an answer is never in it and counted again', async () => {
+    server.use(scoreLoading)
+    openApp(`/?mode=mixed&learner=${FOX}`)
+    await screen.findByRole('combobox', { name: 'Who is playing' })
+    await new Promise(r => setTimeout(r, 100))
+    expect(screen.queryByRole('grid', { name: 'Choices' })).not.toBeInTheDocument()
+    expect(mock.roundRequests).toBe(0)
   })
 
   it('shows on a round the engine chose too', async () => {

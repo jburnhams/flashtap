@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DataView, Done, EmptyState, format, useLoad, useSearchParam } from 'strata-react'
 import { api, isPlayChoice, keys, newId, type LearnerRow, type PlayChoice, type Settings } from '../api'
-import { RunningScore, Scored } from '../score'
+import { RunningScore, ScoreRead, Scored } from '../score'
 import { Game, NextAfter, Planned, RoundSkeleton, type Embedded } from './PlayScreen'
 
 /** Rounds in a break when the link does not say. */
@@ -68,7 +68,9 @@ function Sitting({ settings, learners }: { settings: Settings; learners: Learner
       <Scored learner={who}>
         <div className="grid gap-4">
           <RunningScore className="justify-self-end" />
-          {mode === 'next' && who ? <Planned learner={who} embedded={embedded} /> : mode !== 'next' && <Game mode={mode} learner={who} session={who ? session : ''} rateEvery={settings.rate_every} embedded={embedded} />}
+          <ScoreRead skeleton={<RoundSkeleton />}>
+            {mode === 'next' && who ? <Planned learner={who} embedded={embedded} /> : mode !== 'next' && <Game mode={mode} learner={who} session={who ? session : ''} rateEvery={settings.rate_every} embedded={embedded} />}
+          </ScoreRead>
         </div>
       </Scored>
     </NextAfter.Provider>

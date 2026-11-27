@@ -54,7 +54,7 @@ import { Button, ButtonLink, isRefusal, ChoiceGrid, ChoiceGridSkeleton, DataView
 import { api, isMode, isPlayChoice, keepAttempt, keepRating, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type Face, type LearnerRow, type Mode, type Next, type OfferOut, type Option, type PlayChoice, type Round, type SessionInfo, type Settings } from '../api'
 import { LANG, useVoice } from '../voice'
 import { refresh, take } from '../reserve'
-import { RunningScore, Scored, useTally, type Tally } from '../score'
+import { RunningScore, ScoreRead, Scored, useTally, type Tally } from '../score'
 import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRight, solution, type Placement, type Turn } from '../play'
 // Every prompt and answer is said aloud: a learner who cannot read yet still needs the prompt. It is said from the
 // recorded clips where they cover it (../voice.ts), else in the browser's UK English voice. A prompt said unasked
@@ -142,9 +142,9 @@ function Choices({ settings, learners, session }: { settings: Settings; learners
         <RunningScore className="ms-auto self-end" />
       </div>
       {mode !== 'next' ? (
-        <Game key={`${mode}-${playing?.id ?? ''}`} mode={mode} learner={playing} session={playing ? session(playing.id) : ''} rateEvery={settings.rate_every} />
+        <ScoreRead skeleton={<RoundSkeleton />}><Game key={`${mode}-${playing?.id ?? ''}`} mode={mode} learner={playing} session={playing ? session(playing.id) : ''} rateEvery={settings.rate_every} /></ScoreRead>
       ) : playing ? (
-        <Planned key={playing.id} learner={playing} />
+        <ScoreRead skeleton={<RoundSkeleton />}><Planned key={playing.id} learner={playing} /></ScoreRead>
       ) : (
         <EmptyState title="Choose who is playing">Rounds chosen for a learner come from what they have shown, so pick who is playing first, or pick a kind of round.</EmptyState>
       )}
