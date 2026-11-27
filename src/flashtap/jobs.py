@@ -87,6 +87,8 @@ def talk_write(job: Job) -> dict[str, Any]:
     if w.failed:
         key, why = next(iter(w.failed.items()))
         raise RetryLater(f"{len(w.failed)} of {len(keys)} moments not written yet; {key}: {why}", after_s=RETRY_S)
+    if w.short:  # the model answered, but too few lines passed the checks: ask again, up to the queue's retries
+        raise RetryLater(f"{len(w.short)} of {len(keys)} moments not full yet; {w.short[0]}", after_s=RETRY_S)
     return {"added": sum(w.added.values()), "full": len(w.full), "refused": sum(map(len, w.refused.values()))}
 
 

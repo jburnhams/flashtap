@@ -9,7 +9,8 @@
 // (each mount of a Game or a planned session) says hello again and introduces its first kind. Without a learner, or
 // until the pools arrive, or if they fail, the fixed lines are said, which is what Play said before (0.16.0): this is
 // never drawn, so it has no DataView, like the clips list (voice.ts).
-import { createContext, createElement, useContext, useMemo, useState, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { createContext, createElement, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLoad } from 'strata-react'
 import { api, keys, type TalkOut } from './api'
 
@@ -96,6 +97,10 @@ export function TalkProvider({ learner, children }: { learner: string | null; ch
 
 function Pools({ learner, children }: { learner: string; children: ReactNode }) {
   useState(() => startVisit(learner)) // once per mount: each mount is a visit
+  // The clips list is kept for the session (voice.ts), but a learner added since it was read has had their name lines
+  // made by a later build: each visit reads it again, so their clips are used without a reload.
+  const queryClient = useQueryClient()
+  useEffect(() => { void queryClient.invalidateQueries({ queryKey: keys.voice }) }, [queryClient])
   const load = useLoad({ queryKey: keys.talk(learner), queryFn: () => api.talk(learner), staleTime: Infinity })
   const data = load.status === 'ready' ? load.data : undefined
   const talk = useMemo(() => talkOf(learner, data), [learner, data])

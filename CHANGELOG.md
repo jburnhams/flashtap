@@ -4,6 +4,12 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-27
 
+**Review fixes (Codex on #62): short pools are written again, and a visit reads the clips list afresh (branch `claude/project-thread-had1h8`)**
+
+- `src/flashtap/talk.py`: `Wrote.short`, the moments answered with too few lines that pass to fill their pool. `src/flashtap/jobs.py`: `talk_write` runs again later for them (up to the queue's retries), instead of ending done with empty pools.
+- `web/src/talk.ts`: each visit invalidates the clips list, so a learner added in this page hears their name lines once a build has made them, without a reload.
+- `tests/unit/test_talk.py`, `tests/unit/test_jobs.py`: the short pool, and the job asking again.
+
 **A more engaging voice: varied lines with the learner's name, written ahead by a language model, and every phonics sound made pure (0.17.0, branch `claude/project-thread-had1h8`)**
 
 Asked for: "use llm calls to write better dialogue perhaps using the player name ... more engaging and less repetitive ... do in advance so ready"; and why consonants still needed recording when strata-models can now say a single sound. Every right answer opened "Yes!" and every miss ended "Try again.". The engine chooses each round from the answer before it, so no session is known ahead: instead every moment and every kind of round has its lines written and voiced before it is needed. Corrects the earlier claim (0.10.0, README, `voice.py`, Sounds screen) that consonants must be recorded by a person: strata-models #112 says them pure.

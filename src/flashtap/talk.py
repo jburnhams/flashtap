@@ -295,6 +295,7 @@ class Wrote(BaseModel):
     full: list[str] = []  # already had a full pool
     refused: dict[str, list[str]] = {}  # key -> "line: why", for the log
     failed: dict[str, str] = {}
+    short: list[str] = []  # answered, but too few lines passed to fill the pool: asked again later
     left: list[str] = []
 
 
@@ -330,6 +331,8 @@ def write(
         kept: list[int] = []
         store.edit(partial(_keep, key=key, candidates=candidates, model=model, out=out, kept=kept))
         added = kept[0]
+        if len(have) + added < POOL:
+            out.short.append(key)
         out.added[key] = added
         say(f"wrote {added:2}  {key}")
     return out

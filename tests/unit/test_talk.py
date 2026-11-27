@@ -103,6 +103,7 @@ def test_a_moment_that_fails_is_named_and_the_rest_are_written(store: talk.Store
     r = talk.write(store, ["right", "retry"], ask=Writer(["Have a go."], fail="right answer"))
     assert set(r.failed) == {"right"}
     assert r.added == {"retry": 1}
+    assert r.short == ["retry"]  # answered, but one line does not fill the pool: asked again later
     bad = talk.write(store, ["pick"], ask=lambda _p, _q: {"json": {"words": []}})
     assert "lines" in bad.failed["pick"]
 

@@ -137,3 +137,18 @@ def test_talk_is_written_by_the_write_role_then_voiced(fake_models, tmp_path):
     assert "pick" not in book.lines
     assert any(j.kind == jobs.VOICE_BUILD for j in q.page().items)  # what was written is voiced next
     database(app).close()
+
+
+def test_talk_with_pools_left_short_is_written_again_later(fake_models, tmp_path):
+    """The write role answers, but every line fails the checks: the job is not done, it asks again later."""
+    fake_models.results["write"] = {"text": "", "json": {"lines": ["Good girl!"]}, "model": "fake"}
+    app = create_app()
+    q = job_queue(app)
+    jid = q.enqueue(jobs.TALK_WRITE)
+    q.step(jobs.HANDLERS)
+    after = q.get(jid)
+    assert after is not None
+    assert after.state == "queued"
+    assert after.error is not None
+    assert "moments not full yet; right" in after.error
+    database(app).close()
