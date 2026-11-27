@@ -2,6 +2,19 @@
 
 Newest first, grouped by day. One entry per change, in the same commit or PR as the change.
 
+## 2026-11-27
+
+**The very first rounds are numbers to five, colours, shapes and animals; letters and sounds wait (0.15.0, branch `claude/project-thread-85zcg6`)**
+
+Asked for: new learners still met rounds that were too hard ("what starts with letter H"); the first rounds should be "like numbers 1-5, colours, shapes, animals, really basic stuff". The deployed server turned out to be on 0.13.0, before the first steps, and Play starts on Mixed, which draws from every kind; both are covered here or by the next deploy.
+
+- `src/flashtap/kinds/starter.py`: Same picture and its twins show animals only; **Same shape** (from three tiles the right tile is the shape in another colour, beside a wrong one in the shown colour) and **Shape twins** (each shape onto the same shape in another colour). `src/flashtap/mechanics.py`: `SAME_SHAPE`, `SHAPE_TWINS`. `src/flashtap/rounds.py`: their templates and pictures; Same picture and Picture twins are version 2, named Same animal and Animal twins.
+- `src/flashtap/packs/starter.toml`: version 2. `maths.geometry.same_shape`, a strong prerequisite (judgement) of naming shapes; the picture skill is the animal one. Rounds and decisions made from version 1 are no longer rebuilt.
+- `src/flashtap/engine/policy.py`: `utility@8`. Every kind naming a literacy skill also waits on `FIRST_WORDS` (the words for pictures, colour words, shape names, counting a set), and every kind naming a sound on `LETTERS_KNOWN` (Capitals), so Same letter leaves the first steps (`STARTER` is now what a new learner can play). A known skill's reach is 0, so a known Same letter no longer outweighs Capitals for the closed kinds behind it. `SKILLS_SINCE`, `later_skills`: the skills each version added, for replay. `utility@7` weighs neither new kind nor rule, and replays. `src/flashtap/engine/replay.py`: a decision is remade on the graph without the skills added after its version.
+- `web/src/screens/PlayScreen.tsx`: with a learner chosen and the saved kind Mixed, Play starts on "Chosen for them" (Mixed is still in the list); the new names. `web/src/api.ts` (`MODES`), `web/src/mocks/fixtures.ts` (the new kinds, rounds and packs), `web/openapi.json`, `web/src/api.generated.ts` regenerated. `web/stories/play.stories.tsx`: "Playing as Fox" names Mixed, as it showed. `web/tests/integration/PlayScreen.test.tsx`: the list, an animal round, the new default; tests of the grown-up's kind name Mixed.
+- Tests: `tests/unit/test_engine.py` (letters wait on every first word and sounds on Capitals too; an all-right learner opens Same letter after the first words and Letters last, within 300 rounds; utility@7's offer), `test_rounds.py` (animals only; Same shape asks for the shape; Shape twins), `test_mistakes.py` (the probe sessions start from a grown-up's "can do it" on the first words and letters), `test_server.py`.
+- `pyproject.toml`, `uv.lock`: 0.15.0. `README.md`, `AGENTS.md`, `docs/content.md` ("First steps", transfer table), `docs/implementation-plan.md` (item 12), `docs/progress.md`.
+
 ## 2026-11-26
 
 **Review fix (Codex on #59): decisions from before the first steps are remade on the graph they were made on (branch `claude/project-thread-xk3y90`)**

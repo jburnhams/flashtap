@@ -29,7 +29,13 @@ LAST = "maths.cardinality.last_number"
 GIVE = "maths.cardinality.give_n"
 NUMERAL = "maths.numerals.recognise"
 ONE_TO_ONE = "maths.counting.one_to_one"
-FIRST_STEPS = ("language.matching.picture", "language.matching.colour", "literacy.letters.same", "maths.numerals.same")
+FIRST_STEPS = (
+    "language.matching.picture",
+    "language.matching.colour",
+    "maths.geometry.same_shape",
+    "literacy.letters.same",
+    "maths.numerals.same",
+)
 
 
 def started(*more: str) -> list[Told]:
@@ -311,15 +317,45 @@ def test_rounds_open_one_shown_skill_at_a_time_and_only_by_success() -> None:
     assert Mode.MATCHING in open_(fold([], G, told=started()))
     # Answers in a kind's own skill do not open it: what it waits on is shown first
     assert Mode.LETTERS not in open_(fold([event(Mode.LETTERS)], G))
-    assert policy.needs(model.SHAPE[Mode.SHAPES], G) == {"language.matching.colour", "language.vocabulary.colours"}
+    assert policy.needs(model.SHAPE[Mode.SHAPES], G) == {
+        "language.matching.colour",
+        "language.vocabulary.colours",
+        "maths.geometry.same_shape",
+    }
     assert all(not policy.needs(model.SHAPE[m], G) for m in policy.STARTER)
+
+
+def test_letters_wait_on_the_first_words_and_sounds_on_the_letters() -> None:
+    """0.15.0: a new learner's rounds are numbers to five, colours, shapes and animals; a letter kind opens only once
+    the first words are shown, and a sound kind only once the letters are matched to their capitals too."""
+
+    def open_(k: Knowledge) -> set[Mode]:
+        return {x.mode for x in decide(k, past(), CONFIG, "s:0", T0).candidates if x.set_aside is None}
+
+    literacy = {m for m in rounds.PRACTICE if any(s.startswith("literacy.") for s in model.SHAPE[m].skills)}
+    assert {Mode.SAME_LETTER, Mode.LETTERS, Mode.SOUNDS, Mode.LISTEN, Mode.CAPITALS, Mode.SORT_SOUNDS} == literacy
+    assert not open_(Knowledge(G)) & literacy
+    # every first step shown, Same letter among them: still no letters, as the first words are not
+    firsts = fold([], G, told=started())
+    assert not open_(firsts) & literacy
+    # the first words but one: still none
+    words = sorted(policy.FIRST_WORDS)
+    assert not open_(fold([], G, told=started(*words[:-1]))) & literacy
+    # all of them: Same letter, and with it shown Capitals, but no sound kind
+    assert open_(fold([], G, told=started(*words))) & literacy == {Mode.SAME_LETTER, Mode.CAPITALS}
+    # Capitals shown too: the sound kinds that wait on nothing else open
+    with_caps = open_(fold([], G, told=started(*words, "literacy.letters.case_match")))
+    assert {Mode.SOUNDS, Mode.SORT_SOUNDS} <= with_caps
+    assert Mode.LETTERS not in with_caps  # it waits on the first sounds too (Sort by sound)
+    # utility@7 held letters back by their graph edges only
+    assert policy.needs(model.SHAPE[Mode.SAME_LETTER], G, 7) == frozenset()
 
 
 def test_a_learner_who_gets_everything_right_opens_every_kind_gradually() -> None:
     """Nothing waits on itself: answering every round right opens every practice kind, a few at a time."""
     k, answers, opened = Knowledge(G), list[tuple[Mode, bool]](), dict[Mode, int]()
     endless = Config(choices=4, tries=0, max_rounds=999, max_minutes=999, break_every=0)
-    for n in range(100):
+    for n in range(300):  # first steps, first words, letters, then sounds: a long road at one right answer a minute
         now = T0 + timedelta(minutes=n)
         so_far = Past(started=T0, decisions=[(Action.ROUND, m) for m, _ in answers], answers=answers)
         c = decide(k, so_far, endless, f"w:{n}", now)
@@ -330,7 +366,8 @@ def test_a_learner_who_gets_everything_right_opens_every_kind_gradually() -> Non
     assert set(rounds.PRACTICE) <= set(opened)
     assert {m for m, n in opened.items() if n == 0} == policy.STARTER - set(rounds.HELD_OUT)
     assert opened[Mode.MISSING] > opened[Mode.COUNTING] > 0
-    assert opened[Mode.LETTERS] > opened[Mode.SORT_SOUNDS] > opened[Mode.MATCHING] > 0
+    assert opened[Mode.LETTERS] > opened[Mode.SORT_SOUNDS] > opened[Mode.CAPITALS] > opened[Mode.SAME_LETTER]
+    assert opened[Mode.SAME_LETTER] > max(opened[Mode.MATCHING], opened[Mode.COLOURS], opened[Mode.SHAPES]) > 0
 
 
 def test_policies_before_7_neither_offer_the_first_steps_nor_hold_a_kind_back() -> None:
@@ -354,7 +391,7 @@ def test_a_missed_round_is_followed_by_contrasts_that_leave_part_of_it_out() -> 
 
 
 def test_a_pick_below_the_top_says_it_was_exploration() -> None:
-    k = Knowledge(G)
+    k = fold([event(Mode.SAME_NUMBER, at=T0 - timedelta(minutes=1))], G)  # one answer, so the first steps differ
     for i in range(200):
         c = decide(k, past(), CONFIG, f"x:{i}", T0)
         if Why.EXPLORE in c.rationale:
@@ -611,7 +648,7 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
     assert replay.replay(log, retired, {}, G) == (
         0,
         [
-            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3, utility@4, utility@5, utility@6, utility@7)"
+            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3, utility@4, utility@5, utility@6, utility@7, utility@8)"
         ],
     )
     assert replay.replay(log, old[:1], {}, G)[1] == [
@@ -635,7 +672,7 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
 def test_a_decision_from_before_the_first_steps_is_remade_on_the_graph_it_was_made_on() -> None:
     """utility@6 decided on a graph with no first-steps skills; their edges change Matching's readiness and reach, so
     a replay on today's graph alone would differ (Codex on #59)."""
-    old = G.without(policy.STARTER_SKILLS)
+    old = G.without(policy.later_skills(6))
     assert old.before["language.vocabulary.receptive"] == frozenset()
     assert "language.matching.picture" in G.before["language.vocabulary.receptive"]
     assert not set(old.skills) & policy.STARTER_SKILLS
@@ -955,7 +992,7 @@ def test_decisions_logged_by_utility_1_are_remade_by_the_current_policy(
     session config without the choice and rating cadence, made on the graph before the first steps' skills joined it.
     The current code remakes each exactly."""
     monkeypatch.setattr(sessions, "decide", functools.partial(policy.decide, policy=policy.kept("utility@1")))
-    before = G.without(policy.STARTER_SKILLS)
+    before = G.without(policy.later_skills(6))
     play_session(db_session, fox, Config(choices=4, tries=0, max_rounds=6, break_every=3), T0, g=before)
     monkeypatch.undo()
     for d in db_session.scalars(select(Decision)):
@@ -977,9 +1014,16 @@ def test_each_policy_version_weighs_the_kinds_it_had() -> None:
     assert policy.kept("utility@1").shapes == policy.kept("utility@2").shapes
     assert {s.mode for s in POLICY.shapes} == set(rounds.TEMPLATES)
     # no transfer kinds before 6, no first steps before 7
-    assert {s.mode for s in policy.kept("utility@5").shapes} == set(rounds.PRACTICE) - policy.STARTER
-    assert {s.mode for s in policy.kept("utility@6").shapes} == set(rounds.TEMPLATES) - policy.STARTER
-    assert set(policy.REPLAYS) == {f"utility@{n}" for n in range(1, 7)} | {POLICY.id}
+    starts = {m for m in rounds.TEMPLATES if m.value.startswith("same_") or m.value.endswith("_twins")}
+    starts -= {Mode.SAME_SOUND}  # a transfer kind of 0.13.0, not a first step
+    assert {s.mode for s in policy.kept("utility@5").shapes} == set(rounds.PRACTICE) - starts
+    assert {s.mode for s in policy.kept("utility@6").shapes} == set(rounds.TEMPLATES) - starts
+    # no Same shape before 8
+    assert {s.mode for s in policy.kept("utility@7").shapes} == set(rounds.TEMPLATES) - {
+        Mode.SAME_SHAPE,
+        Mode.SHAPE_TWINS,
+    }
+    assert set(policy.REPLAYS) == {f"utility@{n}" for n in range(1, 8)} | {POLICY.id}
 
 
 def test_deleting_a_learner_deletes_their_ratings_and_overrides(db_session: Session, fox: str) -> None:

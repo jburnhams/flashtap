@@ -573,7 +573,7 @@ def test_first_sounds_always_has_a_two_letter_sound_and_tempts_with_its_first_le
 # First steps (0.14.0): matching by look, with wrong options that are always unlike the right one
 
 
-FIRST_STEPS = (Mode.SAME_PICTURE, Mode.SAME_COLOUR, Mode.SAME_LETTER, Mode.SAME_NUMBER)
+FIRST_STEPS = (Mode.SAME_PICTURE, Mode.SAME_COLOUR, Mode.SAME_SHAPE, Mode.SAME_LETTER, Mode.SAME_NUMBER)
 
 
 @pytest.mark.parametrize("mode", FIRST_STEPS)
@@ -585,13 +585,45 @@ def test_first_steps_start_at_two_tiles_and_never_go_past_four(mode):
     assert rounds.TRANSFER[TEMPLATES[mode].skills[0][0]] in rounds.HELD_OUT  # each has its twins kind
 
 
-def test_same_picture_shows_the_answer_among_other_kinds_of_thing():
+@pytest.mark.parametrize("mode", [Mode.SAME_PICTURE, Mode.PICTURE_TWINS])
+def test_same_picture_and_its_twins_show_animals_only(mode):
+    """0.15.0: the very first rounds are numbers to five, colours, shapes and animals."""
     things = {t.id: t for t in lexicon.words().everything}
     for seed in range(300):
-        r = rounds.at_level(Mode.SAME_PICTURE, 2, seed)
+        r = rounds.generate(mode, 4, seed)
+        shown = [o.id for o in r.options] or [p.id for p in r.pieces]
+        assert {things[i].category for i in shown} == {"animals"}
+        assert len({things[i].picture for i in shown}) == len(shown)  # never two alike
+        if r.options:
+            assert r.show == things[r.answer].picture
+
+
+def test_same_shape_asks_for_the_shape_not_the_colour_from_three_tiles():
+    things = {t.id: t for t in lexicon.words().shapes}
+    lured = 0
+    for seed in range(300):
+        two = rounds.at_level(Mode.SAME_SHAPE, 0, seed)
+        assert next(o for o in two.options if o.correct).picture == two.show  # two tiles: the same picture
+        r = rounds.at_level(Mode.SAME_SHAPE, 1, seed)
+        seen = next(t for t in things.values() if t.picture == r.show)
+        assert [o.id for o in r.options if things[o.id].shape == seen.shape] == [r.answer]
         right = things[r.answer]
-        assert r.show == right.picture
-        assert all(things[o.id].category != right.category for o in r.options if not o.correct)
+        assert right.colour != seen.colour or seen.shape == "diamond"  # the diamond comes in one colour
+        lured += any(things[o.id].colour == seen.colour for o in r.options if not o.correct)
+    assert lured > 150  # a wrong tile in the shown colour, whenever there is one
+    for choices in range(2, rounds.MAX_CHOICES + 1):  # a grown-up's choices: a round of that many tiles
+        assert len(rounds.generate(Mode.SAME_SHAPE, choices, 7).options) == choices
+
+
+def test_shape_twins_puts_each_shape_on_the_same_shape():
+    things = {t.id: t for t in lexicon.words().shapes}
+    for seed in range(200):
+        r = rounds.generate(Mode.SHAPE_TWINS, 3, seed)
+        assert len({things[p.id].shape for p in r.pieces}) == len(r.pieces) == 3
+        for place in r.places:
+            (piece,) = place.takes
+            target = things[place.id.removeprefix("twin_")]
+            assert target.shape == things[piece].shape
 
 
 def test_same_colour_asks_for_the_colour_not_the_picture_from_three_tiles():

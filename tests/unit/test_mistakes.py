@@ -493,6 +493,16 @@ def play(db: Session, learner: str, start: datetime, g: Graph | None = None) -> 
 def test_sessions_that_probe_replay_exactly_and_utility_4_ignores_the_tally(
     db_session: Session, fox: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # A grown-up's "can do it" on the first words and the letters, so the letter and sound kinds are open (utility@8)
+    known = set(content.load().skills)
+    for skill in sorted(policy.FIRST_WORDS | policy.LETTERS_KNOWN | {"literacy.letters.same"}):
+        store.tell(
+            db_session,
+            fox,
+            store.OverrideIn(skill=skill, says="can", observer="parent"),
+            known,
+            T0 - timedelta(hours=2),
+        )
     # Three mirror-letter taps first, so the misconception is open before the engine's first session.
     for n in range(3):
         r = find(
@@ -506,7 +516,7 @@ def test_sessions_that_probe_replay_exactly_and_utility_4_ignores_the_tally(
     assert (out.reproduced, out.differences) == (out.decisions, [])
     monkeypatch.setattr(sessions, "decide", functools.partial(policy.decide, policy=policy.kept("utility@4")))
     # utility@4 decided on the graph before the first steps' skills joined it, as replay remakes it
-    assert play(db_session, fox, T0 + timedelta(days=1), G.without(policy.STARTER_SKILLS)) == 0
+    assert play(db_session, fox, T0 + timedelta(days=1), G.without(policy.later_skills(6))) == 0
     monkeypatch.undo()
     out = sessions.evaluate(db_session, sessions.ReplayIn(learner_id=fox), G)
     assert (out.reproduced, out.differences) == (out.decisions, [])

@@ -33,7 +33,7 @@ export const SortBySound: Story = { render: () => <AppAt route="/?mode=sort_soun
 /** A sound on its own is said (from its clip, or described by the browser), never printed: the speaker stands for it. */
 export const Sounds: Story = { render: () => <AppAt route="/?mode=sounds" /> }
 /** A learner chosen in Who is playing: each round is recorded for them. */
-export const PlayingAsFox: Story = { render: () => <AppAt route={`/?learner=${FOX}`} /> }
+export const PlayingAsFox: Story = { render: () => <AppAt route={`/?mode=mixed&learner=${FOX}`} /> }
 /** Chosen for them: the adaptive engine picks each round for the learner and says why, for the grown-up. */
 export const ChosenForFox: Story = { render: () => <AppAt route={`/?mode=next&learner=${FOX}`} /> }
 /** Chosen for them needs to know who is playing. */

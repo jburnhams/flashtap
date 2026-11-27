@@ -71,6 +71,9 @@ class Mode(StrEnum):
     COLOUR_TWINS = "colour_twins"
     LETTER_TWINS = "letter_twins"
     NUMBER_TWINS = "number_twins"
+    # First steps added in 0.15.0: matching a shape by look, and its transfer kind
+    SAME_SHAPE = "same_shape"
+    SHAPE_TWINS = "shape_twins"
     MIXED = "mixed"
 
 

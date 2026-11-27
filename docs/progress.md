@@ -1,5 +1,13 @@
 # Progress log
 
+## 2026-11-27: the very first rounds are numbers to five, colours, shapes and animals (0.15.0)
+
+- Asked for: a new learner still met rounds like "What starts with the letter H?"; the first rounds should be numbers 1-5, colours, shapes and animals.
+- Found: the deployed server was still on 0.13.0, before the first steps, and that learner had no answers on the server. Play's default kind is the saved setting, Mixed unless changed, and Mixed draws from every practice kind, letters and sounds included, so a grown-up who picks a learner and plays straight away got them whatever the engine would say.
+- Under 0.14.0 the letter kinds waited only on their graph prerequisites: Sounds on Same letter alone, a first step. No source orders colour words before letters, so the new order lives in the scheduler (`policy.FIRST_WORDS`, `LETTERS_KNOWN`), not in a pack edge, which would also move BKT's estimates.
+- With the longer road the all-right learner stalled on Capitals: a known Same letter kept the reach of every closed letter kind behind it (information times unseen neighbours) and was played 62 times in 400 rounds while Capitals, which opens the sounds, was played twice. From `utility@8` a known skill's reach is 0: a right answer on it lifts nothing the graph has not lifted already. Then letters open after about 50 all-right rounds and sounds after about 250.
+- Simulated learners still learn more under the engine than at random (13.46 against 13.39 skills, 100 learners, 6 sessions, seed 1), a narrower lead than 0.14.0's: more of each session goes to first steps and first words, which the simulated learners mostly know already.
+
 ## 2026-11-26: first steps, and kinds opened by success (0.14.0)
 
 - Asked for: the owner wants to start using Flashtap, but even the easiest rounds were too hard to begin on; it should start as easy as possible and move on only gradually, on success.

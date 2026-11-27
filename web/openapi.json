@@ -931,6 +931,8 @@
        "colour_twins",
        "letter_twins",
        "number_twins",
+       "same_shape",
+       "shape_twins",
        "mixed"
       ],
       "title": "Mode",
@@ -1586,6 +1588,8 @@
      "colour_twins",
      "letter_twins",
      "number_twins",
+     "same_shape",
+     "shape_twins",
      "mixed"
     ],
     "title": "Mode",
@@ -2488,7 +2492,7 @@
       "title": "Learner Id"
      },
      "policy": {
-      "default": "utility@7",
+      "default": "utility@8",
       "title": "Policy",
       "type": "string"
      },
