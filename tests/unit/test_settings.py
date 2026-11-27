@@ -33,6 +33,14 @@ def test_save_validates_each_setting():
     assert settings.choices() == 3  # a refused save changes nothing
 
 
+def test_next_after_counts_down_three_seconds_by_default_and_can_wait_for_a_tap():
+    assert settings.next_after() == 3
+    settings.SETTINGS.save({"next_after": "0"})
+    assert settings.next_after() == 0
+    with pytest.raises(ValueError, match="from 0 to 10"):
+        settings.SETTINGS.save({"next_after": "11"})
+
+
 def test_session_settings_have_defaults_ranges_and_an_off_switch(monkeypatch):
     got = (
         settings.session_rounds(),

@@ -157,6 +157,7 @@ def test_settings_refuse_a_bad_value(client):
         "break_every": 10,
         "choice_every": 5,
         "rate_every": 4,
+        "next_after": 3,
     }  # numbers: Settings(numbers=True)
 
 
@@ -242,6 +243,25 @@ def test_learner_records_over_http(client):
     assert client.get(f"/api/learners/{fox}/profile").status_code == 404
     assert client.get(f"/api/learners/{fox}/skills/x/evidence").status_code == 404
     assert client.get("/api/learners").json() == []
+
+
+def test_the_running_score_counts_first_answers_all_time_and_leaves_out_struck_ones(client):
+    fox = client.post("/api/learners", json={"nickname": "Fox"}).json()["id"]
+    assert client.get(f"/api/learners/{fox}/score").json() == {"right": 0, "wrong": 0}
+    client.post("/api/attempts", json=_attempt(fox, seed=1, event_id="1" * 32))
+    client.post("/api/attempts", json=_attempt(fox, seed=2, event_id="2" * 32))
+    # right in the end (outcome "right") but wrong first: wrong, as the server judged the first answer
+    client.post("/api/attempts", json=_attempt(fox, seed=3, right=False, event_id="3" * 32))
+    client.post("/api/attempts", json=_attempt(fox, seed=4, event_id="3" * 31 + "4"))
+    # another session (another visit) adds to the same score
+    client.post("/api/attempts", json={**_attempt(fox, seed=5, right=False, event_id="5" * 32), "session_id": "6" * 32})
+    client.post("/api/attempts", json=_attempt(fox, seed=1, event_id="1" * 32))  # a retry is counted once
+    assert client.get(f"/api/learners/{fox}/score").json() == {"right": 3, "wrong": 2}
+    client.post(f"/api/attempts/{'5' * 32}/strike", json={"reason": "a grown-up's tap"})
+    assert client.get(f"/api/learners/{fox}/score").json() == {"right": 3, "wrong": 1}
+    other = client.post("/api/learners", json={"nickname": "Owl"}).json()["id"]
+    assert client.get(f"/api/learners/{other}/score").json() == {"right": 0, "wrong": 0}
+    assert client.get(f"/api/learners/{'0' * 32}/score").status_code == 404
 
 
 def test_an_export_of_a_nickname_with_no_letters_is_still_named(client):

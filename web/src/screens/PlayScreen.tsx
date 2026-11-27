@@ -12,9 +12,15 @@
 //   piece in or out of a place clears its mark.
 //
 // With a limit on tries (Settings), running out shows the answer: taps for a one-tap round, checks
-// for an arrangement. There is no score and no streak: the spec asks for no streak pressure and no
-// punishment for mistakes (§11, §17). The kind of round lives in the URL (?mode=counting), so a
+// for an arrangement. Once a round is over, Next counts down from three (Settings, `next_after`) and
+// the next round comes by itself, so a young learner never has to find the button; a tap on Next goes
+// at once. With the three faces asked, the count starts once a face is tapped, so it never takes the
+// faces away; untapped, Next waits. The kind of round lives in the URL (?mode=counting), so a
 // grown-up can bookmark one. It is a select, not a row of toggles: thirteen names do not fit.
+//
+// The running score (src/score.tsx; the owner, 2026-11-27, over the spec's "no streak pressure", §11,
+// §17): a recorded learner's first answers right and wrong, all time, in green and red above the
+// round the whole time they play. There is still no streak.
 //
 // Who is playing is the second select, also in the URL (?learner=<id>), so "Play as Fox" on the
 // Learners screen is a link. With a learner chosen, each round is kept once it ends (or once Next or
@@ -43,11 +49,12 @@
 // tile is a picture tile like any other (strata-react's ChoiceGrid), left open: neither a pick nor a face is right
 // or wrong. With the grown-up choosing the kind, the faces still come every few rounds for a learner who is recorded.
 import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { Button, ButtonLink, isRefusal, ChoiceGrid, ChoiceGridSkeleton, DataView, Done, EmptyState, format, Field, NativeSelect, PageHeader, PlaceBoard, SayAgain, Skeleton, useLoad, useSearchParam, type ChoiceState, type Delivery, type Load, type PlaceState } from 'strata-react'
 import { api, isMode, isPlayChoice, keepAttempt, keepRating, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type Face, type LearnerRow, type Mode, type Next, type OfferOut, type Option, type PlayChoice, type Round, type SessionInfo, type Settings } from '../api'
 import { LANG, useVoice } from '../voice'
 import { refresh, take } from '../reserve'
+import { RunningScore, Scored, useTally, type Tally } from '../score'
 import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRight, solution, type Placement, type Turn } from '../play'
 // Every prompt and answer is said aloud: a learner who cannot read yet still needs the prompt. It is said from the
 // recorded clips where they cover it (../voice.ts), else in the browser's UK English voice. A prompt said unasked
@@ -121,6 +128,8 @@ function Choices({ settings, learners, session }: { settings: Settings; learners
   const known = learners.status === 'ready' ? learners.data : []
   const playing = known.find(x => x.id === learner) ?? null
   return (
+    <NextAfter.Provider value={settings.next_after}>
+    <Scored learner={playing}>
     <div className="grid gap-6">
       <div className="flex flex-wrap gap-4">
         <Field label="Kind of round" className="w-full max-w-xs">
@@ -130,6 +139,7 @@ function Choices({ settings, learners, session }: { settings: Settings; learners
           </NativeSelect>
         </Field>
         <WhoPlays learners={known} recording={playing !== null} failed={learners.status === 'error'} />
+        <RunningScore className="ms-auto self-end" />
       </div>
       {mode !== 'next' ? (
         <Game key={`${mode}-${playing?.id ?? ''}`} mode={mode} learner={playing} session={playing ? session(playing.id) : ''} rateEvery={settings.rate_every} />
@@ -139,8 +149,13 @@ function Choices({ settings, learners, session }: { settings: Settings; learners
         <EmptyState title="Choose who is playing">Rounds chosen for a learner come from what they have shown, so pick who is playing first, or pick a kind of round.</EmptyState>
       )}
     </div>
+    </Scored>
+    </NextAfter.Provider>
   )
 }
+
+/** Seconds Next counts down before the next round comes by itself (Settings, `next_after`); 0 waits for a tap. */
+export const NextAfter = createContext(0)
 
 /** Who the rounds are recorded for; Nobody records nothing. A failed list still lets the child play, unrecorded. */
 function WhoPlays({ learners, recording, failed }: { learners: LearnerRow[]; recording: boolean; failed: boolean }) {
@@ -156,6 +171,9 @@ function WhoPlays({ learners, recording, failed }: { learners: LearnerRow[]; rec
 
 /** What a round reports once it ends: the rest of an attempt comes from the round and who is playing. */
 export type Answered = Pick<AttemptIn, 'first_answer' | 'tries' | 'outcome' | 'presented_at' | 'answered_at'>
+
+/** A round's report, with whether its first answer was right (for the running score; the server judges it again). */
+type OnAnswered = (a: Answered, right: boolean) => void
 
 /** A round to play: fresh from the server, or one the device kept for when the server cannot be reached. */
 type Played = { round: Round; kept: boolean }
@@ -175,10 +193,14 @@ async function freshOrKept(mode: Mode): Promise<Played> {
 
 const KEPT = 'The server can’t be reached, so this round is one kept on this device. Answers are sent when it is back.'
 
-/** Keeps a learner’s answer to send (the shell refreshes the learners’ records whenever one is sent). */
-function keep(who: LearnerRow, attempt: Omit<AttemptIn, 'learner_id' | 'event_id'>): { id: string; delivered: Promise<Delivery> } {
+/** Keeps a learner’s answer to send (the shell refreshes the learners’ records whenever one is sent), and counts it on
+ * the running score at once, sent or waiting: `right` is the first answer as the round's own key says, which is what
+ * the server will judge from the same round. */
+function keep(who: LearnerRow, attempt: Omit<AttemptIn, 'learner_id' | 'event_id'>, right: boolean, tally: Tally): { id: string; delivered: Promise<Delivery> } {
   const id = newId()
-  return { id, delivered: keepAttempt({ ...attempt, event_id: id, learner_id: who.id }, `${who.nickname}, ${modeLabels[attempt.mode]}`) }
+  const delivered = keepAttempt({ ...attempt, event_id: id, learner_id: who.id }, `${who.nickname}, ${modeLabels[attempt.mode]}`)
+  tally(id, right)
+  return { id, delivered }
 }
 
 /** Keeps a face for the answer `eventId`; a face the server refused says so under the faces. */
@@ -199,15 +221,16 @@ export function Game({ mode, learner, session, rateEvery, embedded }: { mode: Mo
   // half done and shown again with its answers forgotten would let a retry be recorded as a new first answer.
   const [visit] = useState(newId)
   const round = useLoad({ queryKey: keys.round(mode, visit, n), queryFn: () => freshOrKept(mode), staleTime: Infinity })
-  const record = (who: LearnerRow, r: Round, a: Answered) => {
-    last.current = keep(who, { session_id: session, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, level: r.level, asked: mode, ...a }).id
+  const tally = useTally()
+  const record = (who: LearnerRow, r: Round, a: Answered, right: boolean) => {
+    last.current = keep(who, { session_id: session, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, level: r.level, asked: mode, ...a }, right, tally).id
   }
   const asking = learner !== null && rateEvery > 0 && (n + 1) % rateEvery === 0
   return (
     <DataView state={round} isEmpty={p => p.round.options.length === 0 && p.round.pieces.length === 0} skeleton={<RoundSkeleton />} empty={<EmptyState title="Nothing to play">The server sent a round with no pictures.</EmptyState>}>
       {({ round: r, kept }) => (
         <div className="grid gap-4">
-          <Board key={`${r.mode}-${r.seed}`} round={r} onNext={() => { setN(x => x + 1); embedded?.onPlayed() }} onAnswered={learner ? a => record(learner, r, a) : undefined} onRated={asking && learner ? v => rate(learner, last.current, v) : undefined} />
+          <Board key={`${r.mode}-${r.seed}`} round={r} onNext={() => { setN(x => x + 1); embedded?.onPlayed() }} onAnswered={learner ? (a, right) => record(learner, r, a, right) : undefined} onRated={asking && learner ? v => rate(learner, last.current, v) : undefined} />
           {kept && <p className="type-caption text-muted-foreground">{KEPT}</p>}
         </div>
       )}
@@ -251,8 +274,9 @@ function Decisions({ session, learner, embedded }: { session: SessionInfo; learn
   const sending = useRef<Promise<unknown>[]>([])
   const onward = () => { void Promise.allSettled(sending.current).then(() => setSeq(n => n + 1)) }
   const last = useRef('') // the last answer kept: a face is offered only after one
-  const record = (d: Next, r: Round, a: Answered) => {
-    const kept = keep(learner, { session_id: session.id, decision_id: d.id, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, level: r.level, asked: 'next', ...a })
+  const tally = useTally()
+  const record = (d: Next, r: Round, a: Answered, right: boolean) => {
+    const kept = keep(learner, { session_id: session.id, decision_id: d.id, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, level: r.level, asked: 'next', ...a }, right, tally)
     last.current = kept.id
     sending.current = [kept.delivered]
   }
@@ -270,7 +294,7 @@ function Decisions({ session, learner, embedded }: { session: SessionInfo; learn
         ) : (d.action === 'round' || d.action === 'choice') && d.round ? (
           <div className="grid gap-4">
             <Chosen round={d.round} onChosen={m => setChosen(k => [m, ...k.filter(x => x !== m)])} />
-            <Board key={d.id} round={d.round} onNext={() => { onward(); embedded?.onPlayed() }} onAnswered={a => record(d, d.round as Round, a)} onRated={d.rate ? rated : undefined} />
+            <Board key={d.id} round={d.round} onNext={() => { onward(); embedded?.onPlayed() }} onAnswered={(a, right) => record(d, d.round as Round, a, right)} onRated={d.rate ? rated : undefined} />
             <p className="type-caption text-muted-foreground">Why this round: {d.why}</p>
           </div>
         ) : d.action === 'choice' && d.offers ? (
@@ -333,7 +357,8 @@ function AwayRounds({ session, seq, learner, kinds, onBack, onPlayed }: { sessio
       setRound(takeKept(kinds))
     })
   }
-  const record = (r: Round, a: Answered) => { keep(learner, { session_id: sitting, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, level: r.level, asked: 'offline', ...a }) }
+  const tally = useTally()
+  const record = (r: Round, a: Answered, right: boolean) => { keep(learner, { session_id: sitting, mode: r.mode, version: r.version, content: r.content, choices: r.choices, seed: r.seed, level: r.level, asked: 'offline', ...a }, right, tally) }
   if (!round)
     return (
       <EmptyState title="No rounds kept on this device" action={<Button variant="default" onClick={again} disabled={asking}>Try the server again</Button>}>
@@ -342,7 +367,7 @@ function AwayRounds({ session, seq, learner, kinds, onBack, onPlayed }: { sessio
     )
   return (
     <div className="grid gap-4">
-      <Board key={`${round.mode}-${round.seed}`} round={round} onNext={() => { again(); onPlayed?.() }} onAnswered={a => record(round, a)} />
+      <Board key={`${round.mode}-${round.seed}`} round={round} onNext={() => { again(); onPlayed?.() }} onAnswered={(a, right) => record(round, a, right)} />
       <p className="type-caption text-muted-foreground">{KEPT}</p>
     </div>
   )
@@ -429,24 +454,34 @@ function SessionOver({ learner, decision }: { learner: LearnerRow; decision: Nex
  * of page is) reports it as left, as long as there was a first answer. The report function is read
  * through a ref, so a new one on each render does not count as leaving.
  */
-function useAttempt(report: ((a: Answered) => void) | undefined) {
+function useAttempt(report: OnAnswered | undefined) {
   const latest = useRef(report)
   useEffect(() => { latest.current = report })
   // One mutable record per round, made once when the round appears (a lazy state initialiser, not a ref read in render).
-  const [log] = useState(() => ({ presented: new Date().toISOString(), first: null as { answer: AttemptIn['first_answer']; at: string } | null, tries: 0, sent: false }))
+  const [log] = useState(() => ({ presented: new Date().toISOString(), first: null as { answer: AttemptIn['first_answer']; at: string; right: boolean } | null, tries: 0, sent: false }))
   const ended = useCallback((outcome: AttemptIn['outcome']) => {
     const x = log
     if (x.sent || !x.first) return
     x.sent = true
-    latest.current?.({ first_answer: x.first.answer, tries: x.tries, outcome, presented_at: x.presented, answered_at: x.first.at })
+    latest.current?.({ first_answer: x.first.answer, tries: x.tries, outcome, presented_at: x.presented, answered_at: x.first.at }, x.first.right)
   }, [log])
   useEffect(() => () => ended('left'), [ended])
-  const answered = (answer: AttemptIn['first_answer']) => {
+  const answered = (answer: AttemptIn['first_answer'], right: boolean) => {
     const x = log
     x.tries += 1
-    x.first ??= { answer, at: new Date().toISOString() }
+    x.first ??= { answer, at: new Date().toISOString(), right }
   }
   return { answered, ended }
+}
+
+/** A face sent through `onRated`, noted so Next can count down once one is tapped. */
+function useRated(onRated: ((v: Face) => Promise<unknown>) | undefined) {
+  const [done, setDone] = useState(false)
+  const rate = onRated && ((v: Face) => {
+    setDone(true)
+    return onRated(v)
+  })
+  return { done, rate }
 }
 
 /** Say it again, from the clips where they cover it: named by the words it says (a sound by its description). */
@@ -456,7 +491,7 @@ function Say({ text, verb }: { text: string; verb: string }) {
 }
 
 /** A round, answered by a tap or by an arrangement as its mechanic says. */
-export function Board({ round, onNext, onAnswered, onRated }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void; onRated?: (v: Face) => Promise<unknown> }) {
+export function Board({ round, onNext, onAnswered, onRated }: { round: Round; onNext: () => void; onAnswered?: OnAnswered; onRated?: (v: Face) => Promise<unknown> }) {
   const queryClient = useQueryClient()
   const voice = useVoice()
   // Said once per round, when the clips list is known; `voice` changes only then, so a later re-render never repeats it.
@@ -470,14 +505,43 @@ export function Board({ round, onNext, onAnswered, onRated }: { round: Round; on
   return PLACE_MECHANICS.includes(round.mechanic) ? <Arrange round={round} onNext={next} onAnswered={onAnswered} onRated={onRated} /> : <Choose round={round} onNext={next} onAnswered={onAnswered} onRated={onRated} />
 }
 
-/** The heading every round shares: the prompt, Say it again, and once it is over what happened and Next. */
-function RoundHeader({ round, over, onNext }: { round: Round; over: 'right' | 'missed' | null; onNext: () => void }) {
+/**
+ * Counts down `seconds` while `running`, then calls `onDone` once: the seconds left, or null when not counting (not
+ * running, or 0 seconds: wait for a tap). Read through a ref, so a new `onDone` each render does not restart it.
+ */
+export function useCountdown(running: boolean, seconds: number, onDone: () => void): number | null {
+  const [left, setLeft] = useState(seconds)
+  const latest = useRef(onDone)
+  useEffect(() => { latest.current = onDone })
+  const counting = running && seconds > 0
+  useEffect(() => {
+    if (!counting) return
+    setLeft(seconds)
+    let n = seconds
+    const t = setInterval(() => {
+      n -= 1
+      setLeft(n)
+      if (n <= 0) {
+        clearInterval(t)
+        latest.current()
+      }
+    }, 1000)
+    return () => clearInterval(t)
+  }, [counting, seconds])
+  return counting ? Math.max(left, 1) : null
+}
+
+/** The heading every round shares: the prompt, Say it again, and once it is over what happened and Next, which counts
+ * down to the next round by itself while `onward` (the faces, when asked, hold it until one is tapped). */
+function RoundHeader({ round, over, onNext, onward = true }: { round: Round; over: 'right' | 'missed' | null; onNext: () => void; onward?: boolean }) {
+  const left = useCountdown(over !== null && onward, useContext(NextAfter), onNext)
   return (
     <>
       <PageHeader
         title={round.prompt}
         actions={<Say text={round.say} verb="Say again" />}
-        finding={over ? { text: over === 'right' ? 'That’s right.' : 'The answer is shown below.', action: <Button variant="default" onClick={onNext} autoFocus>Next</Button> } : undefined}
+        // The count is drawn, not spoken or named: the button stays "Next" to a screen reader and to a test.
+        finding={over ? { text: over === 'right' ? 'That’s right.' : 'The answer is shown below.', action: <Button variant="default" onClick={onNext} autoFocus>Next{left !== null && <span aria-hidden className="tabular-nums" data-countdown>{` ${left}`}</span>}</Button> } : undefined}
       />
       <p id="prompt" className="sr-only">{round.prompt}</p>
     </>
@@ -486,9 +550,10 @@ function RoundHeader({ round, over, onNext }: { round: Round; over: 'right' | 'm
 
 const marks = { wrong: 'Not this one', right: 'Right', answer: 'This one' }
 
-function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void; onRated?: (v: Face) => Promise<unknown> }) {
+function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: () => void; onAnswered?: OnAnswered; onRated?: (v: Face) => Promise<unknown> }) {
   const [turn, setTurn] = useState<Turn>({ tapped: [] })
   const attempt = useAttempt(onAnswered)
+  const rated = useRated(onRated)
   const state = outcome(round, turn)
   const done = state !== 'playing'
 
@@ -501,14 +566,14 @@ function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: 
     const next = { tapped: [...turn.tapped, id] }
     setTurn(next)
     voice.say(feedback(round, next))
-    attempt.answered({ option: id })
+    attempt.answered({ option: id }, round.options.some(o => o.id === id && o.correct))
     const after = outcome(round, next)
     if (after !== 'playing') attempt.ended(after)
   }
 
   return (
     <section aria-labelledby="prompt" className="grid gap-6">
-      <RoundHeader round={round} over={done ? state : null} onNext={onNext} />
+      <RoundHeader round={round} over={done ? state : null} onNext={onNext} onward={!rated.rate || rated.done} />
       {round.show && <Show round={round} />}
       <ChoiceGrid
         label="Choices"
@@ -520,7 +585,7 @@ function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: 
         marks={marks}
         onChoose={o => tap(o.id)}
       />
-      {done && onRated && <HowWasIt onRated={onRated} />}
+      {done && rated.rate && <HowWasIt onRated={rated.rate} />}
     </section>
   )
 }
@@ -544,9 +609,10 @@ function Show({ round }: { round: Round }) {
 
 const placeMarks = { held: 'Picked up', right: 'Right', wrong: 'Not yet' }
 
-function Arrange({ round, onNext, onAnswered, onRated }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void; onRated?: (v: Face) => Promise<unknown> }) {
+function Arrange({ round, onNext, onAnswered, onRated }: { round: Round; onNext: () => void; onAnswered?: OnAnswered; onRated?: (v: Face) => Promise<unknown> }) {
   const [placement, setPlacement] = useState<Placement>({})
   const attempt = useAttempt(onAnswered)
+  const rated = useRated(onRated)
   const [checks, setChecks] = useState(0)
   // The arrangement at the last check: a place keeps its mark until what is in it changes.
   const [checked, setChecked] = useState<Placement | null>(null)
@@ -571,7 +637,7 @@ function Arrange({ round, onNext, onAnswered, onRated }: { round: Round; onNext:
     setChecks(n)
     setChecked(placement)
     voice.say(placeFeedback(round, placement, n))
-    attempt.answered({ placement: Object.fromEntries(Object.entries(placement).filter((e): e is [string, string] => e[1] !== undefined)) })
+    attempt.answered({ placement: Object.fromEntries(Object.entries(placement).filter((e): e is [string, string] => e[1] !== undefined)) }, arrangedRight(round, placement))
     const after = placeOutcome(round, n, arrangedRight(round, placement))
     if (after !== 'playing') attempt.ended(after)
   }
@@ -579,7 +645,7 @@ function Arrange({ round, onNext, onAnswered, onRated }: { round: Round; onNext:
   const placed = Object.values(placement).some(Boolean)
   return (
     <section aria-labelledby="prompt" className="grid gap-6">
-      <RoundHeader round={round} over={done ? state : null} onNext={onNext} />
+      <RoundHeader round={round} over={done ? state : null} onNext={onNext} onward={!rated.rate || rated.done} />
       {round.show && <Show round={round} />}
       <PlaceBoard
         label="Pictures and places"
@@ -603,7 +669,7 @@ function Arrange({ round, onNext, onAnswered, onRated }: { round: Round; onNext:
           Check
         </Button>
       )}
-      {done && onRated && <HowWasIt onRated={onRated} />}
+      {done && rated.rate && <HowWasIt onRated={rated.rate} />}
     </section>
   )
 }

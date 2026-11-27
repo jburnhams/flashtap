@@ -15,7 +15,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DataView, Done, EmptyState, format, useLoad, useSearchParam } from 'strata-react'
 import { api, isPlayChoice, keys, newId, type LearnerRow, type PlayChoice, type Settings } from '../api'
-import { Game, Planned, RoundSkeleton, type Embedded } from './PlayScreen'
+import { RunningScore, Scored } from '../score'
+import { Game, NextAfter, Planned, RoundSkeleton, type Embedded } from './PlayScreen'
 
 /** Rounds in a break when the link does not say. */
 export const ROUNDS = 3
@@ -60,9 +61,16 @@ function Sitting({ settings, learners }: { settings: Settings; learners: Learner
   const who = learners.find(x => x.id === learner) ?? null
   if (finished) return <Done title={`Played ${format.count(played, 'round')}`} next="That’s the break over. Back to what you were watching." />
   if (learner && !who) return <EmptyState title="No such learner">This link names a learner Flashtap does not have, so there is nothing to record these rounds for. Check the link where the break is set up.</EmptyState>
-  if (mode === 'next') {
-    if (!who) return <EmptyState title="Choose who is playing">Rounds chosen for a learner come from what they have shown: add learner= to the link, or a kind of round with mode=.</EmptyState>
-    return <Planned learner={who} embedded={embedded} />
-  }
-  return <Game mode={mode} learner={who} session={who ? session : ''} rateEvery={settings.rate_every} embedded={embedded} />
+  if (mode === 'next' && !who) return <EmptyState title="Choose who is playing">Rounds chosen for a learner come from what they have shown: add learner= to the link, or a kind of round with mode=.</EmptyState>
+  // The same pace and running score as Play: a break is the same game, so the same score grows.
+  return (
+    <NextAfter.Provider value={settings.next_after}>
+      <Scored learner={who}>
+        <div className="grid gap-4">
+          <RunningScore className="justify-self-end" />
+          {mode === 'next' && who ? <Planned learner={who} embedded={embedded} /> : mode !== 'next' && <Game mode={mode} learner={who} session={who ? session : ''} rateEvery={settings.rate_every} embedded={embedded} />}
+        </div>
+      </Scored>
+    </NextAfter.Provider>
+  )
 }

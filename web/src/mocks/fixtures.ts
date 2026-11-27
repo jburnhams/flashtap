@@ -3,7 +3,9 @@
 // each. Rounds are fixed (one per mode), so screenshots do not change from run to run.
 import type { Mechanic, ModeInfo, Round, Settings } from '../api'
 
-export const defaultSettings: Settings = { mode: 'mixed', choices: 4, tries: 0, session_rounds: 20, session_minutes: 15, break_every: 10, choice_every: 5, rate_every: 4 }
+// next_after is 0 here, where the server's default is 3: a finished round then waits for Next, so a test, story or
+// screenshot of one stays on it. Tests of the countdown set it (tests/integration/PlayScreen.test.tsx).
+export const defaultSettings: Settings = { mode: 'mixed', choices: 4, tries: 0, next_after: 0, session_rounds: 20, session_minutes: 15, break_every: 10, choice_every: 5, rate_every: 4 }
 
 export const modes: ModeInfo[] = [
   { mode: 'same_picture', name: 'Same animal', description: 'See an animal and tap the same one', mechanic: 'select_one' },

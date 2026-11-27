@@ -4,6 +4,18 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-27
 
+**On to the next round by itself, and a running score in green and red (0.16.0, branch `claude/project-thread-fwkjyk`)**
+
+Asked for: "Once a question done then it should do next automatically after a short pause (count down on button from 3). Store a running score per user and display at all times - green correct and red wrong counts". Read as: the score is per learner and all time (not per sitting), and counts answers given offline. It goes against the spec's "no streak pressure" (§11, §17), which Play followed with no score at all; there is still no streak.
+
+- `src/flashtap/learners/store.py`: `RunningScore` and `score()`, the learner's attempts counted in the database by `first_correct`, struck ones left out. `src/flashtap/server/app.py`: **`GET /api/learners/{id}/score`**. `src/flashtap/settings.py`: `next_after`, 0 to 10 seconds, default 3.
+- `web/src/score.tsx` (**new**): `Scored` keeps a learner's score for the screen inside (read once per visit, under its own query key so the shell's refresh on every send does not count this visit twice), `useTally` counts each kept answer by its event id at once, and an answer the outbox lists as refused comes off; `RunningScore` draws two big pills in the success and danger roles, with a tick and a cross ("12 right", "3 wrong").
+- `web/src/screens/PlayScreen.tsx`: the score beside the selects for a recorded learner; each round reports whether its first answer was right; `useCountdown` and `NextAfter`: once a round is over Next shows the seconds left (drawn, not part of its name) and plays the next round, holding until a face is tapped when the faces are asked. The opening comment no longer says there is no score. `web/src/screens/BreakScreen.tsx`: the same pace and score. `web/src/screens/SettingsScreen.tsx`: "Next round after" on the Play tab.
+- `web/src/api.ts`: `Score`, `api.score`, `keys.score`, `limits.maxNextAfter`. `web/openapi.json`, `web/src/api.generated.ts` regenerated. `web/src/mocks/handlers.ts`: the score route (Fox 12 and 3), `scoreLoading`, `scoreError`; `web/src/mocks/fixtures.ts`: `next_after: 0`, so a finished round waits in tests, stories and screenshots.
+- Tests: `tests/unit/test_server.py` (the score: first answers, all time, a retry once, struck left out, 404), `tests/unit/test_settings.py`; `web/tests/integration/PlayScreen.test.tsx` (the score from the server, each answer at once, an arrangement, offline and refused, another learner and nobody, an unreadable total; the countdown, a tap, the faces), `BreakScreen.test.tsx`, `SettingsScreen.test.tsx`.
+- `pyproject.toml`, `uv.lock`: 0.16.0. `README.md`, `docs/overview.md`, `docs/implementation-plan.md` (item 13), `docs/progress.md`.
+- Visual baselines (`web/tests/visual/baselines/`): every Play and Break shot with Fox playing shows the score (Fox 12 and 3, 13 after the right tap); the Settings Play tab has the new field. Shots with nobody playing are unchanged. Written in Chromium 158.0.8127.36 (`.strata-visual.json`).
+
 **The very first rounds are numbers to five, colours, shapes and animals; letters and sounds wait (0.15.0, branch `claude/project-thread-85zcg6`)**
 
 Asked for: new learners still met rounds that were too hard ("what starts with letter H"); the first rounds should be "like numbers 1-5, colours, shapes, animals, really basic stuff". The deployed server turned out to be on 0.13.0, before the first steps, and Play starts on Mixed, which draws from every kind; both are covered here or by the next deploy.

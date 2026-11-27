@@ -9,7 +9,8 @@ to the settings; a fresh seed when none is given; a version other than the templ
 GET /api/rounds?mode=&count=&choices= (count fresh rounds at once, 1 to 20, for a device to keep for when it cannot reach
 the server; web/src/reserve.ts); GET /api/content (the content packs as rows: skills, curriculum objectives, phonics sets).
 Learner records (src/flashtap/learners/): GET and POST /api/learners {nickname}; PATCH and DELETE /api/learners/{id};
-GET /api/learners/{id}/profile (every skill's estimates and state); GET /api/learners/{id}/skills/{skill}/evidence
+GET /api/learners/{id}/profile (every skill's estimates and state); GET /api/learners/{id}/score
+(the running score Play shows: rounds whose first answer was right and wrong, all time, struck ones left out); GET /api/learners/{id}/skills/{skill}/evidence
 (the attempts behind it, newest first); GET /api/learners/{id}/export (everything held, as a JSON download);
 POST /api/attempts (one round answered; idempotent by event_id); POST /api/attempts/{event_id}/strike {reason};
 POST /api/attempts/{event_id}/rating {value} (the three faces: 1, 0 or -1; once per round).
@@ -168,6 +169,10 @@ def add_learner_routes(app: FastAPI, skills: list[SkillInfo]) -> None:
     @app.get("/api/learners/{learner_id}/profile", response_model=store.Profile)
     def get_profile(learner_id: str, s: Db) -> store.Profile:  # pyright: ignore[reportUnusedFunction]
         return store.profile(s, learner_id, skills)
+
+    @app.get("/api/learners/{learner_id}/score", response_model=store.RunningScore)
+    def get_score(learner_id: str, s: Db) -> store.RunningScore:  # pyright: ignore[reportUnusedFunction]
+        return store.score(s, learner_id)
 
     @app.get("/api/learners/{learner_id}/skills/{skill}/evidence", response_model=list[EvidenceRow])
     def get_evidence(learner_id: str, skill: str, s: Db) -> list[EvidenceRow]:  # pyright: ignore[reportUnusedFunction]

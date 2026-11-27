@@ -57,6 +57,11 @@ One mechanic (tap one of N pictures), five unseeded round types, no learner stat
     - Done: Same picture shows animals only (template 2, "Same animal"); Same shape and Shape twins join the first steps (`maths.geometry.same_shape`, a judgement edge to naming shapes; `starter` pack version 2). Policy `utility@8`: every literacy kind also waits on the first words (`FIRST_WORDS`: Matching, Colours, Shapes, Counting), and every sound kind on Capitals too (`LETTERS_KNOWN`), so Same letter leaves the first steps; a known skill no longer counts the reach of the kinds still closed behind it, which had kept Same letter coming back while Capitals waited. With a learner chosen and the saved kind Mixed, Play starts on "Chosen for them".
     - Left for later: the order is the scheduler's (no source puts colours before letters), for the teacher review; Matching still draws food and vehicles as well as animals; Mixed by hand still offers every kind.
 
+13. **On by itself, and a running score (0.16.0, in review).** The owner: once a question is done, go to the next after a short pause, counting down on the button from 3; keep a running score per learner, shown at all times, green right and red wrong.
+    - Done: Next counts down (`next_after`, default 3 seconds, 0 waits for a tap; with the faces asked, from a face tapped) and plays the next round. `GET /api/learners/{id}/score`: first answers right and wrong, all time, struck ones left out; Play and Break show it as two big pills, adding each answer the moment it is kept, offline too, and taking off any the server refuses (`web/src/score.tsx`).
+    - A change from the spec, by the owner's ask: §11 and §17 ask for no streak pressure and no punishment for mistakes, and Play had no score; there is still no streak, but wrong first answers are counted in red. Worth a look in the field study (P5): whether a red count puts a young learner off.
+    - Left for later: an answer an earlier visit left waiting on the device joins the score when it lands and Play is opened again, not at once; the countdown, a hook of Play's own (`useCountdown`), could become a strata-react button if another app wants one.
+
 P5 (field validation) is a study, not code.
 
 ## Decisions (2026-11-23)

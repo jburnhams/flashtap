@@ -1,6 +1,6 @@
 // The grown-up's question: "What does a round look like by default?" Three tabs whose choice lives in
 // the URL (?tab=appearance). Play is a form over the server's settings (the kind of round, how many
-// choices, how many tries), started from what the server holds inside DataView's ready state and
+// choices, how many tries, how long Next counts down before the next round comes by itself), started from what the server holds inside DataView's ready state and
 // saved with one AsyncButton. Sessions holds the limits of a session the engine plans ("Chosen for
 // them"): its rounds and minutes, how often a break is offered, and how often the learner picks
 // between two activities or is asked how a round was (spec §11, §12: limits are the grown-up's, never
@@ -63,10 +63,11 @@ export function SettingsForm({ current, modes }: { current: Settings; modes: Mod
   const [mode, setMode] = useState<Mode>(current.mode)
   const [choices, setChoices] = useState<number | null>(current.choices)
   const [tries, setTries] = useState<number | null>(current.tries)
+  const [nextAfter, setNextAfter] = useState<number | null>(current.next_after)
 
   const save = useAsyncAction(
     async () => {
-      await api.saveSettings({ mode, choices: choices as number, tries: tries ?? 0 }) // not null: validate refused that before this runs
+      await api.saveSettings({ mode, choices: choices as number, tries: tries ?? 0, next_after: nextAfter ?? 0 }) // not null: validate refused that before this runs
       await queryClient.invalidateQueries({ queryKey: keys.settings })
       queryClient.removeQueries({ queryKey: ['round'] }) // rounds already fetched were made with the old settings
     },
@@ -91,6 +92,9 @@ export function SettingsForm({ current, modes }: { current: Settings; modes: Mod
       </Field>
       <Field label="Tries" hint="Taps before a round shows the answer. 0 means keep trying until it is found.">
         <NumberField value={tries} onChange={setTries} min={0} max={limits.maxChoices - 1} step={1} />
+      </Field>
+      <Field label="Next round after" hint={`Seconds Next counts down once a round is over, then the next round comes by itself, 0 to ${limits.maxNextAfter}. 0 means wait for a tap on Next.`}>
+        <NumberField value={nextAfter} onChange={setNextAfter} min={0} max={limits.maxNextAfter} step={1} />
       </Field>
       <div className="flex flex-wrap items-center gap-3">
         <AsyncButton type="submit" variant="default" phase={save.phase} error={save.error} labels={{ idle: 'Save settings', pending: 'Saving…', done: 'Saved' }} />

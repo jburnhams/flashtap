@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AttemptIn } from '../../src/api'
 import { rounds } from '../../src/mocks/fixtures'
-import { attemptRefused, attemptUnreachable, decisionFor, handlers, learnersError, nextChoice, nextError, nextUnreachable, pickFails, quickLookGoes, ratingRefused, roundError, roundUnreachable, SESSION, sessionError, voiceLoading } from '../../src/mocks/handlers'
+import { attemptRefused, attemptUnreachable, decisionFor, handlers, learnersError, nextChoice, nextError, nextUnreachable, pickFails, quickLookGoes, ratingRefused, roundError, roundUnreachable, scoreError, SESSION, sessionError, voiceLoading } from '../../src/mocks/handlers'
 import { openApp, screen, waitFor, within } from '../utils/render'
 import { mock, server } from '../utils/server'
 import { expectOneFilledButton, installFakeSpeech } from 'strata-react/testing'
@@ -451,7 +451,7 @@ describe('Play, chosen for them', () => {
     mock.plan = ['number_card', 'end']
     const { user } = openApp(`/?mode=next&learner=${FOX}`)
     expect(await screen.findByRole('heading', { level: 1, name: 'Put this many in the basket.' })).toBeInTheDocument()
-    expect(screen.getByText(rounds.number_card.show)).toBeInTheDocument()
+    expect(screen.getByText(rounds.number_card.show, { selector: 'div' })).toBeInTheDocument() // the card, not the score's 3
     expect(screen.getByRole('combobox', { name: 'Kind of round' })).not.toHaveTextContent('Number card') // held out of the list
     for (let i = 0; i < 3; i++) {
       await user.click(within(screen.getByRole('group', { name: 'Pictures to place' })).getAllByRole('button')[0] as HTMLElement)
@@ -652,6 +652,124 @@ describe('Play, chosen for them', () => {
         expect.stringMatching(/^Fox, a face: Not sent, as what it follows was refused/),
       ])
     })
+  })
+})
+
+describe('Play, the running score', () => {
+  const FOX = 'a'.repeat(32)
+  /** The two counts, as a screen reader reads them: "12 right", "3 wrong". */
+  const score = () => within(screen.getByRole('list', { name: 'Score' })).getAllByRole('listitem').map(li => li.textContent)
+
+  it('shows the learner’s score from the server, all time, and counts each first answer at once', async () => {
+    const { user } = openApp(`/?mode=mixed&learner=${FOX}`)
+    await vi.waitFor(() => expect(score()).toEqual(['12 right', '3 wrong']))
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    expect(score()).toEqual(['13 right', '3 wrong'])
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    // wrong first and then found: wrong, as the server judges the first answer
+    await user.click(await screen.findByRole('row', { name: tile('duck') }))
+    await user.click(screen.getByRole('row', { name: tile('cow') }))
+    expect(score()).toEqual(['13 right', '4 wrong'])
+  })
+
+  it('counts an arrangement by its first check', async () => {
+    mock.tries = 1
+    const { user } = openApp(`/?learner=${FOX}&mode=order`)
+    await vi.waitFor(() => expect(score()).toEqual(['12 right', '3 wrong']))
+    for (const [n, where] of [['1', 'first'], ['9', 'second']]) {
+      await user.click(await screen.findByRole('button', { name: n }))
+      await user.click(screen.getByRole('button', { name: `Put ${n} in ${where}` }))
+    }
+    await user.click(screen.getByRole('button', { name: 'Check' }))
+    expect(score()).toEqual(['12 right', '4 wrong'])
+  })
+
+  it('counts an answer kept on the device while the server is away, and takes off one it refuses', async () => {
+    server.use(attemptUnreachable)
+    const { user } = openApp(`/?mode=mixed&learner=${FOX}`)
+    await vi.waitFor(() => expect(score()).toEqual(['12 right', '3 wrong']))
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    expect(await screen.findByText(/answer kept on this device/)).toBeInTheDocument()
+    expect(score()).toEqual(['13 right', '3 wrong'])
+    // Back, the server refuses both: the one kept while it was away (on its later try) and the one just given.
+    server.use(attemptRefused)
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    expect(await screen.findByText(/^The server refused 2\sanswers/)).toBeInTheDocument()
+    expect(score()).toEqual(['12 right', '3 wrong'])
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }))
+    expect(score()).toEqual(['12 right', '3 wrong']) // dismissed from the list, still off the score
+  })
+
+  it('starts afresh for another learner, and shows none for nobody, who is not recorded', async () => {
+    mock.learners = [...mock.learners, { id: 'b'.repeat(32), nickname: 'Owl', created_at: '2026-11-23T09:00:00Z', attempts: 0, last_played: null }]
+    const { user } = openApp(`/?mode=mixed&learner=${FOX}`)
+    await vi.waitFor(() => expect(score()).toEqual(['12 right', '3 wrong']))
+    const who = screen.getByRole('combobox', { name: 'Who is playing' })
+    await user.selectOptions(who, 'b'.repeat(32))
+    await vi.waitFor(() => expect(score()).toEqual(['0 right', '0 wrong']))
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    expect(score()).toEqual(['1 right', '0 wrong'])
+    await user.selectOptions(who, '')
+    expect(screen.queryByRole('list', { name: 'Score' })).not.toBeInTheDocument()
+    await user.selectOptions(who, FOX) // read again: the answer just given as Owl is not Fox's
+    await vi.waitFor(() => expect(score()).toEqual(['12 right', '3 wrong']))
+  })
+
+  it('counts this visit when the total cannot be read, and says so for the grown-up', async () => {
+    server.use(scoreError)
+    const { user } = openApp(`/?mode=mixed&learner=${FOX}`)
+    expect(await screen.findByText('The total score could not be read, so this counts this visit only.')).toBeInTheDocument()
+    expect(score()).toEqual(['0 right', '0 wrong'])
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    expect(score()).toEqual(['1 right', '0 wrong'])
+  })
+
+  it('shows on a round the engine chose too', async () => {
+    const { user } = openApp(`/?mode=next&learner=${FOX}`)
+    await user.click(await screen.findByRole('row', { name: tile('3') }))
+    await vi.waitFor(() => expect(score()).toEqual(['13 right', '3 wrong']))
+  })
+})
+
+describe('Play, on to the next round by itself', () => {
+  const FOX = 'a'.repeat(32)
+  const countdown = () => screen.getByRole('button', { name: 'Next' }).querySelector('[data-countdown]')?.textContent?.trim()
+
+  it('counts down on Next once a round is over, then plays the next round', async () => {
+    mock.settings = { ...mock.settings, next_after: 2 }
+    const { user } = openApp('/')
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    expect(countdown()).toBe('2')
+    await vi.waitFor(() => expect(countdown()).toBe('1'), { timeout: 1500 })
+    const asked = mock.roundRequests
+    await vi.waitFor(() => expect(mock.roundRequests).toBe(asked + 1), { timeout: 1500 })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Find the cow.' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument() // the new round waits for an answer
+  })
+
+  it('goes at once on a tap, and waits for one when set to 0', async () => {
+    mock.settings = { ...mock.settings, next_after: 1 }
+    const { user } = openApp('/')
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    const asked = mock.roundRequests
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await vi.waitFor(() => expect(mock.roundRequests).toBe(asked + 1))
+    await new Promise(r => setTimeout(r, 1200)) // the count it started is gone: no second round
+    expect(mock.roundRequests).toBe(asked + 1)
+  })
+
+  it('waits for a face when the faces are asked, then counts down', async () => {
+    mock.settings = { ...mock.settings, next_after: 1, rate_every: 1 }
+    const { user } = openApp(`/?mode=mixed&learner=${FOX}`)
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    expect(countdown()).toBeUndefined()
+    await new Promise(r => setTimeout(r, 1200))
+    expect(screen.getByRole('heading', { name: 'How was that one?' })).toBeInTheDocument() // not taken away
+    const asked = mock.roundRequests
+    await user.click(screen.getByRole('row', { name: 'Liked it' }))
+    expect(countdown()).toBe('1')
+    await vi.waitFor(() => expect(mock.roundRequests).toBe(asked + 1), { timeout: 2000 })
   })
 })
 

@@ -18,7 +18,7 @@ uv run flashtap learners list             # the learners; `learners rebuild expo
 uv run flashtap engine simulate           # simulated learners: each model's held-out log loss, and skills learnt under the engine vs at random
 uv run flashtap voice status             # the recorded voice: sentences and sounds with a clip, consonants still to record
 uv run flashtap voice build              # make the missing clips now (serve also queues this at every start) (STRATA_MODELS_URL; --voice bf_emma, --limit N for a first listen)
-uv run flashtap set choices 6             # settings: mode, choices (2-8), tries (0 = no limit), session_rounds, session_minutes, break_every, choice_every, rate_every
+uv run flashtap set choices 6             # settings: mode, choices (2-8), tries (0 = no limit), next_after (seconds Next counts down, 0 = wait for a tap), session_rounds, session_minutes, break_every, choice_every, rate_every
 uv run flashtap doctor                    # check the environment
 ```
 
@@ -33,6 +33,7 @@ Without the web build, `flashtap serve` answers with a plain stand-in page that 
 | `GET /api/modes` | The kinds of round, with a name, a sentence and the mechanic each |
 | `GET /api/content` | The content packs as rows: skills (with stage labels, rounds and edges), curriculum goals, phonics sets |
 | `GET`, `POST /api/learners`; `PATCH`, `DELETE /api/learners/{id}` | List and add learners (`{nickname}`), rename, delete with everything recorded |
+| `GET /api/learners/{id}/score` | The running score Play shows: rounds whose first answer was right, and wrong, all time, struck ones left out (`{right, wrong}`) |
 | `GET /api/learners/{id}/profile` | Every skill's estimates (`bkt@1`, `rule@1`), reporting state, counts, speed and last seen; each misconception offered and its status |
 | `GET /api/learners/{id}/skills/{skill}/evidence` | The rounds that touched a skill, newest first: the first answer, whether it counted and why not |
 | `GET /api/learners/{id}/export` | Everything held about a learner, as a JSON download |

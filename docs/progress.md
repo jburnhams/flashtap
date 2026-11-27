@@ -1,5 +1,13 @@
 # Progress log
 
+## 2026-11-27: on by itself, and a running score (0.16.0)
+
+- Asked for: after a round, go to the next one after a short pause, counting down on Next from 3; a running score per learner, shown at all times, green right and red wrong.
+- The score counts first answers (`first_correct`), not how a round ended: with the default of no limit on tries every round ends found, so "found in the end" would never be red. All time, as the owner asked "running score per user", so it lives on the server, counted from the attempt log on each read like every other figure here (struck rounds left out).
+- Offline: Play reads the total once per visit and adds each answer as it is kept, sent or waiting, so an answer given with the server away counts at once and is not counted twice when it lands. One the server refuses (the outbox's refused list, at once or on a later try) comes off and stays off once dismissed.
+- The countdown waits for a face when the faces are asked, so it never takes them away; a grown-up can set it to 0 to keep Next a tap. The test and story fixtures keep 0, so a finished round stays on screen for a test or screenshot; the countdown's own tests set it.
+- Against the spec: §11 and §17 ask for no streak pressure and no punishment for mistakes. There is still no streak; the red count is the owner's ask and is noted for the field study.
+
 ## 2026-11-27: the very first rounds are numbers to five, colours, shapes and animals (0.15.0)
 
 - Asked for: a new learner still met rounds like "What starts with the letter H?"; the first rounds should be numbers 1-5, colours, shapes and animals.
