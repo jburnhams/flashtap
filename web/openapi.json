@@ -3248,6 +3248,25 @@
     "title": "StrikeIn",
     "type": "object"
    },
+   "TalkOut": {
+    "properties": {
+     "lines": {
+      "additionalProperties": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      "title": "Lines",
+      "type": "object"
+     }
+    },
+    "required": [
+     "lines"
+    ],
+    "title": "TalkOut",
+    "type": "object"
+   },
    "Task": {
     "description": "A job or task row as an API answers it.",
     "properties": {
@@ -4678,6 +4697,45 @@
      }
     },
     "summary": "Post Withdraw"
+   }
+  },
+  "/api/v1/learners/{learner_id}/talk": {
+   "get": {
+    "operationId": "get_talk_api_v1_learners__learner_id__talk_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "learner_id",
+      "required": true,
+      "schema": {
+       "title": "Learner Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TalkOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Talk"
    }
   },
   "/api/v1/sessions": {

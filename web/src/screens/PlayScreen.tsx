@@ -49,6 +49,9 @@ import { api, isMode, isPlayChoice, keepAttempt, keepRating, keys, MODES, newId,
 import { LANG, useVoice } from '../voice'
 import { refresh, take } from '../reserve'
 import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRight, solution, type Placement, type Turn } from '../play'
+// Around each round the learner hears varied lines with their name (../talk.ts): a cheer in place of "Yes!", another
+// go in place of "Try again.", a hello and a word when the kind changes. With nobody playing, the fixed lines.
+import { TalkProvider, useTalk } from '../talk'
 // Every prompt and answer is said aloud: a learner who cannot read yet still needs the prompt. It is said from the
 // recorded clips where they cover it (../voice.ts), else in the browser's UK English voice. A prompt said unasked
 // waits for the clips list (`voice.ready`), so the first one is in the same voice as the rest.
@@ -204,6 +207,7 @@ export function Game({ mode, learner, session, rateEvery, embedded }: { mode: Mo
   }
   const asking = learner !== null && rateEvery > 0 && (n + 1) % rateEvery === 0
   return (
+    <TalkProvider learner={learner?.id ?? null}>
     <DataView state={round} isEmpty={p => p.round.options.length === 0 && p.round.pieces.length === 0} skeleton={<RoundSkeleton />} empty={<EmptyState title="Nothing to play">The server sent a round with no pictures.</EmptyState>}>
       {({ round: r, kept }) => (
         <div className="grid gap-4">
@@ -212,6 +216,7 @@ export function Game({ mode, learner, session, rateEvery, embedded }: { mode: Mo
         </div>
       )}
     </DataView>
+    </TalkProvider>
   )
 }
 
@@ -220,9 +225,11 @@ export function Planned({ learner, embedded }: { learner: LearnerRow; embedded?:
   const [visit] = useState(newId)
   const session = useLoad({ queryKey: keys.session(learner.id, visit), queryFn: () => api.startSession(learner.id), staleTime: Infinity })
   return (
-    <DataView state={session} isEmpty={() => false} skeleton={<RoundSkeleton />} empty={<EmptyState title="No session">The server started none.</EmptyState>}>
-      {s => <Decisions session={s} learner={learner} embedded={embedded} />}
-    </DataView>
+    <TalkProvider learner={learner.id}>
+      <DataView state={session} isEmpty={() => false} skeleton={<RoundSkeleton />} empty={<EmptyState title="No session">The server started none.</EmptyState>}>
+        {s => <Decisions session={s} learner={learner} embedded={embedded} />}
+      </DataView>
+    </TalkProvider>
   )
 }
 
@@ -352,7 +359,9 @@ function AwayRounds({ session, seq, learner, kinds, onBack, onPlayed }: { sessio
 function PickOne({ decision, offers, onPicked }: { decision: Next; offers: OfferOut[]; onPicked: (n: Next) => void }) {
   const [failed, setFailed] = useState(false)
   const voice = useVoice()
-  const question = `Which one next? ${offers.map(o => o.title).join(' or ')}?`
+  const talk = useTalk()
+  const [asked] = useState(() => talk.pick()) // one line per offer, kept across re-renders
+  const question = `${asked} ${offers.map(o => o.title).join(' or ')}?`
   useEffect(() => { if (voice.ready) voice.say(question) }, [question, voice])
   const choose = (o: OfferOut) => {
     setFailed(false)
@@ -401,7 +410,9 @@ function HowWasIt({ onRated }: { onRated: (v: Face) => Promise<unknown> }) {
 function BreakOffer({ decision, onContinue }: { decision: Next; onContinue: () => void }) {
   const [stopped, setStopped] = useState(false)
   const voice = useVoice()
-  useEffect(() => { if (voice.ready) voice.say('Time for a break?') }, [voice])
+  const talk = useTalk()
+  const [offer] = useState(() => talk.break())
+  useEffect(() => { if (voice.ready) voice.say(offer) }, [offer, voice])
   if (stopped) return <Done title={`Played ${format.count(decision.rounds_played, 'round')}`} next="Come back later: the next session picks up from these rounds." />
   return (
     <PageHeader
@@ -459,8 +470,17 @@ function Say({ text, verb }: { text: string; verb: string }) {
 export function Board({ round, onNext, onAnswered, onRated }: { round: Round; onNext: () => void; onAnswered?: (a: Answered) => void; onRated?: (v: Face) => Promise<unknown> }) {
   const queryClient = useQueryClient()
   const voice = useVoice()
+  // The talk is read through a ref: its pools arriving mid-round must not say the prompt again (they wait for the next).
+  const latestTalk = useTalk()
+  const talk = useRef(latestTalk)
+  useEffect(() => { talk.current = latestTalk })
   // Said once per round, when the clips list is known; `voice` changes only then, so a later re-render never repeats it.
-  useEffect(() => { if (voice.ready) voice.say(round.say) }, [round.say, voice])
+  // The talk's opening (a hello, a new kind) is asked for then too, so it moves on only when it is said.
+  useEffect(() => {
+    if (!voice.ready) return
+    const opening = talk.current.opening(round.mode)
+    voice.say(opening ? `${opening} ${round.say}` : round.say)
+  }, [round.say, round.mode, voice])
   const next = () => {
     // The round just played is not shown again: drop every round, this one too while it is still on
     // screen, so coming back to this kind of round (a new Game, counting from 0) asks the server afresh.
@@ -497,10 +517,11 @@ function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: 
     turn.tapped.includes(o.id) ? (o.correct ? 'right' : 'wrong') : o.correct && done ? 'answer' : 'open'
 
   const voice = useVoice()
+  const talk = useTalk()
   const tap = (id: string) => { // only an open tile reaches here: ChoiceGrid closes tapped tiles and, once answered, every tile
     const next = { tapped: [...turn.tapped, id] }
     setTurn(next)
-    voice.say(feedback(round, next))
+    voice.say(feedback(round, next, talk))
     attempt.answered({ option: id })
     const after = outcome(round, next)
     if (after !== 'playing') attempt.ended(after)
@@ -566,11 +587,12 @@ function Arrange({ round, onNext, onAnswered, onRated }: { round: Round; onNext:
   const move = (piece: string, place: string | null) => setPlacement(m => ({ ...m, [piece]: place ?? undefined }))
 
   const voice = useVoice()
+  const talk = useTalk()
   const check = () => {
     const n = checks + 1
     setChecks(n)
     setChecked(placement)
-    voice.say(placeFeedback(round, placement, n))
+    voice.say(placeFeedback(round, placement, n, talk))
     attempt.answered({ placement: Object.fromEntries(Object.entries(placement).filter((e): e is [string, string] => e[1] !== undefined)) })
     const after = placeOutcome(round, n, arrangedRight(round, placement))
     if (after !== 'playing') attempt.ended(after)

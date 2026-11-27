@@ -1,6 +1,7 @@
 """Command line: `doctor` checks the environment, `round` prints a round, `content check` and `content list` read the
 content packs, `learners list` and `learners rebuild` read the learner records, `engine simulate` runs the adaptive
-engine on simulated learners, `voice lines`, `voice status` and `voice build` list and make the recorded voice, `openapi` writes the API's schema (the
+engine on simulated learners, `voice lines`, `voice status` and `voice build` list and make the recorded voice, `talk write`, `talk list` and
+`talk strike` write, show and strike the varied lines around a round, `openapi` writes the API's schema (the
 source of the web app's types), `set` shows or changes a setting, `serve` starts the web server."""
 
 import argparse
@@ -200,9 +201,12 @@ def cmd_voice_status(args: argparse.Namespace) -> int:
     print(f"voice clips in {store.root}")
     print(f"  sentences: {sum(x in have for x in sentences)} of {len(sentences)} have a clip")
     print(f"  sounds:    {sum(x in have for x in sounds)} of {len(sounds)} have a clip")
-    to_record = [x for x in sounds if x not in have and not voice.is_vowel(voice.phoneme_of(x) or "")]
-    if to_record:
-        print(f"  to record in the app (Sounds screen): {' '.join(to_record)}")
+    missing = [x for x in sounds if x not in have]
+    if missing:
+        print(f"  sounds not made yet (voice build): {' '.join(missing)}")
+    recorded = [x for x in sounds if x in have and have[x].source == "recorded"]
+    if recorded:
+        print(f"  recorded on the Sounds screen: {' '.join(recorded)}")
     voices = sorted({c.voice for c in have.values()})
     if voices:
         print(f"  voices: {', '.join(voices)}")
@@ -213,8 +217,10 @@ def cmd_voice_build(args: argparse.Namespace) -> int:
     from flashtap import voice
 
     _utf8()
+    from flashtap import jobs
+
     store = voice.Store(voice.home())
-    wanted = voice.lines()
+    wanted = voice.wanted(jobs.nicknames())
     if args.only == "sounds":
         wanted = [x for x in wanted if voice.phoneme_of(x) is not None]
     elif args.only == "sentences":
@@ -230,10 +236,45 @@ def cmd_voice_build(args: argparse.Namespace) -> int:
         now=voice.speak_settings(args.model),
         say=print,
     )
-    print(
-        f"made {len(r.made)}, kept {len(r.kept)}, failed {len(r.failed)}; {len(r.to_record)} sounds to record in the app"
-    )
+    print(f"made {len(r.made)}, kept {len(r.kept)}, failed {len(r.failed)}")
     return 1 if r.failed else 0
+
+
+def cmd_talk_write(args: argparse.Namespace) -> int:
+    from flashtap import talk, voice
+
+    _utf8()
+    w = talk.write(talk.Store(voice.home()), args.moment or None, say=print)
+    for key, why in w.refused.items():
+        for line in why:
+            print(f"refused  {key}: {line}")
+    print(f"wrote {sum(w.added.values())}, {len(w.full)} moments full, failed {len(w.failed)}")
+    if any(w.added.values()):
+        print("run `flashtap voice build` (or restart the server) to say them in the recorded voice")
+    return 1 if w.failed else 0
+
+
+def cmd_talk_list(args: argparse.Namespace) -> int:
+    from flashtap import talk, voice
+
+    _utf8()
+    book = talk.Store(voice.home()).read()
+    for key, m in talk.moments().items():
+        if args.moment and key not in args.moment:
+            continue
+        print(f"{key}  (fixed: {m.fixed or 'none'})")
+        for w in book.lines.get(key, []):
+            print(f"  {w.text}")
+    return 0
+
+
+def cmd_talk_strike(args: argparse.Namespace) -> int:
+    from flashtap import talk, voice
+
+    _utf8()
+    n = talk.Store(voice.home()).strike(args.line)
+    print(f"struck from {n} moments; it is never written again" if n else "not a written line; struck for the future")
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -278,7 +319,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     vl = vsub.add_parser("lines", help="every line Flashtap says, with its clip's source or 'missing'")
     vl.add_argument("--missing", action="store_true", help="only the lines with no clip")
     vl.set_defaults(fn=cmd_voice_lines)
-    vs = vsub.add_parser("status", help="how many lines have clips, and the sounds still to record")
+    vs = vsub.add_parser("status", help="how many lines have clips, and the sounds not made yet")
     vs.set_defaults(fn=cmd_voice_status)
     vb = vsub.add_parser("build", help="make the missing clips with strata-models (role speak)")
     vb.add_argument(
@@ -289,6 +330,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     vb.add_argument("--only", choices=("sounds", "sentences"), default=None)
     vb.add_argument("--limit", type=int, default=0, help="at most this many lines (a first listen)")
     vb.set_defaults(fn=cmd_voice_build)
+    tk = sub.add_parser("talk", help="the varied lines around a round, written by strata-models (role write)")
+    tsub = tk.add_subparsers(dest="talk_cmd", required=True)
+    tw = tsub.add_parser("write", help="fill each moment's pool of lines (what the server does at start)")
+    tw.add_argument("moment", nargs="*", help="only these moments (right, retry, intro.counting, ...)")
+    tw.set_defaults(fn=cmd_talk_write)
+    tl = tsub.add_parser("list", help="each moment's fixed line and written lines")
+    tl.add_argument("moment", nargs="*", help="only these moments")
+    tl.set_defaults(fn=cmd_talk_list)
+    ts = tsub.add_parser("strike", help="never say a written line again")
+    ts.add_argument("line", help="the line as written, with {name} where the nickname goes")
+    ts.set_defaults(fn=cmd_talk_strike)
     shared.add_openapi(sub, _create_app)  # web/openapi.json, from the repository root; --check in CI
     shared.add_set(sub, settings.SETTINGS)
     shared.add_serve(sub, run_server, default_port=PORT)

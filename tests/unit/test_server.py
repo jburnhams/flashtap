@@ -396,3 +396,24 @@ def test_voice_refuses_a_line_that_is_not_a_sound_and_a_file_that_is_not_a_wav(c
     long = client.put("/api/v1/voice/recordings", params={"line": "/m/"}, content=sine_wav(11, rate=24000))
     assert long.status_code == 400
     assert client.get("/api/v1/voice").json()["clips"] == {}
+
+
+def test_talk_is_each_moment_with_the_learners_nickname_and_a_new_name_queues_a_build(client):
+    from flashtap import jobs, talk, voice
+    from flashtap.server.app import job_queue
+
+    talk.Store(voice.home()).edit(
+        lambda b: b.lines.update({"right": [talk.Written(text="Lovely, {name}!", made="2026-11-27T09:00:00+00:00")]})
+    )
+    fox = client.post("/api/learners", json={"nickname": "Fox"}).json()["id"]
+    out = client.get(f"/api/v1/learners/{fox}/talk").json()["lines"]
+    assert out["right"] == ["Yes!", "Lovely, Fox!"]
+    assert out["retry"] == ["Try again."]
+    assert out["intro.counting"] == []
+    assert client.get(f"/api/v1/learners/{'0' * 32}/talk").status_code == 404
+    q = job_queue(client.app)  # pyright: ignore[reportArgumentType]
+    queued = [j for j in q.page().items if j.kind == jobs.VOICE_BUILD]
+    assert len(queued) == 1  # the name is voiced before it is played (one build, however many changes queue it)
+    client.patch(f"/api/learners/{fox}", json={"nickname": "Owl"})
+    assert len([j for j in q.page().items if j.kind == jobs.VOICE_BUILD]) == 1
+    assert client.get(f"/api/v1/learners/{fox}/talk").json()["lines"]["right"] == ["Yes!", "Lovely, Owl!"]

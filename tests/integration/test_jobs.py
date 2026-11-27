@@ -35,13 +35,14 @@ def test_serving_starts_a_voice_build_by_itself_and_stopping_leaves_the_rest_for
     speaker(fake_models, tmp_path)
     app = run_jobs(create_app(), isolate=False)  # threads here, so the stand-in's URL needs no handing on
     with TestClient(app) as client:
-        until(lambda: len(fake_models.jobs) >= 3)  # making clips, a line at a time
-        (task,) = client.get("/api/jobs").json()["items"]
-        assert (task["kind"], task["state"]) == (jobs.VOICE_BUILD, "running")
+        until(lambda: sum(j["role"] == "speak" for j in fake_models.jobs) >= 3)  # making clips, a line at a time
+        items = {t["kind"]: t for t in client.get("/api/jobs").json()["items"]}
+        assert items[jobs.VOICE_BUILD]["state"] == "running"
+        assert jobs.TALK_WRITE in items  # the talk is written at each start too (the stand-in has no write role)
     have = voice.Store(voice.home()).read().clips
     assert have  # what was made before the stop is kept
     q = job_queue(app)
-    (job,) = q.page().items
+    job = next(j for j in q.page().items if j.kind == jobs.VOICE_BUILD)
     after = q.get(job.id)
     assert after is not None
     assert after.state == "queued"  # the rest is still to do: queued again, not done and not failed

@@ -83,6 +83,8 @@ export type Engagement = Schema<'Engagement'>
 export type KindRow = Schema<'KindRow'>
 export type Hypothesis = Schema<'Hypothesis'>
 
+/** `GET /api/v1/learners/{id}/talk`: what may be said at each moment around a round, the learner's nickname filled in (src/talk.ts). */
+export type TalkOut = Schema<'TalkOut'>
 /** `GET /api/v1/voice`: the clip of each line that has one (line -> URL under the app's base), and every phonics sound. */
 export type VoiceOut = Schema<'VoiceOut'>
 /** A phonics sound: its letters, how the browser describes it, and its clip (made from IPA for a vowel, recorded for a consonant). */
@@ -121,6 +123,7 @@ export const keys = {
   profile: (id: string) => ['learners', id, 'profile'],
   evidence: (id: string, skill: string) => ['learners', id, 'evidence', skill],
   voice: ['voice'],
+  talk: (id: string) => ['learners', id, 'talk'],
 } as const
 
 // Every request goes through strata-react's typed client over the generated `paths`: it puts the app's base
@@ -139,6 +142,7 @@ export const api = {
   rounds: (mode: Mode, count: number) => http.get('/api/rounds', { query: { mode, count } }) as Promise<Round[]>,
   content: () => http.get('/api/content'),
   voice: () => http.get('/api/v1/voice'),
+  talk: (id: string) => http.get('/api/v1/learners/{learner_id}/talk', { path: { learner_id: id } }),
   // A recording is a WAV body, not JSON, which the typed client only sends: fetchJson with the same base and errors.
   keepRecording: (line: string, wav: Blob) =>
     fetchJson<SoundRow>(withBase(`${paths.voice}/recordings?line=${encodeURIComponent(line)}`), { method: 'PUT', body: wav, headers: { 'Content-Type': 'audio/wav' } }),
