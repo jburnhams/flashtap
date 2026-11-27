@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DataView, Done, EmptyState, format, useLoad, useSearchParam } from 'strata-react'
 import { api, isPlayChoice, keys, newId, type LearnerRow, type PlayChoice, type Settings } from '../api'
 import { RunningScore, ScoreRead, Scored } from '../score'
-import { Game, NextAfter, Planned, RoundSkeleton, type Embedded } from './PlayScreen'
+import { Game, NextAfter, Planned, PLAY_AREA, RoundSkeleton, type Embedded } from './PlayScreen'
 
 /** Rounds in a break when the link does not say. */
 export const ROUNDS = 3
@@ -66,7 +66,7 @@ function Sitting({ settings, learners }: { settings: Settings; learners: Learner
   return (
     <NextAfter.Provider value={settings.next_after}>
       <Scored learner={who}>
-        <div className="grid gap-4">
+        <div className={PLAY_AREA}>
           <RunningScore className="justify-self-end" />
           <ScoreRead skeleton={<RoundSkeleton />}>
             {mode === 'next' && who ? <Planned learner={who} embedded={embedded} /> : mode !== 'next' && <Game mode={mode} learner={who} session={who ? session : ''} rateEvery={settings.rate_every} embedded={embedded} />}

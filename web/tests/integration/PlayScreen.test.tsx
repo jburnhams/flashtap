@@ -84,6 +84,15 @@ describe('Play', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('The server could not answer (503)')
   })
 
+  it('fills the row with its tiles and pulses one at a time until the round is answered', async () => {
+    const { user } = openApp('/')
+    const grid = await screen.findByRole('grid', { name: 'Choices' })
+    expect(grid.style.gridTemplateColumns).toContain('auto-fit')
+    await vi.waitFor(() => expect(grid.querySelectorAll('[data-beckon]')).toHaveLength(1), { timeout: 2500 })
+    await user.click(screen.getByRole('row', { name: tile('cow') }))
+    expect(grid.querySelectorAll('[data-beckon]')).toHaveLength(0)
+  })
+
   it('has one filled button at most', async () => {
     const { user } = openApp('/')
     await user.click(await screen.findByRole('row', { name: tile('cow') }))

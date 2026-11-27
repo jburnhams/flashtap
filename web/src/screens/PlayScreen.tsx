@@ -18,6 +18,12 @@
 // faces away; untapped, Next waits. The kind of round lives in the URL (?mode=counting), so a
 // grown-up can bookmark one. It is a select, not a row of toggles: thirteen names do not fit.
 //
+// The screen (the owner, 2026-11-27): Play fills the main region, centred with room at the sides (`PLAY_AREA`); the
+// tiles, and an arrangement's pieces and places, share the row out between them (`stretch`) and the pictures grow with the screen
+// (styles/theme.css), the picture to match a step larger than the tiles' (`picture-lead`). Until a round is answered
+// its tiles, or the pieces of an arrangement, pulse one at a time in a random order (`beckon`, strata-react), so a
+// learner who does not know what to do sees what to press.
+//
 // The running score (src/score.tsx; the owner, 2026-11-27, over the spec's "no streak pressure", §11,
 // §17): a recorded learner's first answers right and wrong, all time, in green and red above the
 // round the whole time they play. There is still no streak.
@@ -130,7 +136,7 @@ function Choices({ settings, learners, session }: { settings: Settings; learners
   return (
     <NextAfter.Provider value={settings.next_after}>
     <Scored learner={playing}>
-    <div className="grid gap-6">
+    <div className={PLAY_AREA}>
       <div className="flex flex-wrap gap-4">
         <Field label="Kind of round" className="w-full max-w-xs">
           <NativeSelect param="mode" paramDefault={fallback}>
@@ -153,6 +159,10 @@ function Choices({ settings, learners, session }: { settings: Settings; learners
     </NextAfter.Provider>
   )
 }
+
+/** Play's own column: the whole width the shell gives it up to a large screen's, centred, with room at the sides
+ * (the owner, 2026-11-27: "grow with viewport to fill (tho with extra padding). Centre content"). Break uses it too. */
+export const PLAY_AREA = 'mx-auto grid w-full max-w-7xl gap-6 sm:px-6 lg:px-12'
 
 /** Seconds Next counts down before the next round comes by itself (Settings, `next_after`); 0 waits for a tap. */
 export const NextAfter = createContext(0)
@@ -387,7 +397,7 @@ function PickOne({ decision, offers, onPicked }: { decision: Next; offers: Offer
     <section aria-labelledby="pick" className="grid gap-6">
       <PageHeader title="Which one next?" actions={<Say text={question} verb="Say again" />} />
       <p id="pick" className="sr-only">{question}</p>
-      <ChoiceGrid label="Which one next?" items={offers} itemKey={o => o.mode} itemLabel={o => o.title} renderPicture={o => o.picture} state={() => 'open'} marks={pickMarks} onChoose={choose} size="lg" />
+      <ChoiceGrid label="Which one next?" items={offers} itemKey={o => o.mode} itemLabel={o => o.title} renderPicture={o => o.picture} state={() => 'open'} marks={pickMarks} onChoose={choose} size="lg" stretch />
       {failed && <p role="status" className="type-caption text-muted-foreground">That pick did not reach the server: tap one again.</p>}
       <p className="type-caption text-muted-foreground">Why two: {decision.why} {offers.map(o => `${o.title}: ${o.why}`).join(' ')}</p>
     </section>
@@ -416,7 +426,7 @@ function HowWasIt({ onRated }: { onRated: (v: Face) => Promise<unknown> }) {
         <h2 id="how" className="type-heading">How was that one?</h2>
         <Say text="How was that one?" verb="Say" />
       </div>
-      <ChoiceGrid label="How was that one?" items={FACES} itemKey={f => String(f.value)} itemLabel={f => f.word} renderPicture={f => f.picture} state={() => 'open'} marks={pickMarks} onChoose={f => rate(f.value)} />
+      <ChoiceGrid label="How was that one?" items={FACES} itemKey={f => String(f.value)} itemLabel={f => f.word} renderPicture={f => f.picture} state={() => 'open'} marks={pickMarks} onChoose={f => rate(f.value)} stretch />
       {said === 'failed' && <p role="status" className="type-caption text-muted-foreground">That face was not saved.</p>}
     </section>
   )
@@ -584,13 +594,15 @@ function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: 
         state={tileState}
         marks={marks}
         onChoose={o => tap(o.id)}
+        stretch
+        beckon
       />
       {done && rated.rate && <HowWasIt onRated={rated.rate} />}
     </section>
   )
 }
 
-/** The big picture, word or row above the answer. A quick look hides it after `exposure_ms`, keeping its room so the tiles do not jump. */
+/** The big picture, word or row above the answer, centred and a step larger than the tiles' pictures. A quick look hides it after `exposure_ms`, keeping its room so the tiles do not jump. */
 function Show({ round }: { round: Round }) {
   const [hidden, setHidden] = useState(false)
   useEffect(() => {
@@ -598,9 +610,9 @@ function Show({ round }: { round: Round }) {
     const t = setTimeout(() => setHidden(true), round.exposure_ms)
     return () => clearTimeout(t)
   }, [round.exposure_ms])
-  if (!hidden) return <div className="type-picture break-words" aria-hidden>{round.show}</div>
+  if (!hidden) return <div className="type-picture picture-lead justify-self-center break-words text-center" aria-hidden>{round.show}</div>
   return (
-    <div className="type-picture">
+    <div className="type-picture picture-lead">
       <span aria-hidden>{'\u00a0'}</span>
       <span role="status" className="sr-only">The pictures have gone.</span>
     </div>
@@ -663,6 +675,8 @@ function Arrange({ round, onNext, onAnswered, onRated }: { round: Round; onNext:
         placeState={placeState}
         marks={placeMarks}
         locked={done}
+        stretch
+        beckon
       />
       {!done && (
         <Button variant="default" className="justify-self-start" onClick={check} disabled={!placed}>
@@ -680,7 +694,7 @@ export function RoundSkeleton() {
     <div className="grid gap-6" aria-hidden>
       <Skeleton className="h-8 w-64" />
       <Skeleton className="h-20 w-40" />
-      <ChoiceGridSkeleton count={4} />
+      <ChoiceGridSkeleton count={4} stretch />
     </div>
   )
 }

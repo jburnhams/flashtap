@@ -4,6 +4,16 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-27
 
+**The Play screen fills the window, its tiles take turns to pulse, and the picture to match is larger (branch `claude/project-thread-fwkjyk`)**
+
+Asked for: "arrange screen better - grow with viewport to fill (tho with extra padding). Centre content. Pulse randomly alternately the answer buttons to make clearer which to press, with item to match slightly larger", and "Add and improve components to strata react as required". The stretching and the pulse are strata-react's (#400, 1.3.28: `ChoiceGrid` and `PlaceBoard` `stretch` and `beckon`, tile pictures sized to the tile), not built here.
+
+- `web/package.json`, `web/package-lock.json`: strata-react `^1.3.28` (the lockfile gains the Fontsource faces strata-react depends on since 1.3.x; Flashtap adds no dependency).
+- `web/src/screens/Layout.tsx`: Play (the `/` route) is not held to the grown-up screens' `max-w-5xl`. `web/src/screens/PlayScreen.tsx`: `PLAY_AREA`, a centred column up to `max-w-7xl` with wider side padding as the window grows; the tile grids `stretch` to fill their row; Choose and the pile of an arrangement `beckon`, one tile at a time at random, until the round is answered; the shown picture is a step larger (`picture-lead`). `web/src/screens/BreakScreen.tsx`: the same area.
+- `web/src/styles/theme.css`: `--type-picture-size` grows with the window (3 to 8 rem), and `picture-lead` for the picture to match (4 to 10.75 rem).
+- `web/tests/integration/PlayScreen.test.tsx`: the tiles fill the row and one at a time pulses until the round is answered.
+- Visual baselines: every Play and Break shot (wider tiles, larger pictures, centred); the grown-up screens move by a few dozen pixels on control corners, from the strata-react update.
+
 **Review fix (Codex on #61): play waits for the learner's total before the first round (branch `claude/project-thread-fwkjyk`)**
 
 Codex found that an answer given while the total was still being read could be counted by the server's total and by this visit's count, for the rest of the visit.
