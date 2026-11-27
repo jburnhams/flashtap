@@ -9,6 +9,17 @@ export interface Turn {
 
 export type Outcome = 'playing' | 'right' | 'missed'
 
+/** The words around a reply that vary (src/talk.ts): each is asked for only when it is said, so a pool moves on only
+ * when one of its lines is used. */
+export type Words = { right: () => string; retry: () => string; missed: () => string }
+
+/** What Play said before there was talk: "Yes!", "Try again." and nothing before the answer. */
+export const PLAIN: Words = { right: () => 'Yes!', retry: () => 'Try again.', missed: () => '' }
+
+// Every right reply a round carries opens "Yes!" (src/flashtap/kinds): the talk's cheer takes its place.
+const cheer = (said: string, words: Words) => (said.startsWith('Yes!') ? `${words.right()}${said.slice(4)}` : said)
+const join = (...parts: string[]) => parts.filter(Boolean).join(' ')
+
 /** Where a round stands after `turn`: right once the answer is tapped, missed once the tries run out without it. */
 export function outcome(round: Pick<Round, 'answer' | 'tries'>, turn: Turn): Outcome {
   if (turn.tapped.includes(round.answer)) return 'right'
@@ -17,15 +28,16 @@ export function outcome(round: Pick<Round, 'answer' | 'tries'>, turn: Turn): Out
 }
 
 /** What to say after the last tap: the option's own sentence, then, when the round is missed, where the answer was. */
-export function feedback(round: Round, turn: Turn): string {
+export function feedback(round: Round, turn: Turn, words: Words = PLAIN): string {
   const last = round.options.find(o => o.id === turn.tapped.at(-1))
   if (!last) return round.say
-  if (outcome(round, turn) === 'missed') {
+  const state = outcome(round, turn)
+  if (state === 'missed') {
     const right = round.options.find(o => o.correct)
     if (!right) return last.feedback
-    return `${last.feedback} The right one was ${/^\d+$/.test(right.word) ? right.word : `the ${right.word}`}.`
+    return join(last.feedback, words.missed(), `The right one was ${/^\d+$/.test(right.word) ? right.word : `the ${right.word}`}.`)
   }
-  return outcome(round, turn) === 'playing' ? `${last.feedback} Try again.` : last.feedback
+  return state === 'playing' ? join(last.feedback, words.retry()) : cheer(last.feedback, words)
 }
 
 // Placing rounds (give a number, order, match, sort): the learner arranges pieces, then checks.
@@ -59,8 +71,8 @@ export function placeOutcome(round: Pick<Round, 'tries'>, checks: number, right:
 }
 
 /** What to say after a check. Giving a number says how many were given, the skill being stopping at the number. */
-export function placeFeedback(round: Round, placement: Placement, checks: number): string {
-  if (arrangedRight(round, placement)) return round.done_feedback
+export function placeFeedback(round: Round, placement: Placement, checks: number, words: Words = PLAIN): string {
+  if (arrangedRight(round, placement)) return cheer(round.done_feedback, words)
   const missed = placeOutcome(round, checks, false) === 'missed'
   let said = 'Not yet.'
   if (round.mechanic === 'give_n') {
@@ -68,5 +80,5 @@ export function placeFeedback(round: Round, placement: Placement, checks: number
     const given = inside(placement, basket.id).length
     said = `You put ${given} in ${basket.word}. ${given > basket.holds ? 'That’s too many.' : 'That’s not enough.'}`
   }
-  return missed ? `${said} Here is the answer.` : `${said} Try again.`
+  return missed ? join(said, words.missed(), 'Here is the answer.') : join(said, words.retry())
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { expectOneFilledButton, fakeMicrophone, installFakeSpeech } from 'strata-react/testing'
-import { keepRecordingFails, voiceError } from '../../src/mocks/handlers'
+import { keepRecordingFails, voiceAllMade, voiceError } from '../../src/mocks/handlers'
 import { openApp, screen, waitFor, within } from '../utils/render'
 import { mock, server } from '../utils/server'
 
@@ -11,13 +11,13 @@ describe('Sounds', () => {
   let speech: ReturnType<typeof installFakeSpeech> | undefined
   afterEach(() => speech?.uninstall())
 
-  it('says how many consonants are still to record, and where each sound comes from', async () => {
+  it('says how many sounds are not made yet, and where each sound comes from', async () => {
     openApp('/sounds')
     expect(await screen.findByRole('heading', { level: 1, name: 'Sounds' })).toBeInTheDocument()
-    expect(screen.getByText(/^21\ssounds to record\./)).toBeInTheDocument()
+    expect(screen.getByText(/^28\ssounds not made yet:/)).toBeInTheDocument()
     expect(within(row('sh')).getByText('Recorded')).toBeInTheDocument()
     expect(within(row('sh')).getByText('sh')).toBeInTheDocument()
-    expect(within(row('p')).getByText('To record')).toBeInTheDocument()
+    expect(within(row('p')).getByText('Not made yet')).toBeInTheDocument()
     expect(within(row('ai')).getByText('Not made yet')).toBeInTheDocument()
     expect(within(row('ee')).getByText('Made')).toBeInTheDocument()
   })
@@ -46,7 +46,7 @@ describe('Sounds', () => {
     expect(mock.recordings[0]!.line).toBe('/p/')
     expect(mock.recordings[0]!.bytes).toBeGreaterThan(44)
     expect(await within(row('p')).findByText('Recorded')).toBeInTheDocument()
-    expect(screen.getByText(/^20\ssounds to record\./)).toBeInTheDocument()
+    expect(screen.getByText(/^27\ssounds not made yet:/)).toBeInTheDocument()
   })
 
   it('keeps the dialog open and says so when the recording is not kept', async () => {
@@ -61,10 +61,10 @@ describe('Sounds', () => {
     expect(mock.recordings).toEqual([])
   })
 
-  it('says so when every consonant is recorded', async () => {
-    for (const s of mock.voice.sounds) if (!s.vowel) Object.assign(s, { source: 'recorded', clip: `api/v1/voice/clips/r${s.phoneme}.wav` })
+  it('says what to listen for once every sound has a clip', async () => {
+    server.use(voiceAllMade)
     openApp('/sounds')
-    expect(await screen.findByText(/^Every consonant is recorded; \d+ of 45 sounds have a clip\./)).toBeInTheDocument()
+    expect(await screen.findByText(/^All 45 sounds have a clip\. Listen to each, and record one yourself/)).toBeInTheDocument()
   })
 
   it('says why nothing was recorded when the microphone is refused', async () => {

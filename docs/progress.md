@@ -1,5 +1,13 @@
 # Progress log
 
+## 2026-11-27: a more engaging voice (0.17.0)
+
+- Asked for: the voice was repetitive ("Yes!" before every right answer, "Try again." after every miss); write better lines with a language model, using the player's name, ahead of time; and use strata-models' new pure consonants.
+- strata-models has a `write` role (a cloud model, JSON through a schema), reached with `clients.models.ask(..., role="write")`; no strata-python change was needed.
+- The name never goes to the model: it writes `{name}` and the server fills in the nickname, so a learner's nickname only reaches the local speech model. A nickname a line would not say well (an emoji, a digit) gets the lines without a name.
+- Lines are per moment and per kind, not per round. The engine decides each round from the answer before it, so what comes is not known a session ahead; but every kind it can choose has its lines and clips ready, which is what "ready when needed" asks.
+- Written text for children is checked by rules before it is kept: short, no digits (it could state a wrong answer), no word that judges, compares, promises or guesses a gender, a question only where the moment asks one. The owner can strike any line.
+
 ## 2026-11-27: the very first rounds are numbers to five, colours, shapes and animals (0.15.0)
 
 - Asked for: a new learner still met rounds like "What starts with the letter H?"; the first rounds should be numbers 1-5, colours, shapes and animals.

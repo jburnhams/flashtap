@@ -42,13 +42,13 @@ def test_a_short_build_makes_its_lines_and_a_second_finds_nothing_to_make(fake_m
     finished = q.get(done.id)
     assert finished is not None
     assert finished.state == "done"
-    assert finished.result == {"made": 3, "kept": 0, "to_record": []}
+    assert finished.result == {"made": 3, "kept": 0}
     q.enqueue(jobs.VOICE_BUILD, {"limit": 3})
     again = q.step(jobs.HANDLERS)
     assert again is not None
     kept = q.get(again.id)
     assert kept is not None
-    assert kept.result == {"made": 0, "kept": 3, "to_record": []}
+    assert kept.result == {"made": 0, "kept": 3}
     assert len(fake_models.jobs) == 3
     database(app).close()
 
@@ -96,10 +96,44 @@ def test_the_served_app_queues_a_build_at_start_and_stops_its_worker_with_the_se
     voice.lines()  # swept once per process (about a minute cold), so the worker starts on the lines at once
     app = run_jobs(create_app(), isolate=False)
     with TestClient(app) as client:
-        until(lambda: len(fake_models.jobs) >= 2)
-        (task,) = client.get("/api/jobs").json()["items"]
-        assert (task["kind"], task["state"]) == (jobs.VOICE_BUILD, "running")
-        assert client.get("/api/jobs/counts").json()["running"] == 1
-    (job,) = job_queue(app).page().items
-    assert job.state == "queued"  # stopped with the server: the rest next start
+        until(lambda: sum(j["role"] == "speak" for j in fake_models.jobs) >= 2)
+        items = {t["kind"]: t for t in client.get("/api/jobs").json()["items"]}
+        assert set(items) == {jobs.VOICE_BUILD, jobs.TALK_WRITE}  # the talk is written at every start too
+        assert items[jobs.VOICE_BUILD]["state"] == "running"
+    build = next(j for j in job_queue(app).page().items if j.kind == jobs.VOICE_BUILD)
+    assert build.state == "queued"  # stopped with the server: the rest next start
+    database(app).close()
+
+
+def test_talk_is_written_by_the_write_role_then_voiced(fake_models, tmp_path):
+    """The talk job asks strata-models' write role for each moment over HTTP (the plugin's stand-in), keeps what passes
+    the checks, and queues a voice build for it; a moment the service refuses is tried again later."""
+    from flashtap import talk
+
+    keys = list(talk.moments())
+
+    def write(params: dict[str, object]) -> dict[str, object]:
+        prompt = str(params["prompt"])
+        if "two games" in prompt:  # the pick moment's brief, so it ends with one refused moment
+            raise RuntimeError("over budget")
+        q = "?" if "Time for a break?" in prompt else "."  # the break moment asks; the others say
+        return {"text": "", "json": {"lines": [f"Lovely, {{name}}{q}", f"Super{q}", "Good girl!"]}, "model": "fake"}
+
+    fake_models.results["write"] = write
+    app = create_app()
+    q = job_queue(app)
+    jid = q.enqueue(jobs.TALK_WRITE)
+    q.step(jobs.HANDLERS)
+    after = q.get(jid)
+    assert after is not None
+    assert after.state == "queued"  # pick is tried again later
+    assert after.error is not None
+    assert f"1 of {len(keys)} moments not written yet; pick" in after.error
+    assert all(j["role"] == "write" for j in fake_models.jobs)
+    assert "Fox" not in str(fake_models.jobs)  # no nickname is ever sent
+    book = talk.Store(voice.home()).read()
+    assert [w.text for w in book.lines["right"]] == ["Lovely, {name}.", "Super."]  # "Good girl!" refused
+    assert [w.text for w in book.lines["break"]] == ["Lovely, {name}?", "Super?"]
+    assert "pick" not in book.lines
+    assert any(j.kind == jobs.VOICE_BUILD for j in q.page().items)  # what was written is voiced next
     database(app).close()

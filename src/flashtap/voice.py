@@ -13,11 +13,16 @@ clips (strata-react's `speak(parts)`) and the browser says only what has no clip
   web app builds around them (`web/src/play.ts`, `PlayScreen.tsx`; kept in step by hand, see `APP_LINES`), and each
   sound of the phonics inventory. tests/unit/test_voice.py checks that rounds from seeds outside the sweep say nothing
   new, so a line is never silently left to the browser.
-- **Sounds**: a vowel sound is made from its IPA (`phonemes`, strata-models PR #110). A consonant is not: Kokoro wraps a
-  lone /ʃ/ or /m/ in a vowel ("uh-sh-uh"), which is the mistake phonics teaching works to undo, so consonants are
-  recorded by a person in the app (the Sounds screen, `PUT /api/v1/voice/recordings`) and `build` never makes them
-  (strata-models issue #111 would let it). Until one is recorded the browser says a description ("the first sound in
-  ship"), never the letters, which would give the answer.
+- **Sounds**: every phonics sound is made by `speak`'s `sound` (strata-models #112, 2026-11-24). A vowel is said from
+  its IPA as written; a consonant is said at the start of a carrier syllable and cut from before the vowel, so /m/ is
+  "mmm", not "muh": Kokoro asked for a lone consonant wraps it in a vowel ("uh-sh-uh"), the mistake phonics teaching
+  works to undo, which is why consonants were recorded by a person until 0.17.0. A person can still record any sound
+  in the app (the Sounds screen, `PUT /api/v1/voice/recordings`), and a recording always wins over a made clip. Until a
+  sound has a clip the browser says a description ("the first sound in ship"), never the letters, which would give the
+  answer.
+- **Talk** (`talk.py`): the varied lines around a round (cheers, have another go, the kind coming up), written ahead
+  of time by strata-models' `write` role, with the learner's nickname filled in here. `build` makes them like any
+  other line; `wanted()` adds them for the learners there are.
 - **The store** is a folder beside the settings (`~/.flashtap/voice/`, moved with `FLASHTAP_HOME`): `manifest.json`
   (line -> file, source, voice, model, settings hash) and `clips/<sha256 of the file>.wav`, named by content so the
   browser may cache a clip forever. A recording is never replaced by `build`. Nothing here is in git: a recording is
@@ -39,7 +44,7 @@ from strata_python.clients.models import RoleSettings, Unavailable, role_setting
 from strata_python.contracts import ApiModel
 from strata_python.wav import read_wav
 
-from flashtap import lexicon, rounds, settings
+from flashtap import lexicon, rounds, settings, talk
 from flashtap.mechanics import Mechanic
 
 APP = "flashtap"  # the app name strata-models files the jobs under
@@ -171,6 +176,15 @@ def lines() -> list[str]:
     return sorted(s for s in said if phoneme_of(s) is None) + sounds
 
 
+def wanted(nicknames: Iterable[str | None] = ()) -> list[str]:
+    """What the voice build makes: `lines()`, then every line of talk (`talk.py`) for no learner and for each of
+    `nicknames`, cut into lines the same way, so "Brilliant, Fox! There are 5 ducks." finds both of its clips."""
+    out = dict.fromkeys(lines())
+    for said in talk.said(talk.Store(home()).read(), nicknames):
+        out.update(dict.fromkeys(segments(said)))
+    return list(out)
+
+
 # ---- the store ------------------------------------------------------------------------------------------------------
 
 
@@ -275,7 +289,6 @@ class Store:
 class Built(BaseModel):
     made: list[str] = []
     kept: list[str] = []  # already there in this voice and settings (or recorded)
-    to_record: list[str] = []  # consonant sounds: a person records them
     failed: dict[str, str] = {}
     left: list[str] = []  # not reached: asked to stop first (a job cancelled, or the server shutting down)
 
@@ -326,7 +339,8 @@ def build(
     """Make the missing clips of `wanted` with strata-models. A clip is remade when it is in another voice, from another
     model or other model settings than `now` (the speak role's as the service reports them, `models.role_settings`), or
     `force`; a recording never is. Without `now` (the service out of reach, or older) only the voice is compared.
-    Consonant sounds are listed to record, not made. `stop` is asked before each line; once it says yes the rest are
+    A sound is made pure by `speak`'s `sound` (a consonant with no vowel after it). `stop` is asked before each line;
+    once it says yes the rest are
     `left`, so a job stops between clips, never inside one."""
     out = Built()
     have = store.read().clips
@@ -340,15 +354,12 @@ def build(
             out.kept.append(line)
             continue
         ph = phoneme_of(line)
-        if ph is not None and not is_vowel(ph):
-            out.to_record.append(line)
-            continue
         if old is not None and old.voice == voice and not force and not _stale(old, now):
             out.kept.append(line)
             continue
         params: dict[str, Any] = {"voice": voice, "language": LANGUAGE, "seed": 0}
-        if ph is not None:
-            params["phonemes"] = ph
+        if ph is not None:  # the sound alone: a vowel as written, a consonant cut from a carrier (strata-models #112)
+            params["sound"] = ph
         if model:
             params["model"] = model
         try:
@@ -383,7 +394,7 @@ class SoundRow(ApiModel):
     graphemes: list[str]  # the letters that write it in the inventory: sh; c, k, ck
     example: str  # a word that shows it
     describe: str  # what the browser says until it has a clip
-    vowel: bool  # made from IPA by `build`; a consonant is recorded by a person
+    vowel: bool  # a vowel is said as written; a consonant is cut from a carrier syllable (both by `build`)
     clip: str | None  # the clip's URL (relative: the web app puts it through withBase), None for none
     source: Source | None
 

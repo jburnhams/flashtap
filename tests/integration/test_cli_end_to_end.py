@@ -37,7 +37,8 @@ def test_content_check_as_a_process_reads_the_packaged_packs(cli_subprocess, tmp
 
 def test_voice_build_makes_clips_through_strata_models_and_the_app_serves_them(cli, client, fake_models, tmp_path):
     """`flashtap voice build` against the strata-models stand-in over real HTTP: each job writes a real WAV where the
-    service would, the store keeps it, and the API serves it. A consonant sound is listed to record, never asked for."""
+        service would, the store keeps it, and the API serves it. Every sound, a consonant too, goes as `sound`
+    (strata-models #112 says a consonant pure)."""
     from strata_python.testing import sine_wav
 
     def speak(params: dict[str, object]) -> dict[str, object]:
@@ -49,12 +50,11 @@ def test_voice_build_makes_clips_through_strata_models_and_the_app_serves_them(c
     fake_models.models["speak"] = "kokoro-v1"
     r = cli("voice", "build", "--only", "sounds", "--limit", "33")  # /s/ ... /eɪ/, /iː/, /aɪ/: consonants and vowels
     asked = [j["params"] for j in fake_models.jobs]
-    assert all(p.get("phonemes") for p in asked)
+    assert len(asked) == 33
+    assert all(p.get("sound") == str(p["text"])[1:-1] for p in asked)
     assert {p["voice"] for p in asked} == {"bf_emma"}
-    assert {p["text"] for p in asked} >= {"/æ/", "/ɪ/", "/eɪ/"}
-    assert "/ʃ/" not in {p["text"] for p in asked}
-    assert f"made {len(asked)}, kept 0, failed 0;" in r.stdout
-    assert "sounds to record in the app" in r.stdout
+    assert {p["text"] for p in asked} >= {"/æ/", "/ɪ/", "/eɪ/", "/s/", "/ʃ/"}
+    assert f"made {len(asked)}, kept 0, failed 0" in r.stdout
 
     voice = client.get("/api/v1/voice").json()
     a = next(s for s in voice["sounds"] if s["line"] == "/æ/")
@@ -75,4 +75,4 @@ def test_voice_build_says_which_lines_failed(cli, fake_models):
     assert r.code == 1
     assert "FAILED 0: CUDA out of memory" in r.stdout
     assert "No such file" in r.stdout
-    assert "made 0, kept 0, failed 2;" in r.stdout
+    assert "made 0, kept 0, failed 2" in r.stdout
