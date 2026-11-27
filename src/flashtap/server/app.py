@@ -25,9 +25,11 @@ the models' predictions).
 The recorded voice (src/flashtap/voice.py): GET /api/v1/voice (each line with a clip, and every phonics sound with its
 clip or none); GET /api/v1/voice/clips/{name} (a clip, cached for good: named by its content); PUT
 /api/v1/voice/recordings?line=/ʃ/ (a WAV body: a person's recording of a sound, kept over any made one); DELETE
-/api/v1/voice/recordings?line=/ʃ/.
+/api/v1/voice/recordings?line=/ʃ/. Talk (src/flashtap/talk.py): GET /api/v1/learners/{id}/talk, what may be said at
+each moment around a round, with the learner's nickname filled in.
 Background work (src/flashtap/jobs.py, strata_python.tasks.web): GET /api/jobs, /api/jobs/counts, /api/jobs/{id};
-POST /api/jobs/{id}/cancel, /api/jobs/{id}/retry. `flashtap serve` queues a voice build at every start.
+POST /api/jobs/{id}/cancel, /api/jobs/{id}/retry. `flashtap serve` queues a talk write and a voice build at every
+start; adding or renaming a learner queues one more build.
 Every other path serves the web app (`src/flashtap/server/static/index.html` when built with `cd web && npm run build`,
 else the plain stand-in `landing.html`), so a reload or a shared link opens that screen: the app routes in the browser."""
 
@@ -45,7 +47,7 @@ from strata_python.db.web import DbSession, add_database, database
 from strata_python.tasks.queue import Queue
 from strata_python.tasks.web import add_jobs
 
-from flashtap import __version__, content, jobs, rounds, settings, voice
+from flashtap import __version__, content, jobs, rounds, settings, talk, voice
 from flashtap.engine import model, sessions
 from flashtap.engine.policy import Config
 from flashtap.learners import db as learner_db
@@ -153,13 +155,22 @@ def add_learner_routes(app: FastAPI, skills: list[SkillInfo]) -> None:
     def get_learners(s: Db) -> list[store.LearnerRow]:  # pyright: ignore[reportUnusedFunction]
         return store.list_learners(s)
 
+    # A new nickname is said in the talk lines (flashtap.talk): one more voice build makes its clips before it plays.
     @app.post("/api/learners", response_model=store.LearnerRow, status_code=201)
     def post_learner(body: NicknameIn, s: Db) -> store.LearnerRow:  # pyright: ignore[reportUnusedFunction]
-        return store.add_learner(s, body.nickname)
+        row = store.add_learner(s, body.nickname)
+        jobs.queue_learner_build(job_queue(app))
+        return row
 
     @app.patch("/api/learners/{learner_id}", response_model=store.LearnerRow)
     def patch_learner(learner_id: str, body: NicknameIn, s: Db) -> store.LearnerRow:  # pyright: ignore[reportUnusedFunction]
-        return store.rename_learner(s, learner_id, body.nickname)
+        row = store.rename_learner(s, learner_id, body.nickname)
+        jobs.queue_learner_build(job_queue(app))
+        return row
+
+    @app.get("/api/v1/learners/{learner_id}/talk", response_model=talk.TalkOut)
+    def get_talk(learner_id: str, s: Db) -> talk.TalkOut:  # pyright: ignore[reportUnusedFunction]
+        return talk.pools(talk.Store(voice.home()).read(), store.learner_row(s, learner_id).nickname)
 
     @app.delete("/api/learners/{learner_id}", status_code=204)
     def delete_learner(learner_id: str, s: Db) -> Response:  # pyright: ignore[reportUnusedFunction]

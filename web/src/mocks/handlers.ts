@@ -7,7 +7,7 @@
 // state: `server.use(roundError)` in a test, `msw.use(roundError)` in a story's beforeEach,
 // `states: { error: [roundError] }` in the visual config.
 import { delay, http, HttpResponse } from 'msw'
-import { isMode, paths, type AttemptIn, type LearnerRow, type Next, type OfferOut, type OverrideIn, type Round, type Score, type Settings, type Told } from '../api'
+import { isMode, paths, type AttemptIn, type TalkOut, type LearnerRow, type Next, type OfferOut, type OverrideIn, type Round, type Score, type Settings, type Told } from '../api'
 import { content } from './content'
 import { defaultSettings, modes, rounds } from './fixtures'
 import { countingEvidence, foxProfile, FOX, learners, owlProfile } from './learners'
@@ -19,6 +19,26 @@ type Plan = Round['mode'] | `${Round['mode']}+rate` | `pick:${Round['mode']}/${R
 const scores: Record<string, Score> = { [FOX]: { right: 12, wrong: 3 } }
 
 const PLAN: Plan[] = ['counting', 'give', 'break', 'matching', 'end']
+
+/** What src/flashtap/talk.py `pools` answers before any line is written: each moment's fixed line, no intros. */
+export const talkFixed: TalkOut = {
+  lines: { right: ['Yes!'], retry: ['Try again.'], missed: ['Good try.'], start: ['Let’s play.'], pick: ['Which one next?'], break: ['Time for a break?'], 'intro.counting': [], 'intro.give': [], 'intro.matching': [] },
+}
+
+/** Pools with written lines, one each, so what is said is known: Fox's name filled in, as the server fills it. */
+export const talkWritten: TalkOut = {
+  lines: {
+    right: ['Brilliant, Fox!'],
+    retry: ['Have another look.'],
+    missed: ['Good try, Fox.'],
+    start: ['Hello, Fox! Let’s play.'],
+    pick: ['Your turn to choose.'],
+    break: ['Fancy a rest?'],
+    'intro.counting': ['Now for some counting.'],
+    'intro.give': ['Time to fill the basket.'],
+    'intro.matching': ['Let’s find some pairs.'],
+  },
+}
 
 /** What the mock server holds. Writes change it, so a test can save a setting and see it used. */
 export const mock = {
@@ -50,6 +70,8 @@ export const mock = {
   voice: structuredClone(voice),
   /** Recordings kept, in order: the sound and the WAV's size. */
   recordings: [] as { line: string; bytes: number }[],
+  /** The talk pools for every learner: the server's with nothing written yet, the fixed lines alone. */
+  talk: structuredClone(talkFixed) as TalkOut,
 }
 
 /** Back to the healthy state: call between tests and stories. */
@@ -70,6 +92,7 @@ export function resetMock() {
   mock.withdrawn = []
   mock.voice = structuredClone(voice)
   mock.recordings = []
+  mock.talk = structuredClone(talkFixed)
 }
 
 /** A short silent PCM WAV (16-bit mono, 8 kHz), for every clip the mock voice serves: something real to play. */
@@ -185,6 +208,7 @@ export const handlers = [
     if (!mock.learners.some(x => x.id === id)) return HttpResponse.json({ detail: `No learner ${id}: removed, or never added.` }, { status: 404 })
     return HttpResponse.json(mock.scores[id] ?? { right: 0, wrong: 0 })
   }),
+  http.get(at(`${paths.overrides}/:id/talk`), () => HttpResponse.json(mock.talk)),
   http.get(at(`${paths.learners}/:id/skills/:skill/evidence`), ({ params }) => HttpResponse.json(params.id === FOX && params.skill === 'maths.counting.objects' ? countingEvidence : [])),
   http.post(at(paths.attempts), async ({ request }) => {
     const a = (await request.json()) as AttemptIn
@@ -232,11 +256,13 @@ export const handlers = [
 
 const down = () => HttpResponse.json({ detail: 'down' }, { status: 503 })
 
+export const talkError = http.get(at(`${paths.overrides}/:id/talk`), down)
 export const voiceError = http.get(at(paths.voice), down)
 export const voiceLoading = http.get(at(paths.voice), async () => { await delay('infinite'); return HttpResponse.json(null) })
-export const voiceAllRecorded = http.get(at(paths.voice), () => {
-  const sounds = voice.sounds.map(s => (s.vowel ? s : { ...s, source: 'recorded' as const, clip: `api/v1/voice/clips/r${s.phoneme}.wav` }))
-  return HttpResponse.json({ sounds, clips: Object.fromEntries(sounds.filter(s => s.clip).map(s => [s.line, s.clip!])) })
+/** Every sound has a clip: the voice made the rest, around the four recorded. */
+export const voiceAllMade = http.get(at(paths.voice), () => {
+  const sounds = voice.sounds.map(s => (s.clip ? s : { ...s, source: 'generated' as const, clip: `api/v1/voice/clips/m${s.phoneme}.wav` }))
+  return HttpResponse.json({ sounds, clips: Object.fromEntries(sounds.map(s => [s.line, s.clip])) })
 })
 export const keepRecordingFails = http.put(at(`${paths.voice}/recordings`), down)
 

@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AttemptIn } from '../../src/api'
 import { rounds } from '../../src/mocks/fixtures'
-import { attemptRefused, attemptUnreachable, decisionFor, handlers, learnersError, nextChoice, nextError, nextUnreachable, pickFails, quickLookGoes, ratingRefused, roundError, roundUnreachable, scoreError, scoreLoading, SESSION, sessionError, voiceLoading } from '../../src/mocks/handlers'
+import { attemptRefused, attemptUnreachable, decisionFor, handlers, learnersError, nextChoice, nextError, nextUnreachable, pickFails, quickLookGoes, ratingRefused, roundError, roundUnreachable, scoreError, scoreLoading, SESSION, sessionError, talkError, talkWritten, voiceLoading } from '../../src/mocks/handlers'
 import { openApp, screen, waitFor, within } from '../utils/render'
 import { mock, server } from '../utils/server'
 import { expectOneFilledButton, installFakeSpeech } from 'strata-react/testing'
@@ -469,6 +469,41 @@ describe('Play, chosen for them', () => {
     await user.click(screen.getByRole('button', { name: 'Check' }))
     expect(screen.getByText('That’s right.')).toBeInTheDocument()
     expect(mock.keptRequests).toEqual([]) // never kept for playing away: offline it would be practice, not a check
+  })
+
+  describe('talk', () => {
+    let speech: ReturnType<typeof installFakeSpeech>
+    afterEach(() => speech.uninstall())
+
+    it('greets the learner, says a new kind is coming, and cheers with their name in place of Yes', async () => {
+      mock.talk = structuredClone(talkWritten)
+      mock.plan = ['counting', 'give', 'end']
+      speech = installFakeSpeech([{ lang: 'en-GB', name: 'Daniel' }])
+      const { user } = openApp(`/?mode=next&learner=${FOX}`)
+      await screen.findByRole('heading', { level: 1, name: 'How many apples are there?' })
+      await waitFor(() => expect(speech.said).toHaveLength(1))
+      await user.click(screen.getByRole('row', { name: tile('2') }))
+      await user.click(screen.getByRole('row', { name: tile('3') }))
+      await user.click(screen.getByRole('button', { name: 'Next' }))
+      await screen.findByRole('heading', { level: 1, name: 'Put 3 ducks in the basket.' })
+      await waitFor(() => expect(speech.said).toHaveLength(4))
+      expect(speech.said.map(s => s.text)).toEqual([
+        'Hello, Fox! Let\u2019s play. Now for some counting. How many apples are there?',
+        'No, that\u2019s 2. Have another look.',
+        'Brilliant, Fox! There are 3 apples.',
+        'Time to fill the basket. Put 3 ducks in the basket.',
+      ])
+    })
+
+    it('says the fixed lines when the talk cannot be read', async () => {
+      server.use(talkError)
+      speech = installFakeSpeech([{ lang: 'en-GB', name: 'Daniel' }])
+      const { user } = openApp(`/?mode=next&learner=${FOX}`)
+      await screen.findByRole('heading', { level: 1, name: 'How many apples are there?' })
+      await user.click(screen.getByRole('row', { name: tile('2') }))
+      await user.click(screen.getByRole('row', { name: tile('3') }))
+      expect(speech.said.map(s => s.text).slice(-2)).toEqual(['No, that\u2019s 2. Try again.', 'Yes! There are 3 apples.'])
+    })
   })
 
   it('asks for the next decision only once the answer is saved, so the engine knows it', async () => {

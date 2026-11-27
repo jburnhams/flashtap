@@ -148,14 +148,17 @@ class Speaker:
         return {"path": str(path), "voice": params["voice"]}, SimpleNamespace(model="kokoro-v1", settings_hash="h1")
 
 
-def test_build_makes_sentences_and_vowels_and_lists_consonants_to_record(store: voice.Store, tmp_path: Path):
+def test_build_makes_sentences_and_every_sound_pure(store: voice.Store, tmp_path: Path):
+    """A vowel and a consonant alike go to speak's `sound` (strata-models #112), which cuts a consonant from a carrier
+    syllable so no vowel follows it; a sentence goes as text."""
     speak = Speaker(tmp_path)
     r = voice.build(store, ["Listen.", "/iː/", "/ʃ/"], speak=speak)
-    assert r.made == ["Listen.", "/iː/"]
-    assert r.to_record == ["/ʃ/"]
+    assert r.made == ["Listen.", "/iː/", "/ʃ/"]
     assert not r.failed
     assert speak.calls[0] == {"text": "Listen.", "voice": "bf_emma", "language": "en-gb", "seed": 0}
-    assert speak.calls[1]["phonemes"] == "iː"
+    assert speak.calls[1]["sound"] == "iː"
+    assert speak.calls[2]["sound"] == "ʃ"
+    assert "phonemes" not in speak.calls[2]
     clip = store.read().clips["Listen."]
     assert (clip.source, clip.voice, clip.model, clip.settings_hash) == ("generated", "bf_emma", "kokoro-v1", "h1")
 

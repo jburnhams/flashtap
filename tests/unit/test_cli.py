@@ -202,12 +202,37 @@ def test_voice_lines_status_and_a_build_with_no_service(capsys, monkeypatch):
     assert cli.main(["voice", "status"]) == 0
     out = capsys.readouterr().out
     assert "sounds:    1 of 45 have a clip" in out
-    assert "/m/" in out
-    assert "/ʃ/" not in out.split("to record")[1]
+    assert "/m/" in out.split("not made yet")[1]
+    assert "/ʃ/" not in out.split("not made yet")[1].split("\n")[0]
+    assert "recorded on the Sounds screen: /ʃ/" in out
     assert "voices: recording" in out
 
     monkeypatch.setenv("STRATA_MODELS_URL", "http://127.0.0.1:9")  # the discard port: nothing answers
     assert cli.main(["voice", "build", "--only", "sentences", "--limit", "1"]) == 1
     assert "FAILED 0:" in capsys.readouterr().out
-    assert cli.main(["voice", "build", "--only", "sounds", "--limit", "1"]) == 0  # /s/: a consonant, to record
-    assert "made 0, kept 0, failed 0; 1 sounds to record in the app" in capsys.readouterr().out
+    assert cli.main(["voice", "build", "--only", "sounds", "--limit", "1"]) == 1  # /s/: made too, so it fails here
+    assert "made 0, kept 0, failed 1" in capsys.readouterr().out
+
+
+def test_talk_write_list_and_strike(capsys, monkeypatch):
+    """The talk from the CLI: with no strata-models to reach, `write` names each moment it could not write and fails;
+    `list` shows the fixed and written lines, `strike` takes one out for good. tests/unit/test_jobs.py writes through
+    the service's stand-in."""
+    from flashtap import talk, voice
+
+    store = talk.Store(voice.home())
+    store.edit(lambda b: b.lines.update({"right": [talk.Written(text="Lovely, {name}!", made="2026-11-27")]}))
+    assert cli.main(["talk", "list", "right", "retry"]) == 0
+    out = capsys.readouterr().out
+    assert "right  (fixed: Yes!)\n  Lovely, {name}!" in out
+    assert "retry  (fixed: Try again.)" in out
+    assert "intro.counting" not in out
+    assert cli.main(["talk", "strike", "Lovely, {name}!"]) == 0
+    assert "struck from 1 moments" in capsys.readouterr().out
+    assert cli.main(["talk", "strike", "Not one."]) == 0
+    assert "not a written line" in capsys.readouterr().out
+    assert store.read().lines["right"] == []
+
+    monkeypatch.setenv("STRATA_MODELS_URL", "http://127.0.0.1:9")  # the discard port: nothing answers
+    assert cli.main(["talk", "write", "right"]) == 1
+    assert "FAILED right:" in capsys.readouterr().out

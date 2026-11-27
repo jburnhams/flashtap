@@ -1,10 +1,12 @@
-// The grown-up's question: "Which sounds can Flashtap say, and which do I still need to record?" The Sounds round
-// says one phonics sound on its own ("hear /sh/, tap sh"). No browser voice can say one, and a speech model wraps a
-// lone consonant in a vowel ("uh-sh-uh", the habit phonics teaching works to undo), so `flashtap voice build` makes
-// only the vowel sounds and a person records the consonants here, once each (src/flashtap/voice.py). Until a sound
-// has a clip, the browser describes it ("the first sound in ship"), so the round still works, less well.
+// The grown-up's question: "Does each sound Flashtap says sound right, and which should I record myself?" The Sounds
+// round says one phonics sound on its own ("hear /sh/, tap sh"). No browser voice can say one, and a speech model
+// asked for a lone consonant wraps it in a vowel ("uh-sh-uh", the habit phonics teaching works to undo), so until
+// 0.17.0 a person recorded every consonant here. strata-models now says a consonant pure (its `sound`, #112: the
+// sound said before a vowel, then cut from it), so `flashtap voice build` makes every sound and a recording here is
+// for one that does not sound right; a recording always wins over the made clip (src/flashtap/voice.py). Until a
+// sound has a clip, the browser describes it ("the first sound in ship"), so the round still works, less well.
 //
-// The finding is how many sounds still need a recording. Each row is one sound: its letters, a word it is heard
+// The finding is how many sounds have no clip yet, else what to listen for. Each row is one sound: its letters, a word it is heard
 // in, where its clip came from, a play button and Record. A sound is named by where it is heard ("the first sound in
 // ship"), never by its IPA: a grown-up does not read /θ/, and the app's face (Andika) is bundled without Greek. Recording is strata-react's recorder: Record, Stop,
 // listen back and see the level, then Keep it (it replaces the made clip or an earlier recording). The take stays
@@ -38,20 +40,17 @@ export function SoundsScreen() {
   )
 }
 
-const needsRecording = (s: SoundRow) => !s.vowel && s.source !== 'recorded'
-
 function Sounds({ v, onRecord }: { v: VoiceOut; onRecord: (s: SoundRow) => void }) {
-  const toRecord = v.sounds.filter(needsRecording).length
-  const withClip = v.sounds.filter(s => s.clip).length
+  const notMade = v.sounds.filter(s => !s.clip).length
   return (
     <>
       <PageHeader
         title="Sounds"
         scope="The phonics sounds Flashtap says on their own, and where each one's voice comes from"
         finding={{
-          text: toRecord
-            ? `${format.count(toRecord, 'sound')} to record. A speech model adds a vowel to a consonant on its own, so a person says those; the browser describes them until then.`
-            : `Every consonant is recorded; ${withClip} of ${v.sounds.length} sounds have a clip.`,
+          text: notMade
+            ? `${format.count(notMade, 'sound')} not made yet: the voice makes them when the server starts, and the browser describes them until then.`
+            : `All ${v.sounds.length} sounds have a clip. Listen to each, and record one yourself where it does not sound right: a recording is said instead.`,
         }}
       />
       <DataTable caption="Phonics sounds" columns={columns(onRecord)} rows={v.sounds} rowKey={s => s.line} />
@@ -62,8 +61,7 @@ function Sounds({ v, onRecord }: { v: VoiceOut; onRecord: (s: SoundRow) => void 
 const status = (s: SoundRow): { tone: Tone; word: string } =>
   s.source === 'recorded' ? { tone: 'success', word: 'Recorded' }
     : s.source === 'generated' ? { tone: 'neutral', word: 'Made' }
-      : s.vowel ? { tone: 'warning', word: 'Not made yet' }
-        : { tone: 'warning', word: 'To record' }
+      : { tone: 'warning', word: 'Not made yet' }
 
 const columns = (onRecord: (s: SoundRow) => void): Column<SoundRow>[] => [
   { key: 'graphemes', header: 'Letters', value: s => s.graphemes.join(', '), cell: s => s.graphemes.join(', ') },

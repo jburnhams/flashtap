@@ -397,6 +397,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/learners/{learner_id}/talk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Talk */
+        get: operations["get_talk_api_v1_learners__learner_id__talk_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions": {
         parameters: {
             query?: never;
@@ -1711,6 +1728,13 @@ export interface components {
              */
             reason: string;
         };
+        /** TalkOut */
+        TalkOut: {
+            /** Lines */
+            lines: {
+                [key: string]: string[];
+            };
+        };
         /**
          * Task
          * @description A job or task row as an API answers it.
@@ -2595,6 +2619,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_talk_api_v1_learners__learner_id__talk_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                learner_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TalkOut"];
+                };
             };
             /** @description Validation Error */
             422: {

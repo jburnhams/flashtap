@@ -1,6 +1,6 @@
 # Progress log
 
-## 2026-11-27: on by itself, and a running score (0.16.0)
+## 2026-11-27: on by itself, and a running score (0.18.0)
 
 - Asked for: after a round, go to the next one after a short pause, counting down on Next from 3; a running score per learner, shown at all times, green right and red wrong.
 - The score counts first answers (`first_correct`), not how a round ended: with the default of no limit on tries every round ends found, so "found in the end" would never be red. All time, as the owner asked "running score per user", so it lives on the server, counted from the attempt log on each read like every other figure here (struck rounds left out).
@@ -8,6 +8,13 @@
 - The countdown waits for a face when the faces are asked, so it never takes them away; a grown-up can set it to 0 to keep Next a tap. The test and story fixtures keep 0, so a finished round stays on screen for a test or screenshot; the countdown's own tests set it.
 - Against the spec: §11 and §17 ask for no streak pressure and no punishment for mistakes. There is still no streak; the red count is the owner's ask and is noted for the field study.
 - The screen (asked for next): Play fills the window and centres; a tile's picture is sized to its tile (strata-react caps it at 75% of the tile's width, so a stretched row of four does not grow pictures past their tiles); the pulse picks a tile at random each beat and never the same one twice running, and stops once the round is answered or something is held, so it shows where to press without moving under a finger.
+## 2026-11-27: a more engaging voice (0.17.0)
+
+- Asked for: the voice was repetitive ("Yes!" before every right answer, "Try again." after every miss); write better lines with a language model, using the player's name, ahead of time; and use strata-models' new pure consonants.
+- strata-models has a `write` role (a cloud model, JSON through a schema), reached with `clients.models.ask(..., role="write")`; no strata-python change was needed.
+- The name never goes to the model: it writes `{name}` and the server fills in the nickname, so a learner's nickname only reaches the local speech model. A nickname a line would not say well (an emoji, a digit) gets the lines without a name.
+- Lines are per moment and per kind, not per round. The engine decides each round from the answer before it, so what comes is not known a session ahead; but every kind it can choose has its lines and clips ready, which is what "ready when needed" asks.
+- Written text for children is checked by rules before it is kept: short, no digits (it could state a wrong answer), no word that judges, compares, promises or guesses a gender, a question only where the moment asks one. The owner can strike any line.
 
 ## 2026-11-27: the very first rounds are numbers to five, colours, shapes and animals (0.15.0)
 
