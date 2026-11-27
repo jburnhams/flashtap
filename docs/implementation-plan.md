@@ -66,6 +66,10 @@ One mechanic (tap one of N pictures), five unseeded round types, no learner stat
     - Then (the owner): the screen fills the window, centred, with wider padding as it grows; the answer tiles stretch and pulse one at a time at random until the round is answered, and the picture to match is a step larger. The stretching and the pulse were added to strata-react (`ChoiceGrid`/`PlaceBoard` `stretch` and `beckon`, 1.3.28), as the standing rule asks.
     - Left for later: an answer an earlier visit left waiting on the device joins the score when it lands and Play is opened again, not at once; the countdown, a hook of Play's own (`useCountdown`), could become a strata-react button if another app wants one.
 
+15. **Ramping up on every right answer (0.19.0, in review).** The owner, watching a learner answer a few right: it should ramp far more aggressively, stepping up every time an answer is right, so it finds the current level quickly.
+    - Done: policy `utility@9`. A kind's stair steps up after every right first answer and down after every miss (`model.Params.up`, `down`: 1 and 1; 3 and 2 before, `SLOW_STAIR`, which replay uses for older decisions). An open kind whose skill is not yet known gets a bonus (`Weights.ahead`), so the next thing to learn comes before more rounds of what is known. An all-right learner opens every practice kind in about 60 rounds (about 250 under `utility@8`); simulated learners know 13.86 skills after 6 sessions (13.52 with the quick stair alone, 13.46 under `utility@8`, 13.39 at random).
+    - Left for later: one up and one down settles where about half the first answers at a step boundary go right; the frustration guard (an easier step after two misses, a break after three) is what keeps it kind. Watch real sessions for too many misses.
+
 P5 (field validation) is a study, not code.
 
 ## Decisions (2026-11-23)

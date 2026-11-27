@@ -2499,7 +2499,7 @@
       "title": "Learner Id"
      },
      "policy": {
-      "default": "utility@8",
+      "default": "utility@9",
       "title": "Policy",
       "type": "string"
      },

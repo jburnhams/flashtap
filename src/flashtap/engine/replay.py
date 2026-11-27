@@ -25,8 +25,9 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from flashtap import rounds
-from flashtap.engine.model import Graph, Params, fold
+from flashtap.engine.model import SLOW_STAIR, Graph, Params, fold
 from flashtap.engine.policy import (
+    QUICK_FROM,
     REPLAYS,
     Action,
     Choice,
@@ -107,7 +108,8 @@ def remake(
     # made before some first steps' skills joined the graph: remade without them
     if later := later_skills(policy.version):
         g = g.without(later)
-    k = fold(as_of(events, d.at), g, Params(), told_as_of(told, d.at))
+    params = Params() if policy.version >= QUICK_FROM else Params(**SLOW_STAIR)
+    k = fold(as_of(events, d.at), g, params, told_as_of(told, d.at))
     past = past_of(started, decisions, events, d.session_id, d.at, d.seq)
     likes = likes_as_of(ratings, decisions, d.at)
     return decide(k, past, config, f"{d.session_id}:{d.seq}", d.at, policy=policy, likes=likes)

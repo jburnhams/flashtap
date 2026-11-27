@@ -515,6 +515,8 @@ def test_sessions_that_probe_replay_exactly_and_utility_4_ignores_the_tally(
     out = sessions.evaluate(db_session, sessions.ReplayIn(learner_id=fox), G)
     assert (out.reproduced, out.differences) == (out.decisions, [])
     monkeypatch.setattr(sessions, "decide", functools.partial(policy.decide, policy=policy.kept("utility@4")))
+    # and on the slower stairs of its day, as replay folds it
+    monkeypatch.setattr(sessions, "fold", functools.partial(fold, params=model.Params(**model.SLOW_STAIR)))
     # utility@4 decided on the graph before the first steps' skills joined it, as replay remakes it
     assert play(db_session, fox, T0 + timedelta(days=1), G.without(policy.later_skills(6))) == 0
     monkeypatch.undo()
