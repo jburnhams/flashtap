@@ -528,6 +528,31 @@ def events(db: Session, learner_id: str) -> list[Event]:
     ]
 
 
+# The running score
+
+
+class RunningScore(BaseModel):
+    """`GET /api/learners/{id}/score`: every round the learner has answered, ever, by whether the first answer was
+    right. All time, not per session: the number a child sees grow. Struck rounds are left out (a grown-up said they
+    were not the learner's answer), and so are rounds never answered, which are never recorded."""
+
+    right: int
+    wrong: int
+
+
+def score(db: Session, learner_id: str) -> RunningScore:
+    get_learner(db, learner_id)
+    # Counted in the database, not from `events`: the score is read on every visit to Play, and the log grows forever.
+    q = (
+        select(Attempt.first_correct, func.count())
+        .outerjoin(Tombstone, Tombstone.event_id == Attempt.event_id)
+        .where(Attempt.learner_id == learner_id, Tombstone.event_id.is_(None))
+        .group_by(Attempt.first_correct)
+    )
+    counts = {bool(right): n for right, n in db.execute(q)}
+    return RunningScore(right=counts.get(True, 0), wrong=counts.get(False, 0))
+
+
 # Reports
 
 

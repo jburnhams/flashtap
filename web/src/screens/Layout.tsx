@@ -6,11 +6,13 @@
 // the grown-up, so they can check before closing the tab; the queue starts here, so what an earlier visit left is sent
 // whichever screen opens first. Every answer the server takes, whenever it goes (at once, on a retry, or left by an
 // earlier visit), refreshes the learners' records, so a report never lags behind what was sent.
+// The grown-up's screens keep to a reading width; Play takes the whole main region and centres itself in it (the
+// owner, 2026-11-27: "grow with viewport to fill ... centre content"), since a round is pictures, not lines to read.
 import { useQueryClient } from '@tanstack/react-query'
 import { AudioLines, Gamepad2, Library, Settings, Users } from 'lucide-react'
 import { useEffect } from 'react'
-import { Outlet } from 'react-router'
-import { AppShell, OutboxStatus, useOutboxStarted, type NavItem } from 'strata-react'
+import { Outlet, useMatch } from 'react-router'
+import { AppShell, cn, OutboxStatus, useOutboxStarted, type NavItem } from 'strata-react'
 import { answers } from '../api'
 import { VoiceProvider } from '../voice'
 
@@ -33,10 +35,11 @@ function useAnswers() {
 
 export function Layout() {
   useAnswers()
+  const play = useMatch({ path: '/', end: true }) !== null
   return (
     <VoiceProvider>
       <AppShell product={product} nav={nav}>
-        <div className="grid max-w-5xl gap-8 pb-16">
+        <div className={cn('grid gap-8 pb-16', !play && 'max-w-5xl')}>
           <OutboxStatus outbox={answers} noun="answer" />
           <Outlet />
         </div>

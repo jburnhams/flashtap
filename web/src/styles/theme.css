@@ -7,8 +7,10 @@
 
 :root {
   /* Pictures on ChoiceGrid tiles and above them: larger than strata-react's default step, which
-     drew a 35px emoji in a 138px phone tile. A picture fills about a third of its tile at any width. */
-  --type-picture-size: clamp(3rem, 2rem + 6vw, 5rem);
+     drew a 35px emoji in a 138px phone tile. A picture fills about a third of its tile at any width, and keeps
+     growing on a wide screen, where the tiles stretch to fill the row (the owner, 2026-11-27: "grow with viewport
+     to fill"): 48px on a phone, about 110px at 1440px. */
+  --type-picture-size: clamp(3rem, 1rem + 6.5vw, 8rem);
 
   /* Status: pale tint + dark ink of one hue. These are the kiln-room values from strata-react's
      fixture theme; on this palette's grounds each ink measures at least 6.0:1 on its tint and 6.6:1
@@ -49,4 +51,10 @@
   --font-sans: "Andika", "Twemoji", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Andika", "Twemoji", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, monospace;
+}
+
+/* The picture to match, above the answers: a step larger than the pictures on the tiles, so it reads as the one
+   the round is about (the owner, 2026-11-27: "item to match slightly larger"). About a third larger at any width. */
+@utility picture-lead {
+  --type-picture-size: clamp(4rem, 1.25rem + 8.75vw, 10.75rem);
 }

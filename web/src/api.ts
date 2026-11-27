@@ -45,6 +45,8 @@ export type ContentSummary = Schema<'ContentSummary'>
 
 /** A learner: a random id and a nickname, nothing else (AGENTS.md rule 8). */
 export type LearnerRow = Schema<'LearnerRow'>
+/** A learner's running score, all time: rounds whose first answer was right, and wrong. */
+export type Score = Schema<'RunningScore'>
 export type SkillState = Schema<'State'>
 /** Derived reporting states (src/flashtap/learners/report.py), lowest first. Unobserved is not "not mastered". */
 export const SKILL_STATES = ['unobserved', 'introduced', 'emerging', 'independent', 'generalised', 'retained'] as const satisfies readonly SkillState[]
@@ -121,6 +123,9 @@ export const keys = {
   next: (session: string, seq: number) => ['next', session, seq],
   learners: ['learners'],
   profile: (id: string) => ['learners', id, 'profile'],
+  // Not under ['learners']: the shell refreshes those on every answer sent, and Play adds this visit's answers to the
+  // score it read when the learner sat down (src/score.tsx), so reading it again mid-visit would count them twice.
+  score: (id: string, visit: string) => ['score', id, visit],
   evidence: (id: string, skill: string) => ['learners', id, 'evidence', skill],
   voice: ['voice'],
   talk: (id: string) => ['learners', id, 'talk'],
@@ -150,6 +155,7 @@ export const api = {
   addLearner: (nickname: string) => http.post('/api/learners', { json: { nickname } }),
   deleteLearner: (id: string) => http.delete('/api/learners/{learner_id}', { path: { learner_id: id } }),
   profile: (id: string) => http.get('/api/learners/{learner_id}/profile', { path: { learner_id: id } }),
+  score: (id: string) => http.get('/api/learners/{learner_id}/score', { path: { learner_id: id } }),
   evidence: (id: string, skill: string) => http.get('/api/learners/{learner_id}/skills/{skill}/evidence', { path: { learner_id: id, skill } }),
   startSession: (learnerId: string) => http.post('/api/v1/sessions', { json: { learner_id: learnerId } }),
   // The server answers a round's played kind (never Mixed), as for `round` above.
@@ -164,7 +170,7 @@ export const api = {
 export const exportUrl = (id: string) => withBase(`${paths.learners}/${encodeURIComponent(id)}/export`)
 
 // The server's own limits (src/flashtap/rounds.py), checked here too so the field says why before sending.
-export const limits = { minChoices: 2, maxChoices: 8 } as const
+export const limits = { minChoices: 2, maxChoices: 8, maxNextAfter: 10 } as const
 
 // Answers and faces wait on the device until the server takes them (spec §14: "queue events offline; server
 // reconciles idempotently"). Every attempt carries its own event id, which the server dedupes on, so an answer sent

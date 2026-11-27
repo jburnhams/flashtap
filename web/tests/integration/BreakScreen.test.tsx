@@ -63,6 +63,22 @@ describe('Break, Play inside another app', () => {
     expect(mock.attempts[0]).toMatchObject({ learner_id: FOX, asked: 'matching' })
   })
 
+  it('shows the learner’s running score, the same one Play shows, and goes on by itself as Play does', async () => {
+    mock.settings = { ...mock.settings, next_after: 1 }
+    const { user } = openApp(`/break?learner=${FOX}&mode=matching&rounds=1`)
+    const score = () => screen.getByRole('list', { name: 'Score' }).textContent
+    await vi.waitFor(() => expect(score()).toBe('12 right3 wrong'))
+    await user.click(await screen.findByRole('row', { name: tile('cow') }))
+    expect(score()).toBe('13 right3 wrong')
+    expect(await over('1\\sround')).toBeInTheDocument() // no tap on Next: it counted down
+  })
+
+  it('shows no score for nobody', async () => {
+    openApp('/break?mode=matching')
+    await screen.findByRole('row', { name: tile('cow') })
+    expect(screen.queryByRole('list', { name: 'Score' })).not.toBeInTheDocument()
+  })
+
   it('says what is missing from the link', async () => {
     openApp('/break')
     expect(await screen.findByText('Choose who is playing')).toBeInTheDocument()

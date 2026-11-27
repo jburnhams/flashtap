@@ -7,7 +7,7 @@
 // state: `server.use(roundError)` in a test, `msw.use(roundError)` in a story's beforeEach,
 // `states: { error: [roundError] }` in the visual config.
 import { delay, http, HttpResponse } from 'msw'
-import { isMode, paths, type AttemptIn, type TalkOut, type LearnerRow, type Next, type OfferOut, type OverrideIn, type Round, type Settings, type Told } from '../api'
+import { isMode, paths, type AttemptIn, type TalkOut, type LearnerRow, type Next, type OfferOut, type OverrideIn, type Round, type Score, type Settings, type Told } from '../api'
 import { content } from './content'
 import { defaultSettings, modes, rounds } from './fixtures'
 import { countingEvidence, foxProfile, FOX, learners, owlProfile } from './learners'
@@ -15,6 +15,9 @@ import { voice } from './voice'
 
 /** A round of a kind, a choice between two kinds (`pick:a/b`), a break or the end. `+rate` asks for the faces after it. */
 type Plan = Round['mode'] | `${Round['mode']}+rate` | `pick:${Round['mode']}/${Round['mode']}` | 'break' | 'end'
+/** Fox has played before, so a score shows both colours; anyone else starts at nothing. */
+const scores: Record<string, Score> = { [FOX]: { right: 12, wrong: 3 } }
+
 const PLAN: Plan[] = ['counting', 'give', 'break', 'matching', 'end']
 
 /** What src/flashtap/talk.py `pools` answers before any line is written: each moment's fixed line, no intros. */
@@ -46,6 +49,8 @@ export const mock = {
   /** Requests for rounds to keep on the device (GET /api/rounds), and how many each asked for. */
   keptRequests: [] as number[],
   learners: [...learners] as LearnerRow[],
+  /** Each learner's running score as the server holds it (none: nothing answered yet). */
+  scores: { ...scores } as Record<string, Score>,
   /** Attempts the app sent, in order: a test reads what Play reported. */
   attempts: [] as AttemptIn[],
   /** Event ids struck out, with the reason. */
@@ -76,6 +81,7 @@ export function resetMock() {
   mock.roundRequests = 0
   mock.keptRequests = []
   mock.learners = [...learners]
+  mock.scores = { ...scores }
   mock.attempts = []
   mock.struck = []
   mock.plan = [...PLAN]
@@ -197,6 +203,11 @@ export const handlers = [
     if (!who) return HttpResponse.json({ detail: `No learner ${String(params.id)}: removed, or never added.` }, { status: 404 })
     return HttpResponse.json(who.id === FOX ? foxProfile : { ...owlProfile, learner: who })
   }),
+  http.get(at(`${paths.learners}/:id/score`), ({ params }) => {
+    const id = String(params.id)
+    if (!mock.learners.some(x => x.id === id)) return HttpResponse.json({ detail: `No learner ${id}: removed, or never added.` }, { status: 404 })
+    return HttpResponse.json(mock.scores[id] ?? { right: 0, wrong: 0 })
+  }),
   http.get(at(`${paths.overrides}/:id/talk`), () => HttpResponse.json(mock.talk)),
   http.get(at(`${paths.learners}/:id/skills/:skill/evidence`), ({ params }) => HttpResponse.json(params.id === FOX && params.skill === 'maths.counting.objects' ? countingEvidence : [])),
   http.post(at(paths.attempts), async ({ request }) => {
@@ -285,6 +296,8 @@ export const learnersError = http.get(at(paths.learners), down)
 export const learnersNone = http.get(at(paths.learners), () => HttpResponse.json([]))
 /** Learners added but none has played yet. */
 export const learnersUnplayed = http.get(at(paths.learners), () => HttpResponse.json(learners.map(x => ({ ...x, attempts: 0, last_played: null }))))
+export const scoreLoading = http.get(at(`${paths.learners}/:id/score`), async () => { await delay('infinite'); return HttpResponse.json(null) })
+export const scoreError = http.get(at(`${paths.learners}/:id/score`), down)
 export const profileLoading = http.get(at(`${paths.learners}/:id/profile`), async () => { await delay('infinite'); return HttpResponse.json(null) })
 export const profileError = http.get(at(`${paths.learners}/:id/profile`), down)
 export const evidenceLoading = http.get(at(`${paths.learners}/:id/skills/:skill/evidence`), async () => { await delay('infinite'); return HttpResponse.json(null) })

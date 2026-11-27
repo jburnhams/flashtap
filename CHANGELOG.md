@@ -4,6 +4,40 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-27
 
+**Screenshots of Play no longer depend on when they are taken (strata-react 2.0.1, branch `claude/project-thread-fwkjyk`)**
+
+CI's visual check failed at random on the phone Play shots: the pulse is frozen in a screenshot, but the lit tile's border was not, and a shot that took longer than one beat caught a random tile lit (rewriting the baselines on the runner did not help; the next run differed again). strata-react 2.0.1 (#403) lights nothing under reduced motion, which the screenshots use; 2.0.0 is only a test dependency bump there.
+
+- `web/package.json`, `web/package-lock.json`: strata-react `^2.0.1`.
+- Visual baselines: the six phone Play, Counting and Give shots show no lit tile; `screens-play--sort-by-sound--dark` and `sounds--record--wide--dark` rewritten on the merged code. Three runs in a row match all 216.
+
+**The Play screen fills the window, its tiles take turns to pulse, and the picture to match is larger (branch `claude/project-thread-fwkjyk`)**
+
+Asked for: "arrange screen better - grow with viewport to fill (tho with extra padding). Centre content. Pulse randomly alternately the answer buttons to make clearer which to press, with item to match slightly larger", and "Add and improve components to strata react as required". The stretching and the pulse are strata-react's (#400, 1.3.28: `ChoiceGrid` and `PlaceBoard` `stretch` and `beckon`, tile pictures sized to the tile), not built here.
+
+- `web/package.json`, `web/package-lock.json`: strata-react `^1.3.28` (the lockfile gains the Fontsource faces strata-react depends on since 1.3.x; Flashtap adds no dependency).
+- `web/src/screens/Layout.tsx`: Play (the `/` route) is not held to the grown-up screens' `max-w-5xl`. `web/src/screens/PlayScreen.tsx`: `PLAY_AREA`, a centred column up to `max-w-7xl` with wider side padding as the window grows; the tile grids `stretch` to fill their row; Choose and the pile of an arrangement `beckon`, one tile at a time at random, until the round is answered; the shown picture is a step larger (`picture-lead`). `web/src/screens/BreakScreen.tsx`: the same area.
+- `web/src/styles/theme.css`: `--type-picture-size` grows with the window (3 to 8 rem), and `picture-lead` for the picture to match (4 to 10.75 rem).
+- `web/tests/integration/PlayScreen.test.tsx`: the tiles fill the row and one at a time pulses until the round is answered.
+- Visual baselines: every Play and Break shot (wider tiles, larger pictures, centred); the grown-up screens move by a few dozen pixels on control corners, from the strata-react update.
+
+**Review fix (Codex on #61): play waits for the learner's total before the first round (branch `claude/project-thread-fwkjyk`)**
+
+Codex found that an answer given while the total was still being read could be counted by the server's total and by this visit's count, for the rest of the visit.
+
+- `web/src/score.tsx`: `ScoreRead` shows the round's skeleton until the total is read or could not be; `web/src/screens/PlayScreen.tsx`, `BreakScreen.tsx` wrap the game in it. `web/tests/integration/PlayScreen.test.tsx`: no round is fetched while the total is on its way.
+
+**On to the next round by itself, and a running score in green and red (0.18.0, branch `claude/project-thread-fwkjyk`)**
+
+Asked for: "Once a question done then it should do next automatically after a short pause (count down on button from 3). Store a running score per user and display at all times - green correct and red wrong counts". Read as: the score is per learner and all time (not per sitting), and counts answers given offline. It goes against the spec's "no streak pressure" (§11, §17), which Play followed with no score at all; there is still no streak.
+
+- `src/flashtap/learners/store.py`: `RunningScore` and `score()`, the learner's attempts counted in the database by `first_correct`, struck ones left out. `src/flashtap/server/app.py`: **`GET /api/learners/{id}/score`**. `src/flashtap/settings.py`: `next_after`, 0 to 10 seconds, default 3.
+- `web/src/score.tsx` (**new**): `Scored` keeps a learner's score for the screen inside (read once per visit, under its own query key so the shell's refresh on every send does not count this visit twice), `useTally` counts each kept answer by its event id at once, and an answer the outbox lists as refused comes off; `RunningScore` draws two big pills in the success and danger roles, with a tick and a cross ("12 right", "3 wrong").
+- `web/src/screens/PlayScreen.tsx`: the score beside the selects for a recorded learner; each round reports whether its first answer was right; `useCountdown` and `NextAfter`: once a round is over Next shows the seconds left (drawn, not part of its name) and plays the next round, holding until a face is tapped when the faces are asked. The opening comment no longer says there is no score. `web/src/screens/BreakScreen.tsx`: the same pace and score. `web/src/screens/SettingsScreen.tsx`: "Next round after" on the Play tab.
+- `web/src/api.ts`: `Score`, `api.score`, `keys.score`, `limits.maxNextAfter`. `web/openapi.json`, `web/src/api.generated.ts` regenerated. `web/src/mocks/handlers.ts`: the score route (Fox 12 and 3), `scoreLoading`, `scoreError`; `web/src/mocks/fixtures.ts`: `next_after: 0`, so a finished round waits in tests, stories and screenshots.
+- Tests: `tests/unit/test_server.py` (the score: first answers, all time, a retry once, struck left out, 404), `tests/unit/test_settings.py`; `web/tests/integration/PlayScreen.test.tsx` (the score from the server, each answer at once, an arrangement, offline and refused, another learner and nobody, an unreadable total; the countdown, a tap, the faces), `BreakScreen.test.tsx`, `SettingsScreen.test.tsx`.
+- `pyproject.toml`, `uv.lock`: 0.18.0 (numbered after the talk PR, which merged first as 0.17.0). `README.md`, `docs/overview.md`, `docs/implementation-plan.md` (item 14), `docs/progress.md`.
+- Visual baselines (`web/tests/visual/baselines/`): every Play and Break shot with Fox playing shows the score (Fox 12 and 3, 13 after the right tap); the Settings Play tab has the new field. Shots with nobody playing are unchanged. Written in Chromium 158.0.8127.36 (`.strata-visual.json`).
 **Review fixes (Codex on #62): short pools are written again, and a visit reads the clips list afresh (branch `claude/project-thread-had1h8`)**
 
 - `src/flashtap/talk.py`: `Wrote.short`, the moments answered with too few lines that pass to fill their pool. `src/flashtap/jobs.py`: `talk_write` runs again later for them (up to the queue's retries), instead of ending done with empty pools.

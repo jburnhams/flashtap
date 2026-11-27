@@ -938,6 +938,12 @@
       "title": "Mode",
       "type": "string"
      },
+     "next_after": {
+      "maximum": 10.0,
+      "minimum": 0.0,
+      "title": "Next After",
+      "type": "integer"
+     },
      "rate_every": {
       "maximum": 20.0,
       "minimum": 0.0,
@@ -967,6 +973,7 @@
      "mode",
      "choices",
      "tries",
+     "next_after",
      "session_rounds",
      "session_minutes",
      "break_every",
@@ -2703,6 +2710,25 @@
     "title": "Round",
     "type": "object"
    },
+   "RunningScore": {
+    "description": "`GET /api/learners/{id}/score`: every round the learner has answered, ever, by whether the first answer was\nright. All time, not per session: the number a child sees grow. Struck rounds are left out (a grown-up said they\nwere not the learner's answer), and so are rounds never answered, which are never recorded.",
+    "properties": {
+     "right": {
+      "title": "Right",
+      "type": "integer"
+     },
+     "wrong": {
+      "title": "Wrong",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "right",
+     "wrong"
+    ],
+    "title": "RunningScore",
+    "type": "object"
+   },
    "Score": {
     "properties": {
      "attempts": {
@@ -4222,6 +4248,45 @@
      }
     },
     "summary": "Get Profile"
+   }
+  },
+  "/api/learners/{learner_id}/score": {
+   "get": {
+    "operationId": "get_score_api_learners__learner_id__score_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "learner_id",
+      "required": true,
+      "schema": {
+       "title": "Learner Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RunningScore"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Score"
    }
   },
   "/api/learners/{learner_id}/skills/{skill}/evidence": {

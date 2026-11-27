@@ -243,6 +243,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/learners/{learner_id}/score": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Score */
+        get: operations["get_score_api_learners__learner_id__score_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/learners/{learner_id}/skills/{skill}/evidence": {
         parameters: {
             query?: never;
@@ -862,6 +879,8 @@ export interface components {
              * @enum {string}
              */
             mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "hear_find" | "colour_box" | "shape_box" | "which_group" | "quick_dots" | "one_more" | "biggest" | "number_card" | "small_letters" | "letter_box" | "same_sound" | "first_sounds" | "same_picture" | "same_colour" | "same_letter" | "same_number" | "picture_twins" | "colour_twins" | "letter_twins" | "number_twins" | "same_shape" | "shape_twins" | "mixed";
+            /** Next After */
+            next_after: number;
             /** Rate Every */
             rate_every: number;
             /** Session Minutes */
@@ -1499,6 +1518,18 @@ export interface components {
             tries: number | null;
             /** Version */
             version: number;
+        };
+        /**
+         * RunningScore
+         * @description `GET /api/learners/{id}/score`: every round the learner has answered, ever, by whether the first answer was
+         *     right. All time, not per session: the number a child sees grow. Struck rounds are left out (a grown-up said they
+         *     were not the learner's answer), and so are rounds never answered, which are never recorded.
+         */
+        RunningScore: {
+            /** Right */
+            right: number;
+            /** Wrong */
+            wrong: number;
         };
         /** Score */
         Score: {
@@ -2283,6 +2314,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Profile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_score_api_learners__learner_id__score_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                learner_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunningScore"];
                 };
             };
             /** @description Validation Error */

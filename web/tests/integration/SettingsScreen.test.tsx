@@ -38,6 +38,30 @@ describe('Settings', () => {
     expect(mock.settings.tries).toBe(0)
   })
 
+  it('saves how long Next counts down, and an empty one as 0, which waits for a tap', async () => {
+    mock.settings.next_after = 3
+    const { user } = openApp('/settings')
+    const after = await screen.findByRole('textbox', { name: 'Next round after' })
+    expect(after).toHaveValue('3')
+    expect(after).toHaveAccessibleDescription(/0 means wait for a tap on Next\.$/)
+    await user.clear(after)
+    await user.type(after, '5')
+    await user.tab()
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(await screen.findByText('Saved', { selector: '[role=status]' })).toBeInTheDocument()
+    expect(mock.settings.next_after).toBe(5)
+  })
+
+  it('saves an empty Next round after as 0, waiting for a tap', async () => {
+    mock.settings.next_after = 3
+    const { user } = openApp('/settings')
+    await user.clear(await screen.findByRole('textbox', { name: 'Next round after' }))
+    await user.tab()
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(await screen.findByText('Saved', { selector: '[role=status]' })).toBeInTheDocument()
+    expect(mock.settings.next_after).toBe(0)
+  })
+
   it('says what happened when saving fails', async () => {
     server.use(saveSettingsFails)
     const { user } = openApp('/settings')
