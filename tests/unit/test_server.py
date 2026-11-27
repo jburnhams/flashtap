@@ -36,16 +36,16 @@ def test_landing_page_and_built_static_index(tmp_path, monkeypatch):
 def test_modes_lists_every_mode(client):
     modes = client.get("/api/modes").json()
     assert [m["mode"] for m in modes] == [
-        "same_picture", "same_colour", "same_letter", "same_number",
+        "same_picture", "same_colour", "same_shape", "same_letter", "same_number",
         "matching", "colours", "shapes", "letters", "counting",
         "missing", "quick_look", "listen", "give", "order", "capitals", "sort_sounds", "sounds",
         "hear_find", "colour_box", "shape_box", "which_group", "quick_dots", "one_more", "biggest", "number_card",
         "small_letters", "letter_box", "same_sound", "first_sounds",
-        "picture_twins", "colour_twins", "letter_twins", "number_twins", "mixed",
+        "picture_twins", "colour_twins", "shape_twins", "letter_twins", "number_twins", "mixed",
     ]  # fmt: skip
     assert modes[0] == {
         "mode": "same_picture",
-        "name": "Same picture",
+        "name": "Same animal",
         "description": modes[0]["description"],
         "mechanic": "select_one",
     }
@@ -255,7 +255,7 @@ def test_engine_sessions_next_and_replay(client):
     r = client.post("/api/v1/sessions", json={"learner_id": fox})
     assert r.status_code == 201
     s = r.json()
-    assert s["policy"] == "utility@7"
+    assert s["policy"] == "utility@8"
     assert s["config"] == {
         "choices": 3,
         "tries": 1,

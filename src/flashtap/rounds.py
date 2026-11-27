@@ -130,13 +130,20 @@ TEMPLATES: dict[Mode, Template] = {
         # First steps (0.14.0, packs/starter.toml): the easiest rounds, first in every list, where a new learner
         # begins. Two tiles at the first step, never more than four: the engine opens the other kinds only once these
         # are shown (engine/policy.py, "Opening rounds by success").
+        # 0.15.0: the very first rounds are numbers to five, colours, shapes and animals (the owner's words), so Same
+        # picture shows animals only (version 2) and Same shape joins; Same letter stays in this list but waits on the
+        # first words (engine/policy.py, `FIRST_WORDS`).
         Template(
-            Mode.SAME_PICTURE, 1, Mechanic.SELECT_ONE, "Same picture", "See a picture and tap the same one",
+            Mode.SAME_PICTURE, 2, Mechanic.SELECT_ONE, "Same animal", "See an animal and tap the same one",
             (("language.matching.picture", P),), _plain(starter.same_picture), _picks(2, 3, 4),
         ),
         Template(
             Mode.SAME_COLOUR, 1, Mechanic.SELECT_ONE, "Same colour", "See a colour and tap the one of the same colour",
             (("language.matching.colour", P),), _plain(starter.same_colour), _picks(2, 3, 4),
+        ),
+        Template(
+            Mode.SAME_SHAPE, 1, Mechanic.SELECT_ONE, "Same shape", "See a shape and tap the same shape",
+            (("maths.geometry.same_shape", P),), _plain(starter.same_shape), _picks(2, 3, 4),
         ),
         Template(
             Mode.SAME_LETTER, 1, Mechanic.SELECT_ONE, "Same letter", "See a letter and tap the same letter",
@@ -273,13 +280,18 @@ TEMPLATES: dict[Mode, Template] = {
         ),
         # The first steps' transfer kinds (0.14.0): the same matching by look, as pairs to put together.
         Template(
-            Mode.PICTURE_TWINS, 1, Mechanic.MATCH_PAIRS, "Picture twins", "Put each picture on the same picture",
+            Mode.PICTURE_TWINS, 2, Mechanic.MATCH_PAIRS, "Animal twins", "Put each animal on the same animal",
             (("language.matching.picture", P),), _plain(starter.picture_twins),
             tuple(Level(n, f"{n} pairs") for n in (2, 3)), held_out=True,
         ),
         Template(
             Mode.COLOUR_TWINS, 1, Mechanic.MATCH_PAIRS, "Colour twins", "Put each shape on the square of its colour",
             (("language.matching.colour", P),), _plain(starter.colour_twins),
+            tuple(Level(n, f"{n} pairs") for n in (2, 3)), held_out=True,
+        ),
+        Template(
+            Mode.SHAPE_TWINS, 1, Mechanic.MATCH_PAIRS, "Shape twins", "Put each shape on the same shape in another colour",
+            (("maths.geometry.same_shape", P),), _plain(starter.shape_twins),
             tuple(Level(n, f"{n} pairs") for n in (2, 3)), held_out=True,
         ),
         Template(
@@ -311,7 +323,9 @@ PICTURES: dict[Mode, str] = {
     Mode.SAME_LETTER: "\U0001f170\ufe0f",  # A button
     Mode.SAME_NUMBER: "1\ufe0f\u20e3",  # keycap 1
     Mode.PICTURE_TWINS: "\U0001f46f",  # people with bunny ears: a pair
+    Mode.SAME_SHAPE: "\U0001f7e5",  # red square
     Mode.COLOUR_TWINS: "\U0001f308",  # rainbow
+    Mode.SHAPE_TWINS: "\U0001f536",  # orange diamond
     Mode.LETTER_TWINS: "\U0001f4dd",  # memo
     Mode.NUMBER_TWINS: "\U0001f3b2",  # die
     Mode.MATCHING: "\U0001f404",  # cow

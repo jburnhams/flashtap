@@ -1,14 +1,16 @@
 # First steps: the easiest rounds there are, where a new learner begins (0.14.0).
 #
-# Each skill here is matching by look: a picture, a colour, a letter or a number is shown, and the learner taps the
-# one that is the same. Nothing has to be named, counted or heard on its own, so a learner who has none of the words
+# Each skill here is matching by look: an animal, a colour, a shape, a letter or a number is shown, and the learner
+# taps the one that is the same. Version 2 (0.15.0): the picture is always an animal, and the same shape joins, so a
+# new learner's first rounds are numbers to five, colours, shapes and animals; letters wait until the first words are
+# shown (engine/policy.py, `FIRST_WORDS`), which is the engine's rule, not an edge here. Nothing has to be named, counted or heard on its own, so a learner who has none of the words
 # yet can still answer, and a right answer is evidence the next rounds can stand on. Each is a strong prerequisite of
 # a skill a practice round assesses, so the engine opens those rounds only once a learner has shown these (engine/
 # policy.py, "Opening rounds by success"). These edges are Flashtap's judgement, not a source's: matching what is seen
 # comes before finding the thing for a heard word. They are for a teacher to check with the rest (docs/content.md).
 
 pack = "starter"
-version = 1
+version = 2
 title = "First steps: matching by look"
 status = "draft"
 
@@ -19,9 +21,9 @@ title = "Matching by look"
 
 [[skills]]
 id = "language.matching.picture"
-title = "Find the same picture"
+title = "Find the same animal"
 strand = "language.matching"
-description = "See a picture and tap the one that is the same, with no word to know."
+description = "See an animal and tap the one that is the same, with no word to know."
 edges = [
   { relation = "prerequisite_strong", to = "language.vocabulary.receptive", confidence = "medium", source = "src.flashtap_judgement", note = "Finding a named picture asks for the matching as well as the word." },
 ]
@@ -53,4 +55,13 @@ description = "See a numeral and tap the same numeral, with no number name to kn
 dimensions = { number_range = [1, 5], representation = ["numerals"] }
 edges = [
   { relation = "prerequisite_strong", to = "maths.numerals.recognise", confidence = "medium", source = "src.flashtap_judgement", note = "Seeing that two numerals are the same comes before reading them." },
+]
+
+[[skills]]
+id = "maths.geometry.same_shape"
+title = "Find the same shape"
+strand = "maths.geometry"
+description = "See a shape and tap the same shape, whatever its colour, with no shape name to know."
+edges = [
+  { relation = "prerequisite_strong", to = "maths.geometry.name_2d", confidence = "medium", source = "src.flashtap_judgement", note = "Seeing that two shapes are the same comes before naming them." },
 ]

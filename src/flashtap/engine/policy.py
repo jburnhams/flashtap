@@ -301,7 +301,9 @@ class Policy:
     # 5 (0.12.0): checking misconceptions. 4 and before give no probe bonus and draw no probe seed, so they replay.
     # 6 (0.13.0): transfer kinds and probes. 5 and before weigh only the practice kinds (`OFFERS`), so they replay.
     # 7 (0.14.0): the first-steps kinds, and kinds opened by success. 6 and before weigh neither (`OFFERS`, `OPENS_FROM`).
-    version: int = 7
+    # 8 (0.15.0): Same shape and Shape twins; letter kinds wait on the first words, sound kinds on Capitals too. 7
+    # weighs neither new kind and closes no kind for them (`OFFERS`, `WORDS_FROM`).
+    version: int = 8
     weights: Weights = field(default_factory=Weights)
     tau: float = 0.15  # softmax temperature: lower picks the best more often
     epsilon: float = 0.1  # share of every pick that is uniform over the eligible candidates
@@ -319,7 +321,7 @@ class Policy:
 # The kinds each version weighs. A new kind changes every decision's candidates and chances, so it comes with a new
 # version, and a logged decision is remade against the kinds its own version had.
 _ALL = frozenset(s.mode for s in SHAPES)
-STARTER = frozenset(  # the first-steps kinds and their transfer kinds (0.14.0)
+_ADDED_7 = frozenset(  # the first-steps kinds and their transfer kinds as 0.14.0 added them
     {
         Mode.SAME_PICTURE,
         Mode.SAME_COLOUR,
@@ -331,7 +333,11 @@ STARTER = frozenset(  # the first-steps kinds and their transfer kinds (0.14.0)
         Mode.NUMBER_TWINS,
     }
 )
-_BEFORE_STARTER = _ALL - STARTER
+_ADDED_8 = frozenset({Mode.SAME_SHAPE, Mode.SHAPE_TWINS})  # 0.15.0
+# The first steps from utility@8: what a new learner can play, as they wait on nothing (numbers to five, colours,
+# shapes and animals, the owner's list). Same letter and Letter twins left them: letters wait on the first words.
+STARTER = (_ADDED_7 | _ADDED_8) - {Mode.SAME_LETTER, Mode.LETTER_TWINS}
+_BEFORE_STARTER = _ALL - _ADDED_7 - _ADDED_8
 _PRACTICE = _BEFORE_STARTER - set(rounds.HELD_OUT)
 _BEFORE_SOUNDS = _PRACTICE - {Mode.SOUNDS}
 OFFERS: dict[str, frozenset[Mode]] = {
@@ -341,20 +347,51 @@ OFFERS: dict[str, frozenset[Mode]] = {
     "utility@4": _PRACTICE,
     "utility@5": _PRACTICE,
     "utility@6": _BEFORE_STARTER,
-    "utility@7": _ALL,
+    "utility@7": _ALL - _ADDED_8,
+    "utility@8": _ALL,
 }
 STEPS_FROM = 4  # the first version that chooses a step of difficulty
 PROBES_FROM = 5  # the first version that checks misconceptions
 TRANSFER_FROM = 6  # the first version that checks transfer
 OPENS_FROM = 7  # the first version that opens kinds by success
-# The first steps' skills: in the graph from utility@7 on, so an older decision is remade on the graph without them
-# (replay.py), as it was made; they are only ever prerequisites, so leaving them out restores it exactly.
-STARTER_SKILLS = frozenset(s.primary for s in SHAPES if s.mode in STARTER)
+WORDS_FROM = 8  # the first version that keeps letters until the first words are shown
+# Skills that joined the graph with a version: an older decision is remade on the graph without them (replay.py), as
+# it was made; they are only ever prerequisites, so leaving them out restores it exactly.
+SKILLS_SINCE: dict[int, frozenset[str]] = {
+    v: frozenset(s.primary for s in SHAPES if s.mode in added) for v, added in ((7, _ADDED_7), (8, _ADDED_8))
+}
+# Every skill that joined after utility@6: what a decision before the first steps is remade without.
+STARTER_SKILLS = frozenset[str]().union(*SKILLS_SINCE.values())
+
+
+def later_skills(version: int) -> frozenset[str]:
+    """The skills that joined the graph after policy `version`: a decision it made is remade without them."""
+    return frozenset[str]().union(*(skills for v, skills in SKILLS_SINCE.items() if version < v))
+
+
 # The skills a practice kind is written to assess: the ones a learner can show, and so the only ones a kind waits on
 # (a skill no practice kind teaches, such as reading a numeral, could never be shown and would close a kind for good).
 TAUGHT = frozenset(s.primary for s in SHAPES if s.mode not in rounds.HELD_OUT)
+# What every letter kind waits on from utility@8 (§13 "progress when mastery evidence ... is sufficient"): the first
+# words, each a practice kind's primary: animals and other things named (Matching), colours, shapes and counting to a
+# few. The owner found letter rounds ("What starts with the letter H?") came too soon after Same letter and Same
+# picture; letters are not a prerequisite of these in any source, so this is the scheduler's order, not a graph edge
+# (an edge would also move the estimates, `Knowledge._spread`).
+FIRST_WORDS = frozenset(
+    {
+        "language.vocabulary.receptive",
+        "language.vocabulary.colours",
+        "maths.geometry.name_2d",
+        "maths.counting.objects",
+    }
+)
+# And what every sound kind waits on too (a phoneme or a letter's sound, Sounds, Listen, Sort by sound, Letters):
+# the letters themselves, matched small to capital, so sounds come after letters and never with them.
+LETTERS_KNOWN = frozenset({"literacy.letters.case_match"})
+_SOUND_STRANDS = ("literacy.gpc.", "literacy.phonemic.")
 
 POLICY = Policy()
+POLICY_VERSION = POLICY.version
 REPLAYS = frozenset(OFFERS)  # logged policies the current code remakes exactly
 
 
@@ -550,6 +587,11 @@ def _candidate(
     ready = min((k.p(q) for q in before), default=1.0)
     learning = (1 - me.p) * ready
     reach = sum(1 for s in before | g.after.get(shape.primary, frozenset()) if not k.state(s).seen)
+    if policy.version >= WORDS_FROM and me.seen and me.p >= MASTERED:
+        # A known skill's answer places nothing new: a right one lifts its prerequisites no further than they are,
+        # and it is hardly ever wrong. Before utility@8 Same letter, known, kept the reach of every letter kind still
+        # closed behind it and was played over and over while Capitals, which opens the sounds, waited.
+        reach = 0
     information = entropy(p_right) * (1 + w.reach * reach) * (w.placing if placing else 1.0)
     retention = 1 - me.recall(now) if me.own and me.p >= MASTERED else 0.0
     played = past.rounds()
@@ -574,7 +616,7 @@ def _candidate(
         set_aside = SetAside.HELD_OUT
     elif any((k.state(q).own >= 2 or k.state(q).told) and k.p(q) < 0.3 for q in before):
         set_aside = SetAside.PREREQUISITE  # a known gap says more than not yet shown, so it is named first
-    elif policy.version >= OPENS_FROM and not all(_shown(k, q) for q in needs(shape, g)):
+    elif policy.version >= OPENS_FROM and not all(_shown(k, q) for q in needs(shape, g, policy.version)):
         set_aside = SetAside.NOT_YET
     elif misses >= GUARDED and p_right < 0.6:
         set_aside = SetAside.FRUSTRATION
@@ -616,14 +658,20 @@ def _candidate(
     )
 
 
-def needs(shape: RoundShape, g: Graph) -> frozenset[str]:
+def needs(shape: RoundShape, g: Graph, version: int = POLICY_VERSION) -> frozenset[str]:
     """The taught skills a kind waits on (utility@7): each named skill's strong prerequisites, and every named skill
-    but its primary that a practice kind teaches."""
+    but its primary that a practice kind teaches; from utility@8 also the first words for a letter kind, and Capitals
+    for a sound kind."""
     need: set[str] = set()
     for s in shape.skills:
         if s != shape.primary:
             need.add(s)
         need |= g.before.get(s, frozenset())
+    if version >= WORDS_FROM:
+        if any(s.startswith("literacy.") for s in shape.skills):
+            need |= FIRST_WORDS
+        if any(s.startswith(_SOUND_STRANDS) for s in shape.skills):
+            need |= LETTERS_KNOWN
     return frozenset(need & TAUGHT) - {shape.primary}
 
 

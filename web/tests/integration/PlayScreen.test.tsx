@@ -121,15 +121,15 @@ describe('Play, the new kinds of round', () => {
     openApp('/')
     const kind = await screen.findByRole('combobox', { name: 'Kind of round' })
     expect(within(kind).getAllByRole('option').map(o => o.textContent)).toEqual([
-      'Chosen for them', 'Same picture', 'Same colour', 'Same letter', 'Same number', 'Matching', 'Colours', 'Shapes', 'Letters', 'Counting', 'Missing number', 'Quick look', 'Listen', 'Give a number', 'Order', 'Capitals', 'Sort by sound', 'Sounds', 'Mixed',
+      'Chosen for them', 'Same animal', 'Same colour', 'Same shape', 'Same letter', 'Same number', 'Matching', 'Colours', 'Shapes', 'Letters', 'Counting', 'Missing number', 'Quick look', 'Listen', 'Give a number', 'Order', 'Capitals', 'Sort by sound', 'Sounds', 'Mixed',
     ])
   })
 
   it('shows a first-steps picture big and takes the same one', async () => {
     const { user } = openApp('/?mode=same_picture')
     expect(await screen.findByRole('heading', { level: 1, name: 'Find the same one.' })).toBeInTheDocument()
-    expect(tiles().map(t => t.getAttribute('aria-label'))).toEqual(['tiger', 'log', 'bell', 'banana'])
-    await user.click(screen.getByRole('row', { name: tile('tiger') }))
+    expect(tiles().map(t => t.getAttribute('aria-label'))).toEqual(['bee', 'duck', 'cat', 'chicken'])
+    await user.click(screen.getByRole('row', { name: tile('bee') }))
     expect(screen.getByText('That’s right.')).toBeInTheDocument()
   })
 
@@ -253,11 +253,11 @@ describe('Play records rounds for the learner playing', () => {
   })
 
   it('sends the first answer, the tries and how the round ended, once', async () => {
-    const { user, router } = openApp('/')
+    const { user, router } = openApp('/?mode=mixed')
     const who = await screen.findByRole('combobox', { name: 'Who is playing' })
     await screen.findByRole('option', { name: 'Fox' })
     await user.selectOptions(who, FOX)
-    expect(router.state.location.search).toBe(`?learner=${FOX}`)
+    expect(router.state.location.search).toBe(`?mode=mixed&learner=${FOX}`)
     await user.click(await screen.findByRole('row', { name: tile('duck') }))
     expect(mock.attempts).toEqual([]) // still playing
     await user.click(screen.getByRole('row', { name: tile('cow') }))
@@ -273,7 +273,19 @@ describe('Play records rounds for the learner playing', () => {
     expect(mock.attempts[1]).toMatchObject({ first_answer: { option: 'cow' }, tries: 1, outcome: 'right', session_id: a.session_id })
     expect(mock.attempts[1].event_id).not.toBe(a.event_id)
     await user.selectOptions(screen.getByRole('combobox', { name: 'Who is playing' }), '')
-    expect(router.state.location.search).toBe('')
+    expect(router.state.location.search).toBe('?mode=mixed')
+  })
+
+  it('hands the choice to the engine when a learner plays and the saved kind is Mixed', async () => {
+    // Mixed draws from every kind, letters and sounds too; a new learner starts on the first steps only through the engine
+    const { user } = openApp('/')
+    const kind = await screen.findByRole('combobox', { name: 'Kind of round' })
+    expect(kind).toHaveValue('mixed')
+    await screen.findByRole('option', { name: 'Fox' })
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Who is playing' }), FOX)
+    expect(kind).toHaveValue('next')
+    await user.selectOptions(kind, 'mixed') // still there to pick by hand
+    expect(kind).toHaveValue('mixed')
   })
 
   it('reports a round left half done, and a missed one', async () => {
@@ -291,7 +303,7 @@ describe('Play records rounds for the learner playing', () => {
   })
 
   it('asks for a fresh round when who is playing changes, so a half-done round is not answered again', async () => {
-    const { user } = openApp(`/?learner=${FOX}`)
+    const { user } = openApp(`/?mode=mixed&learner=${FOX}`)
     await user.click(await screen.findByRole('row', { name: tile('duck') })) // wrong first answer
     const asked = mock.roundRequests
     const who = screen.getByRole('combobox', { name: 'Who is playing' })
@@ -317,7 +329,7 @@ describe('Play records rounds for the learner playing', () => {
 
   it('keeps an answer the server cannot take, says so for the grown-up, and sends it once the server is back', async () => {
     server.use(attemptUnreachable)
-    const { user } = openApp(`/?learner=${FOX}`)
+    const { user } = openApp(`/?mode=mixed&learner=${FOX}`)
     await user.click(await screen.findByRole('row', { name: tile('cow') }))
     expect(await screen.findByText(/^1\sanswer kept on this device\. The server could not be reached\./)).toBeInTheDocument()
     expect(mock.attempts).toEqual([])
@@ -336,7 +348,7 @@ describe('Play records rounds for the learner playing', () => {
 
   it('lists an answer the server refused, with its reason, until dismissed', async () => {
     server.use(attemptRefused)
-    const { user } = openApp(`/?learner=${FOX}`)
+    const { user } = openApp(`/?mode=mixed&learner=${FOX}`)
     await user.click(await screen.findByRole('row', { name: tile('cow') }))
     expect(await screen.findByText('The server refused 1 answer; it will not be sent.')).toBeInTheDocument()
     expect(within(refusedList()).getByRole('listitem')).toHaveTextContent('Fox, Matching: counting was made from words@1; the packs are now words@2')
@@ -378,7 +390,7 @@ describe('Play records rounds for the learner playing', () => {
 
   it('lets the child play when the learners cannot be loaded', async () => {
     server.use(learnersError)
-    const { user } = openApp(`/?learner=${FOX}`)
+    const { user } = openApp(`/?mode=mixed&learner=${FOX}`)
     expect(await screen.findByText('The learners could not be loaded, so these rounds are not recorded.')).toBeInTheDocument()
     await user.click(await screen.findByRole('row', { name: tile('cow') }))
     await user.click(screen.getByRole('button', { name: 'Next' }))
@@ -585,7 +597,7 @@ describe('Play, chosen for them', () => {
 
     it('asks how it was every few rounds when the grown-up picks the kind, only for a recorded learner', async () => {
       mock.settings = { ...mock.settings, rate_every: 2 }
-      const { user } = openApp(`/?learner=${FOX}`)
+      const { user } = openApp(`/?mode=mixed&learner=${FOX}`)
       await user.click(await screen.findByRole('row', { name: tile('cow') }))
       expect(screen.queryByRole('heading', { name: 'How was that one?' })).not.toBeInTheDocument() // round 1 of 2
       await user.click(screen.getByRole('button', { name: 'Next' }))
@@ -616,7 +628,7 @@ describe('Play, chosen for them', () => {
     it('sends a face after the answer it rates, kept with it while the server is away', async () => {
       mock.settings = { ...mock.settings, rate_every: 1 }
       server.use(attemptUnreachable)
-      const { user } = openApp(`/?learner=${FOX}`)
+      const { user } = openApp(`/?mode=mixed&learner=${FOX}`)
       await user.click(await screen.findByRole('row', { name: tile('cow') }))
       await user.click(screen.getByRole('row', { name: 'Liked it' }))
       expect(await screen.findByText('Thank you.')).toBeInTheDocument()
@@ -630,7 +642,7 @@ describe('Play, chosen for them', () => {
     it('does not send a face for an answer the server refused', async () => {
       mock.settings = { ...mock.settings, rate_every: 1 }
       server.use(attemptRefused)
-      const { user } = openApp(`/?learner=${FOX}`)
+      const { user } = openApp(`/?mode=mixed&learner=${FOX}`)
       await user.click(await screen.findByRole('row', { name: tile('cow') }))
       await user.click(screen.getByRole('row', { name: 'Liked it' }))
       expect(await screen.findByText('That face was not saved.')).toBeInTheDocument()

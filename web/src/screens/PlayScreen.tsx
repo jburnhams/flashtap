@@ -54,8 +54,9 @@ import { arrangedRight, feedback, outcome, placeFeedback, placeOutcome, placeRig
 // waits for the clips list (`voice.ready`), so the first one is in the same voice as the rest.
 
 export const modeLabels: Record<Mode, string> = {
-  same_picture: 'Same picture',
+  same_picture: 'Same animal',
   same_colour: 'Same colour',
+  same_shape: 'Same shape',
   same_letter: 'Same letter',
   same_number: 'Same number',
   matching: 'Matching',
@@ -83,8 +84,9 @@ export const modeLabels: Record<Mode, string> = {
   letter_box: 'Letter box',
   same_sound: 'Same first sound',
   first_sounds: 'First sounds',
-  picture_twins: 'Picture twins',
+  picture_twins: 'Animal twins',
   colour_twins: 'Colour twins',
+  shape_twins: 'Shape twins',
   letter_twins: 'Letter twins',
   number_twins: 'Number twins',
   mixed: 'Mixed',
@@ -110,15 +112,19 @@ export function PlayScreen() {
 /** The kind of round and who plays, both in the URL so a link or a reload keeps them; the saved kind is the default. */
 function Choices({ settings, learners, session }: { settings: Settings; learners: Load<LearnerRow[]>; session: (id: string) => string }) {
   // The selects write the URL themselves (`param`); these read the same params back for the game.
-  const [mode] = useSearchParam<PlayChoice>('mode', { default: settings.mode, parse: isPlayChoice })
   const [learner] = useSearchParam<string>('learner', { default: '' })
+  // With a learner playing and the saved kind left at Mixed, the engine chooses (0.15.0): Mixed draws from every kind,
+  // letters and sounds too, so a new learner met "What starts with the letter H?" in their first rounds. Mixed is
+  // still there to pick, and a kind the grown-up saved is still the default.
+  const fallback: PlayChoice = learner && settings.mode === 'mixed' ? 'next' : settings.mode
+  const [mode] = useSearchParam<PlayChoice>('mode', { default: fallback, parse: isPlayChoice })
   const known = learners.status === 'ready' ? learners.data : []
   const playing = known.find(x => x.id === learner) ?? null
   return (
     <div className="grid gap-6">
       <div className="flex flex-wrap gap-4">
         <Field label="Kind of round" className="w-full max-w-xs">
-          <NativeSelect param="mode" paramDefault={settings.mode}>
+          <NativeSelect param="mode" paramDefault={fallback}>
             <option value="next">Chosen for them</option>
             {MODES.map(m => <option key={m} value={m}>{modeLabels[m]}</option>)}
           </NativeSelect>

@@ -844,7 +844,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "hear_find" | "colour_box" | "shape_box" | "which_group" | "quick_dots" | "one_more" | "biggest" | "number_card" | "small_letters" | "letter_box" | "same_sound" | "first_sounds" | "same_picture" | "same_colour" | "same_letter" | "same_number" | "picture_twins" | "colour_twins" | "letter_twins" | "number_twins" | "mixed";
+            mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "hear_find" | "colour_box" | "shape_box" | "which_group" | "quick_dots" | "one_more" | "biggest" | "number_card" | "small_letters" | "letter_box" | "same_sound" | "first_sounds" | "same_picture" | "same_colour" | "same_letter" | "same_number" | "picture_twins" | "colour_twins" | "letter_twins" | "number_twins" | "same_shape" | "shape_twins" | "mixed";
             /** Rate Every */
             rate_every: number;
             /** Session Minutes */
@@ -1056,7 +1056,7 @@ export interface components {
          *     saved settings still name them).
          * @enum {string}
          */
-        Mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "hear_find" | "colour_box" | "shape_box" | "which_group" | "quick_dots" | "one_more" | "biggest" | "number_card" | "small_letters" | "letter_box" | "same_sound" | "first_sounds" | "same_picture" | "same_colour" | "same_letter" | "same_number" | "picture_twins" | "colour_twins" | "letter_twins" | "number_twins" | "mixed";
+        Mode: "matching" | "colours" | "shapes" | "letters" | "counting" | "missing" | "quick_look" | "listen" | "give" | "order" | "capitals" | "sort_sounds" | "sounds" | "hear_find" | "colour_box" | "shape_box" | "which_group" | "quick_dots" | "one_more" | "biggest" | "number_card" | "small_letters" | "letter_box" | "same_sound" | "first_sounds" | "same_picture" | "same_colour" | "same_letter" | "same_number" | "picture_twins" | "colour_twins" | "letter_twins" | "number_twins" | "same_shape" | "shape_twins" | "mixed";
         /** ModeInfo */
         ModeInfo: {
             /** Description */
@@ -1414,7 +1414,7 @@ export interface components {
             learner_id?: string | null;
             /**
              * Policy
-             * @default utility@7
+             * @default utility@8
              */
             policy: string;
             simulated?: components["schemas"]["SimulatedIn"] | null;

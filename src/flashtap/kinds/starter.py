@@ -1,18 +1,23 @@
-"""The first-steps kinds (0.14.0): the easiest rounds there are, where a new learner begins (packs/starter.toml).
+"""The first-steps kinds: the easiest rounds there are, where a new learner begins (packs/starter.toml).
 
-Each one shows a thing and asks for the same thing again: a picture, a colour, a letter or a numeral. Nothing has to
-be named, counted or heard alone, so a learner with none of the words yet can answer, and the prompt is spoken. The
-wrong options are always unlike the right one (a cow beside a bus, never b beside d, numbers that are never each
-other's reversal), because these rounds are for showing the learner what a round is, not for catching a mix-up.
+Each one shows a thing and asks for the same thing again: an animal, a colour, a shape, a numeral to five, or (once
+the first words are shown, 0.15.0) a letter. Nothing has to be named, counted or heard alone, so a learner with none
+of the words yet can answer, and the prompt is spoken. The wrong options are always unlike the right one (a cow beside
+a fish, never b beside d, numbers that are never each other's reversal), because these rounds are for showing the
+learner what a round is, not for catching a mix-up.
 
-- **Same picture**, **Same colour**, **Same letter**, **Same number** (`select_one`): the thing is shown big above
-  two to four tiles. Same colour's right tile is the shown shape itself at two tiles, and from three tiles another
-  shape of that colour where there is one (the red square for a red circle), so the step up asks for the colour and
-  not the picture.
-- **Picture twins**, **Colour twins**, **Letter twins**, **Number twins** (`match_pairs`): the transfer kinds, held
-  out of practice (rounds.TEMPLATES). Each piece goes onto the place that is the same: the same skill in another
-  mechanic, which is what a transfer check asks (learners/transfer.py). Colour twins puts each circle or diamond on
-  the square of its colour, so only the colour matches.
+- **Same picture** (shown as "Same animal" since 0.15.0: animals only, the owner asked for the very first rounds to
+  be numbers to five, colours, shapes and animals), **Same colour**, **Same shape** (0.15.0), **Same letter**, **Same
+  number** (`select_one`): the thing is shown big above two to four tiles. Same colour's right tile is the shown
+  shape itself at two tiles, and from three tiles another shape of that colour where there is one (the red square for
+  a red circle), so the step up asks for the colour and not the picture. Same shape does the same the other way: from
+  three tiles its right tile is the shape in another colour, beside a wrong one in the shown colour, so the step up
+  asks for the shape and not the colour.
+- **Picture twins** (animals), **Colour twins**, **Shape twins**, **Letter twins**, **Number twins**
+  (`match_pairs`): the transfer kinds, held out of practice (rounds.TEMPLATES). Each piece goes onto the place that
+  is the same: the same skill in another mechanic, which is what a transfer check asks (learners/transfer.py). Colour
+  twins puts each circle or diamond on the square of its colour, so only the colour matches; Shape twins puts each
+  shape on the same shape in another colour where there is one, so only the shape matches.
 """
 
 import random
@@ -57,9 +62,13 @@ def _apart(rng: random.Random, pool: Sequence[str], k: int) -> list[str]:
     return chosen
 
 
-def _things() -> list[Thing]:
-    """Every picture but the shapes, by id so a seed always sees the same order."""
-    return sorted((t for t in lexicon.words().everything if t.category != "shapes"), key=lambda t: t.id)
+def _animals() -> list[Thing]:
+    """The animals, by id so a seed always sees the same order (0.15.0: before, every picture but the shapes)."""
+    return sorted((t for t in lexicon.words().everything if t.category == "animals"), key=lambda t: t.id)
+
+
+def _shapes() -> list[Thing]:
+    return sorted(lexicon.words().shapes, key=lambda t: t.id)
 
 
 def _letters() -> list[str]:
@@ -67,11 +76,9 @@ def _letters() -> list[str]:
 
 
 def same_picture(rng: random.Random, choices: int) -> Body:
-    things = _things()
-    answer = rng.choice(things)
-    # From other kinds of thing only: a cow among a bus and an apple, never among other animals.
-    others = [t for t in things if t.category != answer.category]
-    shown = [answer, *rng.sample(others, choices - 1)]
+    animals = _animals()
+    answer = rng.choice(animals)
+    shown = [answer, *rng.sample([t for t in animals if t is not answer], choices - 1)]
     rng.shuffle(shown)
     return Body(
         prompt="Find the same one.",
@@ -82,7 +89,7 @@ def same_picture(rng: random.Random, choices: int) -> Body:
 
 
 def same_colour(rng: random.Random, choices: int) -> Body:
-    shapes = sorted(lexicon.words().shapes, key=lambda t: t.id)
+    shapes = _shapes()
     seen = rng.choice(shapes)
     twins = [t for t in shapes if t.colour == seen.colour and t is not seen]
     answer = rng.choice(twins) if choices >= 3 and twins else seen
@@ -101,6 +108,32 @@ def same_colour(rng: random.Random, choices: int) -> Body:
         prompt="Find the same colour.",
         show=seen.picture,
         options=[_tile(t.id, t.picture, t.word, t is answer, "Yes! That's the same colour.", t.a) for t in shown],
+        answer=answer.id,
+    )
+
+
+def same_shape(rng: random.Random, choices: int) -> Body:
+    shapes = _shapes()
+    # A shape with other shapes enough for the wrong tiles (a grown-up's eight leave out the square: five others)
+    seen = rng.choice([t for t in shapes if sum(o.shape != t.shape for o in shapes) >= choices - 1])
+    twins = [t for t in shapes if t.shape == seen.shape and t is not seen]
+    answer = rng.choice(twins) if choices >= 3 and twins else seen
+    others = [t for t in shapes if t.shape != seen.shape]
+    rng.shuffle(others)
+    # From three tiles one wrong tile wears the shown colour where one does, so the colour alone cannot find it
+    others.sort(key=lambda t: not (choices >= 3 and t.colour == seen.colour))
+    # Other shapes first, one of each, then any: the wrong tiles look as unlike each other as the shapes allow
+    kinds: list[Thing] = []
+    for t in others:
+        if all(k.shape != t.shape for k in kinds):
+            kinds.append(t)
+    wrong = (kinds + [t for t in others if t not in kinds])[: choices - 1]
+    shown = [answer, *wrong]
+    rng.shuffle(shown)
+    return Body(
+        prompt="Find the same shape.",
+        show=seen.picture,
+        options=[_tile(t.id, t.picture, t.word, t is answer, "Yes! That's the same shape.", t.a) for t in shown],
         answer=answer.id,
     )
 
@@ -139,14 +172,7 @@ def _twins(rng: random.Random, pairs: list[tuple[Piece, Place]], prompt: str, do
 
 
 def picture_twins(rng: random.Random, choices: int) -> Body:
-    choices = _pairs(choices)
-    things = _things()
-    chosen: list[Thing] = []
-    for t in rng.sample(things, len(things)):  # one of each kind of thing, so no two pictures are alike
-        if len(chosen) == choices:
-            break
-        if all(c.category != t.category for c in chosen):
-            chosen.append(t)
+    chosen = rng.sample(_animals(), _pairs(choices))
     return _twins(
         rng,
         [
@@ -162,7 +188,7 @@ def picture_twins(rng: random.Random, choices: int) -> Body:
 
 
 def colour_twins(rng: random.Random, choices: int) -> Body:
-    shapes = sorted(lexicon.words().shapes, key=lambda t: t.id)
+    shapes = _shapes()
     squares = {t.colour: t for t in shapes if t.shape == "square" and t.colour}
     others = {t.colour: t for t in shapes if t.shape != "square" and t.colour in squares}  # a circle or a diamond
     colours = rng.sample(sorted(others), _pairs(choices))
@@ -180,6 +206,25 @@ def colour_twins(rng: random.Random, choices: int) -> Body:
         "Put each shape on the square of the same colour.",
         "Yes! Every shape is on its colour.",
     )
+
+
+def shape_twins(rng: random.Random, choices: int) -> Body:
+    shapes = _shapes()
+    kinds = sorted({t.shape for t in shapes if t.shape})
+    chosen = rng.sample(kinds, min(len(kinds), _pairs(choices)))  # three kinds of shape: three pairs at most
+    pairs: list[tuple[Piece, Place]] = []
+    for k in chosen:
+        these = [t for t in shapes if t.shape == k]
+        piece = rng.choice(these)
+        # The same shape in another colour where there is one (the diamond has one colour, so it is its own twin)
+        place = rng.choice([t for t in these if t is not piece] or these)
+        pairs.append(
+            (
+                Piece(id=piece.id, picture=piece.picture, word=piece.word),
+                Place(id=f"twin_{place.id}", picture=place.picture, word=place.word, takes=[piece.id], holds=1),
+            )
+        )
+    return _twins(rng, pairs, "Put each shape on the same shape.", "Yes! Every shape is on its twin.")
 
 
 def letter_twins(rng: random.Random, choices: int) -> Body:
