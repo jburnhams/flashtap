@@ -38,6 +38,8 @@ one decision: a round, a choice between two rounds for the learner to pick, an o
    choices. A kind with no stair yet starts at the easiest step, or halfway up when its skill is already known
    (`MASTERED`, from the learner's own answers, the graph or a grown-up), so a learner who can already do it is not
    walked up from the bottom (§13 "rapid acceleration"). The step decides the chance of a lucky answer in `p_right`.
+   From `utility@9` a stair moves on every first answer, up when right and down when missed (`model.Params.up`,
+   `down`), so a learner who can do it is at a kind's hardest step within a few rounds.
    The grown-up's number of choices (`Config.choices`) is for the rounds they pick by hand and for decisions of
    `utility@3` and before, which replay with it.
 
@@ -289,6 +291,9 @@ class Weights:
     # a nudge, not a priority: on simulated learners (who know a skill in every form alike) 0.8 cost 0.3 skills learnt
     # of 12.8 and 1.5 cost 0.6, as checks displace practice; 0.3 cost 0.15 and still checks every known skill in time
     transfer: float = 0.3
+    # utility@9 on: a bonus for a kind whose skill is open and not yet known, so the next thing to learn comes before
+    # one more round of what is known (the owner: "keep increasing all the time they are got right")
+    ahead: float = 0.6
 
 
 @dataclass(frozen=True)
@@ -303,7 +308,9 @@ class Policy:
     # 7 (0.14.0): the first-steps kinds, and kinds opened by success. 6 and before weigh neither (`OFFERS`, `OPENS_FROM`).
     # 8 (0.15.0): Same shape and Shape twins; letter kinds wait on the first words, sound kinds on Capitals too. 7
     # weighs neither new kind and closes no kind for them (`OFFERS`, `WORDS_FROM`).
-    version: int = 8
+    # 9 (0.19.0): every right first answer steps a kind up and every miss steps it down (`model.Params.up`, `down`);
+    # 8 and before replay with three up and two down (`model.SLOW_STAIR`).
+    version: int = 9
     weights: Weights = field(default_factory=Weights)
     tau: float = 0.15  # softmax temperature: lower picks the best more often
     epsilon: float = 0.1  # share of every pick that is uniform over the eligible candidates
@@ -349,12 +356,14 @@ OFFERS: dict[str, frozenset[Mode]] = {
     "utility@6": _BEFORE_STARTER,
     "utility@7": _ALL - _ADDED_8,
     "utility@8": _ALL,
+    "utility@9": _ALL,
 }
 STEPS_FROM = 4  # the first version that chooses a step of difficulty
 PROBES_FROM = 5  # the first version that checks misconceptions
 TRANSFER_FROM = 6  # the first version that checks transfer
 OPENS_FROM = 7  # the first version that opens kinds by success
 WORDS_FROM = 8  # the first version that keeps letters until the first words are shown
+QUICK_FROM = 9  # the first version whose stairs move on every first answer
 # Skills that joined the graph with a version: an older decision is remade on the graph without them (replay.py), as
 # it was made; they are only ever prerequisites, so leaving them out restores it exactly.
 SKILLS_SINCE: dict[int, frozenset[str]] = {
@@ -633,6 +642,7 @@ def _candidate(
         + w.diagnostic * diagnostic
         + w.misconception * misconception
         + w.transfer * due
+        + (w.ahead if policy.version >= QUICK_FROM and not due and me.p < MASTERED else 0.0)
     )
     return Candidate(
         mode=shape.mode,

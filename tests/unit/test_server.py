@@ -275,7 +275,7 @@ def test_engine_sessions_next_and_replay(client):
     r = client.post("/api/v1/sessions", json={"learner_id": fox})
     assert r.status_code == 201
     s = r.json()
-    assert s["policy"] == "utility@8"
+    assert s["policy"] == "utility@9"
     assert s["config"] == {
         "choices": 3,
         "tries": 1,

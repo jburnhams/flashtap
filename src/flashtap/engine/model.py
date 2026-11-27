@@ -18,11 +18,13 @@ It is the P2 estimators' BKT (src/flashtap/learners/estimators.py) with three ch
   delayed answers say how much forgetting there is (§13 "calibrate retention schedules on real delayed recall data").
 
 **Steps of difficulty** (spec §6; `rounds.Level`). Each kind of round keeps a staircase (`Stair`): the step the
-learner's last round of that kind was played at, moved up after `UP` first answers right in a row at it and down after
-`DOWN` missed in a row. A right answer at a harder step than the stair's (or a miss at an easier one) moves the stair
-there at once. Up after three and down after two settles where most first answers go right (near the three in four the
-scheduler aims for), and a run of misses brings the work down faster than a run of successes takes it up: the spec's
-"constrain frustration" (§12). Only rounds the engine made at a step move a stair; rounds played by hand carry none.
+learner's last round of that kind was played at, moved up after `Params.up` first answers right in a row at it and down
+after `Params.down` missed in a row. A right answer at a harder step than the stair's (or a miss at an easier one) moves
+the stair there at once. From policy `utility@9` (0.19.0) it is up after every right first answer and down after every
+miss: the owner asked for it to "keep increasing all the time they are got right" so it finds a learner's level
+quickly, and a miss brings it back as quickly. Before that it was up after three and down after two (`SLOW_STAIR`),
+which settled where most first answers go right but walked a learner who could already do it up one step per three
+rounds; replay folds an older decision's log with those numbers. Only rounds the engine made at a step move a stair; rounds played by hand carry none.
 The step changes the chance of a lucky answer (more tiles, less luck), not the skill's estimate: BKT stays one
 estimate per skill, over every step it was seen at (the spec's "core capability + parameters", §4).
 
@@ -61,8 +63,6 @@ from flashtap.learners.transfer import is_practice, is_transfer, passed
 from flashtap.mechanics import PLACE, Mechanic, Mode
 
 DAY = 86400.0
-UP = 3  # first answers right in a row at a step before the next step up
-DOWN = 2  # missed in a row at a step before the step below
 
 
 @dataclass(frozen=True)
@@ -73,6 +73,8 @@ class Params:
     learn: float = 0.1
     slip: float = 0.1
     imply: float = 0.9  # a right primary answer lifts its unseen prerequisites to this share of its own estimate
+    up: int = 1  # first answers right in a row at a step before the next step up (utility@9 on; 3 before)
+    down: int = 1  # missed in a row at a step before the step below (utility@9 on; 2 before)
 
     def label(self) -> str:
         return f"prior {self.prior:g}, learn {self.learn:g}, slip {self.slip:g}"
@@ -155,7 +157,7 @@ class Stair:
     right: int = 0  # first answers right in a row at `level`
     wrong: int = 0  # missed in a row at `level`
 
-    def climb(self, level: int, right: bool, steps: int) -> None:
+    def climb(self, level: int, right: bool, steps: int, up: int = 1, down: int = 1) -> None:
         self.last = level
         if level != self.level:
             # A round at another step (eased after misses, or a pick from a choice) speaks for the stair only when it
@@ -167,9 +169,9 @@ class Stair:
             self.right, self.wrong = self.right + 1, 0
         else:
             self.right, self.wrong = 0, self.wrong + 1
-        if self.right >= UP and self.level < steps - 1:
+        if self.right >= up and self.level < steps - 1:
             self.level, self.right = self.level + 1, 0
-        elif self.wrong >= DOWN and self.level > 0:
+        elif self.wrong >= down and self.level > 0:
             self.level, self.wrong = self.level - 1, 0
 
 
@@ -213,7 +215,9 @@ class Knowledge:
         if e.level is not None and e.struck is None:
             mode = Mode(e.mode)
             steps = len(rounds.TEMPLATES[mode].levels)
-            self.stairs.setdefault(mode, Stair(level=e.level, last=e.level)).climb(e.level, e.first_correct, steps)
+            self.stairs.setdefault(mode, Stair(level=e.level, last=e.level)).climb(
+                e.level, e.first_correct, steps, self.params.up, self.params.down
+            )
         for u in judge(e, self.shown):
             if not u.counted:
                 continue
@@ -280,6 +284,10 @@ def fold(events: Iterable[Event], g: Graph, params: Params | None = None, told: 
     for t in pending:
         k.tell(t)
     return k
+
+
+# The staircase before utility@9: up after three right in a row, down after two misses. Replay folds with it.
+SLOW_STAIR = {"up": 3, "down": 2}
 
 
 @dataclass(frozen=True)

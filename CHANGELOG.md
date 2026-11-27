@@ -4,6 +4,17 @@ Newest first, grouped by day. One entry per change, in the same commit or PR as 
 
 ## 2026-11-27
 
+**Ramping up on every right answer (0.19.0, branch `claude/project-thread-85zcg6`)**
+
+Asked for: difficulty should "ramp far more aggressively", stepping up every time an answer is right, so it quickly finds a learner's current level.
+
+- `src/flashtap/engine/model.py`: the stair's thresholds move into `Params` (`up`, `down`), now 1 and 1: every right first answer steps a kind up, every miss steps it down. `SLOW_STAIR` (3 up, 2 down) is the old rule; `UP`, `DOWN` removed.
+- `src/flashtap/engine/policy.py`: `utility@9` (`QUICK_FROM`). `Weights.ahead`: an open kind whose skill is not yet known gets 0.6, so the next thing to learn comes before more of what is known. An all-right learner opens every practice kind in about 60 rounds (was about 250).
+- `src/flashtap/engine/replay.py`: decisions before `utility@9` are remade on a log folded with `SLOW_STAIR`.
+- `web/openapi.json`, `web/src/api.generated.ts`: the default policy id.
+- Tests: `tests/unit/test_engine.py` (a stair moves on every answer; the old rule under `SLOW_STAIR`; a learner who can reaches a first step's top step one round at a time; every practice kind open within 100 all-right rounds), `test_mistakes.py` (the utility@4 sessions fold with the old stair), `test_server.py`.
+- `pyproject.toml`, `uv.lock`: 0.19.0. `docs/content.md`, `docs/implementation-plan.md` (item 15), `docs/progress.md`.
+
 **Screenshots of Play no longer depend on when they are taken (strata-react 2.0.1, branch `claude/project-thread-fwkjyk`)**
 
 CI's visual check failed at random on the phone Play shots: the pulse is frozen in a screenshot, but the lit tile's border was not, and a shot that took longer than one beat caught a random tile lit (rewriting the baselines on the runner did not help; the next run differed again). strata-react 2.0.1 (#403) lights nothing under reduced motion, which the screenshots use; 2.0.0 is only a test dependency bump there.

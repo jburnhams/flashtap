@@ -1,5 +1,12 @@
 # Progress log
 
+## 2026-11-27: ramping up on every right answer (0.19.0)
+
+- Asked for: after a learner answered a few right, "should ramp far more aggressively - ie always increase a slightly hard question and so keep increasing all the time they are got right. That way can quickly adjust to current level".
+- Before: a kind stepped up after three right first answers in a row and down after two misses, and a known first step kept being played while the engine spread rounds over every open kind, so an all-right learner took about 250 rounds to open every practice kind, Capitals being the bottleneck (played rarely: a match-pairs round's low chance of a lucky answer makes its predicted success low, which the frustration term counts against).
+- Now (`utility@9`): up on every right first answer, down on every miss, and a bonus (0.6) for an open kind whose skill is not yet known. Quick stair alone: letters after about 30 rounds instead of about 50, sounds still about 250. With the bonus: every practice kind open in about 60. Simulated learners (100, 6 sessions, seed 1): 13.86 skills known after, against 13.46 under `utility@8` and 13.39 at random.
+- The stair's numbers live in `model.Params` so a fold can be made with either; replay folds decisions before `utility@9` with three up and two down.
+
 ## 2026-11-27: on by itself, and a running score (0.18.0)
 
 - Asked for: after a round, go to the next one after a short pause, counting down on Next from 3; a running score per learner, shown at all times, green right and red wrong.

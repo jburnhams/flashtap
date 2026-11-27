@@ -355,7 +355,9 @@ def test_a_learner_who_gets_everything_right_opens_every_kind_gradually() -> Non
     """Nothing waits on itself: answering every round right opens every practice kind, a few at a time."""
     k, answers, opened = Knowledge(G), list[tuple[Mode, bool]](), dict[Mode, int]()
     endless = Config(choices=4, tries=0, max_rounds=999, max_minutes=999, break_every=0)
-    for n in range(300):  # first steps, first words, letters, then sounds: a long road at one right answer a minute
+    # first steps, first words, letters, then sounds: under 100 rounds from utility@9, which steps up on every right
+    # answer and puts the next thing to learn first (it was about 250)
+    for n in range(100):
         now = T0 + timedelta(minutes=n)
         so_far = Past(started=T0, decisions=[(Action.ROUND, m) for m, _ in answers], answers=answers)
         c = decide(k, so_far, endless, f"w:{n}", now)
@@ -648,7 +650,7 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
     assert replay.replay(log, retired, {}, G) == (
         0,
         [
-            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3, utility@4, utility@5, utility@6, utility@7, utility@8)"
+            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3, utility@4, utility@5, utility@6, utility@7, utility@8, utility@9)"
         ],
     )
     assert replay.replay(log, old[:1], {}, G)[1] == [
@@ -1023,7 +1025,7 @@ def test_each_policy_version_weighs_the_kinds_it_had() -> None:
         Mode.SAME_SHAPE,
         Mode.SHAPE_TWINS,
     }
-    assert set(policy.REPLAYS) == {f"utility@{n}" for n in range(1, 8)} | {POLICY.id}
+    assert set(policy.REPLAYS) == {f"utility@{n}" for n in range(1, 9)} | {POLICY.id}
 
 
 def test_deleting_a_learner_deletes_their_ratings_and_overrides(db_session: Session, fox: str) -> None:
@@ -1039,48 +1041,76 @@ def test_deleting_a_learner_deletes_their_ratings_and_overrides(db_session: Sess
 # Steps of difficulty (utility@4)
 
 
-def steps(mode: Mode, *answers: tuple[int, bool]) -> Knowledge:
-    k = fold([], G, told=started(COUNT))  # every kind these tests step through open (utility@7)
+def steps(mode: Mode, *answers: tuple[int, bool], params: Params | None = None) -> Knowledge:
+    k = fold([], G, params, told=started(COUNT))  # every kind these tests step through open (utility@7)
     for i, (level, right) in enumerate(answers):
         k.observe(event(mode, right=right, level=level, at=T0 + timedelta(minutes=i)))
     return k
 
 
-def test_a_stair_goes_up_after_three_right_and_down_after_two_missed() -> None:
+def test_a_stair_goes_up_after_every_right_answer_and_down_after_every_miss() -> None:
+    """utility@9: the owner asked for it to keep stepping up while answers are right, to find the level quickly."""
     assert Mode.COUNTING not in Knowledge(G).stairs  # no step played: no stair
-    up = steps(Mode.COUNTING, (0, True), (0, True))
-    assert (up.stairs[Mode.COUNTING].level, up.stairs[Mode.COUNTING].right) == (0, 2)
-    up = steps(Mode.COUNTING, (0, True), (0, True), (0, True))
-    assert (up.stairs[Mode.COUNTING].level, up.stairs[Mode.COUNTING].right) == (1, 0)
-    broken = steps(Mode.COUNTING, (0, True), (0, True), (0, False), (0, True), (0, True))
-    assert broken.stairs[Mode.COUNTING].level == 0  # three in a row, not three in all
-    down = steps(Mode.COUNTING, (2, False), (2, False))
-    assert down.stairs[Mode.COUNTING].level == 1
-    floor = steps(Mode.COUNTING, (0, False), (0, False), (0, False))
-    assert floor.stairs[Mode.COUNTING].level == 0
+    assert steps(Mode.COUNTING, (0, True)).stairs[Mode.COUNTING].level == 1
+    climbed = steps(Mode.COUNTING, (0, True), (1, True), (2, True))
+    assert climbed.stairs[Mode.COUNTING].level == 3
+    assert steps(Mode.COUNTING, (2, False)).stairs[Mode.COUNTING].level == 1
+    assert steps(Mode.COUNTING, (0, True), (1, False)).stairs[Mode.COUNTING].level == 0  # back as quickly
+    assert steps(Mode.COUNTING, (0, False), (0, False)).stairs[Mode.COUNTING].level == 0  # the floor
     top = len(rounds.TEMPLATES[Mode.COUNTING].levels) - 1
-    ceiling = steps(Mode.COUNTING, *[(top, True)] * 4)
-    assert ceiling.stairs[Mode.COUNTING].level == top
+    assert steps(Mode.COUNTING, *[(top, True)] * 2).stairs[Mode.COUNTING].level == top  # the ceiling
     # Kinds keep their own stairs, and a struck-out or hand-picked round (no step) moves none.
-    k = steps(Mode.COUNTING, (0, True), (0, True), (0, True))
+    k = steps(Mode.COUNTING, (0, True))
     k.observe(event(Mode.COUNTING, right=False, level=1, struck="tapped by a sibling", at=T0 + timedelta(minutes=5)))
     k.observe(event(Mode.COUNTING, right=False, at=T0 + timedelta(hours=2)))
     assert (k.stairs[Mode.COUNTING].level, k.stairs[Mode.COUNTING].wrong) == (1, 0)
     assert Mode.MISSING not in k.stairs
 
 
+def test_before_utility_9_a_stair_went_up_after_three_right_and_down_after_two_missed() -> None:
+    slow = Params(**model.SLOW_STAIR)
+    up = steps(Mode.COUNTING, (0, True), (0, True), params=slow)
+    assert (up.stairs[Mode.COUNTING].level, up.stairs[Mode.COUNTING].right) == (0, 2)
+    up = steps(Mode.COUNTING, (0, True), (0, True), (0, True), params=slow)
+    assert (up.stairs[Mode.COUNTING].level, up.stairs[Mode.COUNTING].right) == (1, 0)
+    broken = steps(Mode.COUNTING, (0, True), (0, True), (0, False), (0, True), (0, True), params=slow)
+    assert broken.stairs[Mode.COUNTING].level == 0  # three in a row, not three in all
+    assert steps(Mode.COUNTING, (2, False), (2, False), params=slow).stairs[Mode.COUNTING].level == 1
+    assert steps(Mode.COUNTING, (2, False), params=slow).stairs[Mode.COUNTING].level == 2
+
+
+def test_a_learner_who_can_reaches_the_top_step_of_a_first_step_in_a_few_rounds() -> None:
+    k, answers = Knowledge(G), list[tuple[Mode, bool]]()
+    for n in range(30):
+        now = T0 + timedelta(minutes=n)
+        so_far = Past(started=T0, decisions=[(Action.ROUND, m) for m, _ in answers], answers=answers)
+        endless = CONFIG.model_copy(update={"max_rounds": 99, "max_minutes": 99, "break_every": 0})
+        c = decide(k, so_far, endless, f"q:{n}", now)
+        assert c.mode is not None
+        k.observe(event(c.mode, at=now, level=c.level))
+        answers.append((c.mode, True))
+    played = {m for m, _ in answers}
+    for m in played & {Mode.SAME_PICTURE, Mode.SAME_COLOUR, Mode.SAME_SHAPE, Mode.SAME_NUMBER}:
+        rounds_of = sum(1 for x, _ in answers if x is m)
+        top = len(rounds.TEMPLATES[m].levels) - 1
+        assert k.stairs[m].level == min(top, rounds_of), m  # one step per right answer, to the top
+
+
 def test_a_round_at_another_step_moves_the_stair_only_when_it_says_more() -> None:
-    harder = steps(Mode.MISSING, (0, True), (2, True))  # right at a harder step: the stair goes there
+    slow = Params(**model.SLOW_STAIR)  # the rule is the same at any pace; at three up a single answer moves no stair
+    harder = steps(Mode.MISSING, (0, True), (2, True), params=slow)  # right at a harder step: the stair goes there
     assert (harder.stairs[Mode.MISSING].level, harder.stairs[Mode.MISSING].right) == (2, 1)
-    easier = steps(Mode.MISSING, (2, True), (0, False))  # missed at an easier step: there too
+    easier = steps(Mode.MISSING, (2, True), (0, False), params=slow)  # missed at an easier step: there too
     assert (easier.stairs[Mode.MISSING].level, easier.stairs[Mode.MISSING].wrong) == (0, 1)
-    eased = steps(Mode.MISSING, (2, True), (1, True))  # right at an easier step (eased after misses): says nothing new
+    eased = steps(
+        Mode.MISSING, (2, True), (1, True), params=slow
+    )  # right at an easier step (eased after misses): says nothing new
     assert (eased.stairs[Mode.MISSING].level, eased.stairs[Mode.MISSING].right, eased.stairs[Mode.MISSING].last) == (
         2,
         1,
         1,
     )
-    stretched = steps(Mode.MISSING, (1, True), (2, False))  # missed at a harder step: nor does that
+    stretched = steps(Mode.MISSING, (1, True), (2, False), params=slow)  # missed at a harder step: nor does that
     assert (stretched.stairs[Mode.MISSING].level, stretched.stairs[Mode.MISSING].wrong) == (1, 0)
 
 
