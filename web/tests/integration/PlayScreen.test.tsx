@@ -177,16 +177,15 @@ describe('Play, the new kinds of round', () => {
       const { user } = openApp('/?mode=give')
       await screen.findByRole('heading', { level: 1, name: 'Put 3 ducks in the basket.' })
       for (let i = 0; i < 4; i++) {
-        await user.click(within(screen.getByRole('group', { name: 'Pictures to place' })).getAllByRole('button')[0])
-        await user.click(place('Put duck in the basket'))
+        // One basket: a tap puts a duck straight in.
+        await user.click(within(screen.getByRole('group', { name: 'Pictures to place' })).getAllByRole('button', { name: 'Put duck in the basket' })[0])
       }
       await user.click(screen.getByRole('button', { name: 'Check' }))
       expect(speech.said.at(-1)?.text).toBe('You put 4 in the basket. That’s too many. Try again.')
       // The mark is in the place's name too, not only drawn inside it.
       expect(place('the basket, not yet')).toHaveTextContent('Not yet')
       // Taking one out clears the mark; three is right.
-      await user.click(within(screen.getByRole('group', { name: 'In the basket' })).getAllByRole('button')[0])
-      await user.click(screen.getByRole('button', { name: 'Put duck back' }))
+      await user.click(within(screen.getByRole('group', { name: 'In the basket' })).getAllByRole('button', { name: 'Take duck out of the basket' })[0])
       expect(place('the basket')).not.toHaveTextContent('Not yet')
       await user.click(screen.getByRole('button', { name: 'Check' }))
       expect(speech.said.at(-1)?.text).toBe('Yes! There are 3 ducks in the basket.')
@@ -222,6 +221,17 @@ describe('Play, the new kinds of round', () => {
     await user.click(screen.getByRole('button', { name: 'Check' }))
     expect(screen.getByText('That’s right.')).toBeInTheDocument()
     expect(screen.getAllByRole('button').filter(b => b.getAttribute('data-variant') === 'default')).toHaveLength(1)
+  })
+
+  it('puts a number on top of another in an order, sending that one back', async () => {
+    const { user } = openApp('/?mode=order') // 1 4 7 9
+    await screen.findByRole('heading', { level: 1, name: 'Put the numbers in order, smallest first.' })
+    await user.click(piece('7'))
+    await user.click(place('Put 7 in first'))
+    await user.click(piece('1'))
+    await user.click(place('Put 1 in first in place of 7'))
+    expect(within(screen.getByRole('group', { name: 'In first' })).getByRole('button', { name: '1' })).toBeInTheDocument()
+    expect(within(screen.getByRole('group', { name: 'Pictures to place' })).getByRole('button', { name: '7' })).toBeInTheDocument()
   })
 
   it('shows the answer in place once the checks run out', async () => {
@@ -464,7 +474,6 @@ describe('Play, chosen for them', () => {
     expect(screen.getByRole('combobox', { name: 'Kind of round' })).not.toHaveTextContent('Number card') // held out of the list
     for (let i = 0; i < 3; i++) {
       await user.click(within(screen.getByRole('group', { name: 'Pictures to place' })).getAllByRole('button')[0] as HTMLElement)
-      await user.click(place('Put duck in the basket'))
     }
     await user.click(screen.getByRole('button', { name: 'Check' }))
     expect(screen.getByText('That’s right.')).toBeInTheDocument()
@@ -588,7 +597,6 @@ describe('Play, chosen for them', () => {
     server.use(nextUnreachable)
     for (let i = 0; i < 3; i++) {
       await user.click(within(screen.getByRole('group', { name: 'Pictures to place' })).getAllByRole('button')[0])
-      await user.click(screen.getByRole('button', { name: 'Put duck in the basket' }))
     }
     await user.click(screen.getByRole('button', { name: 'Check' }))
     await user.click(screen.getByRole('button', { name: 'Next' }))
@@ -661,7 +669,6 @@ describe('Play, chosen for them', () => {
       expect(await screen.findByRole('heading', { level: 1, name: 'Put 3 ducks in the basket.' })).toBeInTheDocument()
       for (let i = 0; i < 3; i++) {
         await user.click(within(screen.getByRole('group', { name: 'Pictures to place' })).getAllByRole('button')[0])
-        await user.click(screen.getByRole('button', { name: 'Put duck in the basket' }))
       }
       expect(screen.queryByRole('heading', { name: 'How was that one?' })).not.toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: 'Check' }))
