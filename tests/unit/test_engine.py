@@ -650,7 +650,7 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
     assert replay.replay(log, retired, {}, G) == (
         0,
         [
-            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3, utility@4, utility@5, utility@6, utility@7, utility@8, utility@9)"
+            f"decision 0 of session {old[0].session_id}: made by utility@0, which is not kept (now utility@1, utility@2, utility@3, utility@4, utility@5, utility@6, utility@7, utility@8, utility@9, utility@10)"
         ],
     )
     assert replay.replay(log, old[:1], {}, G)[1] == [
@@ -1025,7 +1025,7 @@ def test_each_policy_version_weighs_the_kinds_it_had() -> None:
         Mode.SAME_SHAPE,
         Mode.SHAPE_TWINS,
     }
-    assert set(policy.REPLAYS) == {f"utility@{n}" for n in range(1, 9)} | {POLICY.id}
+    assert set(policy.REPLAYS) == {f"utility@{n}" for n in range(1, 10)} | {POLICY.id}
 
 
 def test_deleting_a_learner_deletes_their_ratings_and_overrides(db_session: Session, fox: str) -> None:
@@ -1065,6 +1065,31 @@ def test_a_stair_goes_up_after_every_right_answer_and_down_after_every_miss() ->
     k.observe(event(Mode.COUNTING, right=False, at=T0 + timedelta(hours=2)))
     assert (k.stairs[Mode.COUNTING].level, k.stairs[Mode.COUNTING].wrong) == (1, 0)
     assert Mode.MISSING not in k.stairs
+
+
+def test_struggling_in_one_kind_slows_the_climb_in_every_other() -> None:
+    """utility@10: the owner found the climb a little fast, and asked that a hard time in one area slow the others."""
+    k = steps(Mode.MISSING, *[(0, False)] * 4)  # four missed in another kind
+    assert (k.struggling(), k.up()) == (2, 3)
+    at = T0 + timedelta(hours=1)
+    for i in range(2):
+        k.observe(event(Mode.COUNTING, right=True, level=0, at=at + timedelta(minutes=i)))
+    assert k.stairs[Mode.COUNTING].level == 0  # two right in a row is not yet enough while struggling
+    k.observe(event(Mode.COUNTING, right=True, level=0, at=at + timedelta(minutes=2)))
+    assert k.stairs[Mode.COUNTING].level == 1  # three are
+    # As right answers fill the last eight the climb speeds up again: a quarter missed needs two, fewer needs one.
+    for i in range(3, 7):
+        k.observe(event(Mode.COUNTING, right=True, level=k.stairs[Mode.COUNTING].level, at=at + timedelta(minutes=i)))
+    assert (k.recent.count(False), k.struggling(), k.up()) == (1, 0, 1)
+    for i in range(7, 9):  # two of the last eight missed: a quarter
+        k.observe(event(Mode.MISSING, right=False, level=0, at=at + timedelta(minutes=i)))
+    assert (k.struggling(), k.up()) == (1, 2)
+    # A miss still steps down at once, and a new learner's first misses are not a struggle (half a window first).
+    assert steps(Mode.COUNTING, (2, False)).stairs[Mode.COUNTING].level == 1
+    assert steps(Mode.COUNTING, (0, False), (0, True)).struggling() == 0
+    # utility@9 replays with none of it: up on every right answer whatever went before.
+    quick = steps(Mode.MISSING, (0, False), (0, False), (0, True), (0, True), params=Params(**model.QUICK_STAIR))
+    assert (quick.struggling(), quick.up()) == (0, 1)
 
 
 def test_before_utility_9_a_stair_went_up_after_three_right_and_down_after_two_missed() -> None:

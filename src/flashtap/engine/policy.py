@@ -39,7 +39,9 @@ one decision: a round, a choice between two rounds for the learner to pick, an o
    (`MASTERED`, from the learner's own answers, the graph or a grown-up), so a learner who can already do it is not
    walked up from the bottom (§13 "rapid acceleration"). The step decides the chance of a lucky answer in `p_right`.
    From `utility@9` a stair moves on every first answer, up when right and down when missed (`model.Params.up`,
-   `down`), so a learner who can do it is at a kind's hardest step within a few rounds.
+   `down`), so a learner who can do it is at a kind's hardest step within a few rounds. From `utility@10` the step up
+   needs two or three right in a row while a quarter or half of the learner's last eight first answers, over every
+   kind, were missed (`model.Knowledge.up`), so struggling in one area slows the climb in all of them.
    The grown-up's number of choices (`Config.choices`) is for the rounds they pick by hand and for decisions of
    `utility@3` and before, which replay with it.
 
@@ -310,7 +312,10 @@ class Policy:
     # weighs neither new kind and closes no kind for them (`OFFERS`, `WORDS_FROM`).
     # 9 (0.19.0): every right first answer steps a kind up and every miss steps it down (`model.Params.up`, `down`);
     # 8 and before replay with three up and two down (`model.SLOW_STAIR`).
-    version: int = 9
+    # 10 (0.21.0): the climb slows in every kind while the learner is missing a share of their recent rounds
+    # (`model.Knowledge.up`); 9 replays without it (`model.QUICK_STAIR`). Quick look's steps also set how long its
+    # pictures show and how many looks again it allows; that is the template's version 2, not the policy's.
+    version: int = 10
     weights: Weights = field(default_factory=Weights)
     tau: float = 0.15  # softmax temperature: lower picks the best more often
     epsilon: float = 0.1  # share of every pick that is uniform over the eligible candidates
@@ -357,6 +362,7 @@ OFFERS: dict[str, frozenset[Mode]] = {
     "utility@7": _ALL - _ADDED_8,
     "utility@8": _ALL,
     "utility@9": _ALL,
+    "utility@10": _ALL,
 }
 STEPS_FROM = 4  # the first version that chooses a step of difficulty
 PROBES_FROM = 5  # the first version that checks misconceptions
@@ -364,6 +370,7 @@ TRANSFER_FROM = 6  # the first version that checks transfer
 OPENS_FROM = 7  # the first version that opens kinds by success
 WORDS_FROM = 8  # the first version that keeps letters until the first words are shown
 QUICK_FROM = 9  # the first version whose stairs move on every first answer
+CALM_FROM = 10  # the first version whose stairs climb more slowly while the learner is struggling anywhere
 # Skills that joined the graph with a version: an older decision is remade on the graph without them (replay.py), as
 # it was made; they are only ever prerequisites, so leaving them out restores it exactly.
 SKILLS_SINCE: dict[int, frozenset[str]] = {

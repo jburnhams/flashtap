@@ -150,14 +150,37 @@ describe('Play, the new kinds of round', () => {
     expect(screen.getByText('That’s right.')).toBeInTheDocument()
   })
 
-  it('hides a quick look’s pictures after a moment, keeping the tiles', async () => {
+  // A quick look counts down 3 seconds before every look (strata-react's Glimpse), so these wait in real time.
+  const glimpse = () => document.querySelector('[data-glimpse]')?.getAttribute('data-glimpse')
+  const gone = () => waitFor(() => expect(glimpse()).toBe('gone'), { timeout: 5000 })
+
+  it('counts down 3 2 1, shows a quick look’s pictures for a moment, then hides them keeping the tiles', async () => {
     server.use(quickLookGoes)
     openApp('/?mode=quick_look')
-    expect(await screen.findByText('🦆 🦆 🦆')).toBeInTheDocument()
-    expect(await screen.findByRole('status')).toHaveTextContent('The pictures have gone.')
-    expect(screen.queryByText('🦆 🦆 🦆')).not.toBeInTheDocument()
+    await waitFor(() => expect(glimpse()).toBe('counting'))
+    expect(document.querySelector('[data-glimpse] [data-countdown]')).toHaveTextContent('3')
+    expect(screen.getByRole('status')).toHaveTextContent('Get ready to look.')
+    await gone()
+    expect(screen.getByRole('status')).toHaveTextContent('The pictures have gone.')
+    expect(screen.getByText('🦆 🦆 🦆').parentElement).toHaveClass('invisible') // gone, its room kept
     expect(tiles()).toHaveLength(4)
-  })
+  }, 10_000)
+
+  it('shows a quick look again after a wrong tap, and once more on Look again, which then goes', async () => {
+    server.use(quickLookGoes)
+    const { user } = openApp('/?mode=quick_look')
+    await gone()
+    await user.click(screen.getByRole('row', { name: tile('8') }))
+    expect(glimpse()).toBe('counting') // the wrong tap brings them back, counted down
+    await gone()
+    await user.click(screen.getByRole('button', { name: 'Look again' })) // the round allows one
+    expect(screen.queryByRole('button', { name: 'Look again' })).not.toBeInTheDocument()
+    expect(glimpse()).toBe('counting')
+    await gone()
+    expect(screen.queryByRole('button', { name: 'Look again' })).not.toBeInTheDocument() // used
+    await user.click(screen.getByRole('row', { name: tile('3') }))
+    expect(screen.getByText('That’s right.')).toBeInTheDocument()
+  }, 20_000)
 
   describe('spoken', () => {
     let speech: ReturnType<typeof installFakeSpeech>

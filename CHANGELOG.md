@@ -2,6 +2,21 @@
 
 Newest first, grouped by day. One entry per change, in the same commit or PR as the change.
 
+## 2026-11-28
+
+**Quick look: a 3-2-1, a timer, the pictures again after a miss, and a look again; the climb slows while a learner is struggling (0.21.0, branch `claude/project-thread-i0c2vh`)**
+
+Asked for: on "How many did you see?", count down 3 2 1 before the pictures, show a timer until they disappear, show them again (timed) after every wrong answer, and offer a one-tap "free retry" that disappears once used, with the time shown and the retries as difficulty the engine sets from success. Then: difficulty ramps up slightly too fast; take an overall failure rate into account, so struggling in one area slows the increase in the others. The countdown and timer are strata-react's new `Glimpse` (strata-react #411); this waits on its release.
+
+- `src/flashtap/rounds.py`: `Level.exposure_ms` and `Level.peeks`; `QUICK_LOOK_STEPS`, six steps from (numbers to 3, 3 tiles, 3 seconds, 2 looks again) to (numbers to 5, 6 tiles, 1 second, none), said in the engine's reasons; Quick look and Quick dots are version 2 (rounds made at version 1 are no longer rebuilt). `generate` takes a step's time and looks again over the body's.
+- `src/flashtap/mechanics.py`: `Round.peeks` (looks again; 0 by default), refused on anything but a brief exposure. `src/flashtap/kinds/__init__.py`: `Body.peeks`. `src/flashtap/kinds/choose.py`: a quick look played by hand allows one look again (`QUICK_LOOK_PEEKS`) and still shows 1.5 s.
+- `src/flashtap/engine/model.py`: `Params.calm` (8) and `Knowledge.recent`, the last eight first answers at a step over every kind; `Knowledge.struggling` is 1 once a quarter were missed and 2 once half were (after at least four), and `Knowledge.up` adds it to the right answers in a row a stair needs to step up. A miss still steps down at once. `QUICK_STAIR` is `utility@9`'s rule, and `SLOW_STAIR` now turns it off too.
+- `src/flashtap/engine/policy.py`: `utility@10` (`CALM_FROM`). `src/flashtap/engine/replay.py`: decisions of `utility@9` are remade with `QUICK_STAIR`; the list of kept policies sorts by version number (`utility@10` after `utility@9`).
+- `web/src/screens/PlayScreen.tsx`: a quick look is a `Glimpse`: 3, 2, 1, the pictures for the round's time with a bar emptying under them, then gone with their room kept; shown again after each wrong tap while the round is playing (`again`), and the round's `peeks` on a Look again button that goes once used and is taken away when the round ends. `LookCount` (3) lets a story leave the count out. `useCountdown` comes from strata-react (it was here).
+- `web/openapi.json`, `web/src/api.generated.ts`: `Round.peeks`, the policy id. `web/src/mocks/fixtures.ts`: every round has `peeks`; Quick look and Quick dots are version 2. `web/stories/play.stories.tsx`: the Quick look stories show no count.
+- Tests: `tests/unit/test_rounds.py` (each step's time and looks again, the hand-played default, `check` refuses looks again elsewhere), `tests/unit/test_engine.py` (struggling in Missing slows Counting's climb and it speeds up again as right answers come; `utility@9` replays without it; the kept list), `tests/unit/test_server.py` (policy id); `web/tests/integration/PlayScreen.test.tsx` (the count, the pictures gone with their room kept, shown again after a wrong tap, Look again once).
+- `pyproject.toml`, `uv.lock`: 0.21.0 (0.20.0 is the placing-round change waiting on strata-react #409). `docs/implementation-plan.md` (item 16), `docs/progress.md`, `docs/overview.md`.
+
 ## 2026-11-27
 
 **Ramping up on every right answer (0.19.0, branch `claude/project-thread-85zcg6`)**

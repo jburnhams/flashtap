@@ -1450,7 +1450,7 @@ export interface components {
             learner_id?: string | null;
             /**
              * Policy
-             * @default utility@9
+             * @default utility@10
              */
             policy: string;
             simulated?: components["schemas"]["SimulatedIn"] | null;
@@ -1497,6 +1497,11 @@ export interface components {
             mode: components["schemas"]["Mode"];
             /** Options */
             options: components["schemas"]["Option"][];
+            /**
+             * Peeks
+             * @default 0
+             */
+            peeks: number;
             /** Pieces */
             pieces: components["schemas"]["Piece"][];
             /** Places */

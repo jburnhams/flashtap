@@ -25,8 +25,9 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from flashtap import rounds
-from flashtap.engine.model import SLOW_STAIR, Graph, Params, fold
+from flashtap.engine.model import QUICK_STAIR, SLOW_STAIR, Graph, Params, fold
 from flashtap.engine.policy import (
+    CALM_FROM,
     QUICK_FROM,
     REPLAYS,
     Action,
@@ -108,7 +109,13 @@ def remake(
     # made before some first steps' skills joined the graph: remade without them
     if later := later_skills(policy.version):
         g = g.without(later)
-    params = Params() if policy.version >= QUICK_FROM else Params(**SLOW_STAIR)
+    params = (
+        Params()
+        if policy.version >= CALM_FROM
+        else Params(**QUICK_STAIR)
+        if policy.version >= QUICK_FROM
+        else Params(**SLOW_STAIR)
+    )
     k = fold(as_of(events, d.at), g, params, told_as_of(told, d.at))
     past = past_of(started, decisions, events, d.session_id, d.at, d.seq)
     likes = likes_as_of(ratings, decisions, d.at)
@@ -132,7 +139,9 @@ def replay(
     for d in sorted(decisions, key=lambda d: (d.at, d.session_id, d.seq)):
         where = f"decision {d.seq} of session {d.session_id}"
         if d.policy not in REPLAYS:
-            out.append(f"{where}: made by {d.policy}, which is not kept (now {', '.join(sorted(REPLAYS))})")
+            out.append(
+                f"{where}: made by {d.policy}, which is not kept (now {', '.join(sorted(REPLAYS, key=_version))})"
+            )
             continue
         drawn = [(d.mode, d.content), *((o.mode, o.content) for o in d.offers or [])]
         moved = [(c, now) for m, c in drawn if m is not None and c and c != (now := rounds.content_of(m))]
@@ -154,3 +163,9 @@ def replay(
         else:
             same += 1
     return same, out
+
+
+def _version(policy_id: str) -> tuple[str, int]:
+    """A policy id's sort key: by name, then by version as a number, so utility@10 comes after utility@9."""
+    name, _, version = policy_id.partition("@")
+    return name, int(version or 0)

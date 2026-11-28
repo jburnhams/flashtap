@@ -24,7 +24,10 @@ the stair there at once. From policy `utility@9` (0.19.0) it is up after every r
 miss: the owner asked for it to "keep increasing all the time they are got right" so it finds a learner's level
 quickly, and a miss brings it back as quickly. Before that it was up after three and down after two (`SLOW_STAIR`),
 which settled where most first answers go right but walked a learner who could already do it up one step per three
-rounds; replay folds an older decision's log with those numbers. Only rounds the engine made at a step move a stair; rounds played by hand carry none.
+rounds; replay folds an older decision's log with those numbers. From `utility@10` (0.21.0) the climb slows while the
+learner is struggling anywhere: once a quarter of their last eight first answers at a step, over every kind, were
+missed, a stair needs two right in a row to step up, and three once half were (`Knowledge.up`); the owner found the
+climb a little fast and asked that a hard time in one area slow it in the others, so a learner is not overwhelmed. Only rounds the engine made at a step move a stair; rounds played by hand carry none.
 The step changes the chance of a lucky answer (more tiles, less luck), not the skill's estimate: BKT stays one
 estimate per skill, over every step it was seen at (the spec's "core capability + parameters", §4).
 
@@ -75,6 +78,9 @@ class Params:
     imply: float = 0.9  # a right primary answer lifts its unseen prerequisites to this share of its own estimate
     up: int = 1  # first answers right in a row at a step before the next step up (utility@9 on; 3 before)
     down: int = 1  # missed in a row at a step before the step below (utility@9 on; 2 before)
+    # utility@10 on: the learner's last `calm` first answers at a step, over every kind; while a share of them were
+    # missed, every stair needs more right in a row to step up (`Knowledge.up`). 0 turns it off (9 and before).
+    calm: int = 8
 
     def label(self) -> str:
         return f"prior {self.prior:g}, learn {self.learn:g}, slip {self.slip:g}"
@@ -190,6 +196,7 @@ class Knowledge:
     shown: set[str] = field(default_factory=set[str])
     counted: int = 0  # counted answers over every skill
     stairs: dict[Mode, Stair] = field(default_factory=dict[Mode, Stair])  # per kind, once played at a step
+    recent: list[bool] = field(default_factory=list[bool])  # the last `params.calm` first answers at a step, any kind
     mistakes: dict[str, Tally] = field(default_factory=dict[str, Tally])  # per misconception a round has offered
     # Per skill: counted primary answers right in its practice kinds, and its transfer answers, oldest first
     # (learners/transfer.py): what the scheduler needs to know whether a transfer check is due.
@@ -216,8 +223,10 @@ class Knowledge:
             mode = Mode(e.mode)
             steps = len(rounds.TEMPLATES[mode].levels)
             self.stairs.setdefault(mode, Stair(level=e.level, last=e.level)).climb(
-                e.level, e.first_correct, steps, self.params.up, self.params.down
+                e.level, e.first_correct, steps, self.up(), self.params.down
             )
+            if self.params.calm:
+                self.recent = [*self.recent, e.first_correct][-self.params.calm :]
         for u in judge(e, self.shown):
             if not u.counted:
                 continue
@@ -241,6 +250,23 @@ class Knowledge:
                     self.transfers.setdefault(u.skill, []).append(e.first_correct)
                 elif e.first_correct and is_practice(e):
                     self.practised[u.skill] = self.practised.get(u.skill, 0) + 1
+
+    def struggling(self) -> int:
+        """How hard the last few rounds have gone, over every kind (utility@10): 0 while few were missed, 1 once a
+        quarter of the last `params.calm` first answers at a step were, 2 once half were. Needs half a window of
+        answers, so a new learner's first miss is not a struggle."""
+        n = len(self.recent)
+        if not self.params.calm or n < max(1, self.params.calm // 2):
+            return 0
+        missed = n - sum(self.recent)
+        return 2 if 2 * missed >= n else 1 if 4 * missed >= n else 0
+
+    def up(self) -> int:
+        """Right first answers in a row a stair needs before it steps up: `params.up`, plus one or two while the
+        learner is struggling anywhere, so a hard time in one kind slows the climb in every other one (the owner,
+        2026-11-28: "if they are struggling in one area ... slow rate of increase in others so they are not
+        overwhelmed"). A miss still steps down at once."""
+        return self.params.up + self.struggling()
 
     def transferred(self, skill: str) -> bool:
         """Whether its transfer check has passed (`transfer.passed`)."""
@@ -287,7 +313,9 @@ def fold(events: Iterable[Event], g: Graph, params: Params | None = None, told: 
 
 
 # The staircase before utility@9: up after three right in a row, down after two misses. Replay folds with it.
-SLOW_STAIR = {"up": 3, "down": 2}
+SLOW_STAIR = {"up": 3, "down": 2, "calm": 0}
+# utility@9: every right answer up, every miss down, whatever happened in other kinds.
+QUICK_STAIR = {"calm": 0}
 
 
 @dataclass(frozen=True)

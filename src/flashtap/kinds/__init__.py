@@ -16,6 +16,7 @@ class Body:
     say: str = ""  # empty: say the prompt
     show: str = ""
     exposure_ms: int | None = None
+    peeks: int = 0  # brief exposure: looks again the learner may ask for once it hides
     options: list[Option] = field(default_factory=list[Option])
     answer: str = ""
     pieces: list[Piece] = field(default_factory=list[Piece])
