@@ -371,6 +371,8 @@ OPENS_FROM = 7  # the first version that opens kinds by success
 WORDS_FROM = 8  # the first version that keeps letters until the first words are shown
 QUICK_FROM = 9  # the first version whose stairs move on every first answer
 CALM_FROM = 10  # the first version whose stairs climb more slowly while the learner is struggling anywhere
+
+
 # Skills that joined the graph with a version: an older decision is remade on the graph without them (replay.py), as
 # it was made; they are only ever prerequisites, so leaving them out restores it exactly.
 SKILLS_SINCE: dict[int, frozenset[str]] = {

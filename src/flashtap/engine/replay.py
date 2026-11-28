@@ -19,6 +19,9 @@ or overrides (policy.REPLAYS). A decision before `utility@7` is remade on the sk
 skills, which joined it then (`Graph.without`): their edges change the readiness and reach of the kinds they open;
 one before `utility@8` without Same shape's skill, which joined it then (`policy.SKILLS_SINCE`).
 `maths.number` version 2's two edges are a pack change like any other and show as differences in the candidates.
+A decision that served or offered a round of a template version no longer kept (Quick look and Quick dots version 1,
+replaced with `utility@10`) is reported, not remade, as one from changed packs is: its round cannot be rebuilt (Codex on
+#64). One that only weighed such a kind among its candidates is remade, and its candidates show as a difference.
 """
 
 from collections.abc import Sequence
@@ -143,11 +146,18 @@ def replay(
                 f"{where}: made by {d.policy}, which is not kept (now {', '.join(sorted(REPLAYS, key=_version))})"
             )
             continue
+        served = [(d.mode, d.version), *((o.mode, o.version) for o in d.offers or [])]
+        old = [(m, v) for m, v in served if m is not None and v is not None and v != rounds.TEMPLATES[m].version]
+        if old:
+            m, v = old[0]
+            t = rounds.TEMPLATES[m]
+            out.append(f"{where}: made a round of {t.name} version {v}, which is not kept (now {t.version})")
+            continue
         drawn = [(d.mode, d.content), *((o.mode, o.content) for o in d.offers or [])]
         moved = [(c, now) for m, c in drawn if m is not None and c and c != (now := rounds.content_of(m))]
         if moved:
-            made, kept = (", ".join(f"{k}@{v}" for k, v in sorted(c.items())) for c in moved[0])
-            out.append(f"{where}: made from {made}, which are not kept (now {kept})")
+            made, now = (", ".join(f"{k}@{v}" for k, v in sorted(c.items())) for c in moved[0])
+            out.append(f"{where}: made from {made}, which are not kept (now {now})")
             continue
         started, config = sessions.get(d.session_id, (None, None))
         if started is None or config is None:

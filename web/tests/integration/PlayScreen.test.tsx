@@ -169,6 +169,9 @@ describe('Play, the new kinds of round', () => {
   it('shows a quick look again after a wrong tap, and once more on Look again, which then goes', async () => {
     server.use(quickLookGoes)
     const { user } = openApp('/?mode=quick_look')
+    await waitFor(() => expect(glimpse()).toBe('counting'))
+    await user.click(screen.getByRole('row', { name: tile('3') })) // before the pictures have shown: no answer taken
+    expect(screen.queryByText('That’s right.')).not.toBeInTheDocument()
     await gone()
     await user.click(screen.getByRole('row', { name: tile('8') }))
     expect(glimpse()).toBe('counting') // the wrong tap brings them back, counted down

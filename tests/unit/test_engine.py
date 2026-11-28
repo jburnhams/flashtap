@@ -671,6 +671,24 @@ def test_replay_names_a_decision_that_comes_out_different(db_session: Session, f
     )
 
 
+def test_a_decision_that_served_a_template_version_no_longer_kept_is_reported_not_remade(
+    db_session: Session, fox: str
+) -> None:
+    """Quick look version 1 (before utility@10) had other steps; its round cannot be rebuilt, so a decision that served
+    one is reported as one from changed packs is (Codex on #64)."""
+    play_session(db_session, fox, Config(choices=4, tries=0, max_rounds=1), T0)
+    log, old = store.events(db_session, fox), store.decisions(db_session, fox)
+    d = next(x for x in old if x.mode is not None)
+    quick = d.model_copy(update={"mode": Mode.QUICK_LOOK, "version": 1, "content": rounds.content_of(Mode.QUICK_LOOK)})
+    starts = {x.id: (x.started_at, x.config) for x in store.sessions_of(db_session, fox)}
+    assert replay.replay(log, [quick], starts, G) == (
+        0,
+        [
+            f"decision {d.seq} of session {d.session_id}: made a round of Quick look version 1, which is not kept (now 2)"
+        ],
+    )
+
+
 def test_a_decision_from_before_the_first_steps_is_remade_on_the_graph_it_was_made_on() -> None:
     """utility@6 decided on a graph with no first-steps skills; their edges change Matching's readiness and reach, so
     a replay on today's graph alone would differ (Codex on #59)."""

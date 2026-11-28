@@ -562,6 +562,9 @@ const marks = { wrong: 'Not this one', right: 'Right', answer: 'This one' }
 function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: () => void; onAnswered?: OnAnswered; onRated?: (v: Face) => Promise<unknown> }) {
   const [turn, setTurn] = useState<Turn>({ tapped: [] })
   const [again, setAgain] = useState(0) // a quick look's pictures come back after each wrong tap while it is still playing
+  // A quick look takes no answer until its pictures have shown once: a tap during the first 3-2-1 would be a guess at
+  // pictures not yet seen, counted as a first answer (Codex on #64).
+  const [seen, setSeen] = useState(round.exposure_ms === null)
   const attempt = useAttempt(onAnswered)
   const rated = useRated(onRated)
   const state = outcome(round, turn)
@@ -574,6 +577,7 @@ function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: 
   const voice = useVoice()
   const talk = useTalk()
   const tap = (id: string) => { // only an open tile reaches here: ChoiceGrid closes tapped tiles and, once answered, every tile
+    if (!seen) return
     const next = { tapped: [...turn.tapped, id] }
     setTurn(next)
     voice.say(feedback(round, next, talk))
@@ -586,7 +590,7 @@ function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: 
   return (
     <section aria-labelledby="prompt" className="grid gap-6">
       <RoundHeader round={round} over={done ? state : null} onNext={onNext} onward={!rated.rate || rated.done} />
-      {round.show && <Show round={round} again={again} peeks={done ? 0 : round.peeks} />}
+      {round.show && <Show round={round} again={again} peeks={done ? 0 : round.peeks} onLook={() => setSeen(true)} />}
       <ChoiceGrid
         label="Choices"
         items={round.options}
@@ -597,7 +601,7 @@ function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: 
         marks={marks}
         onChoose={o => tap(o.id)}
         stretch
-        beckon
+        beckon={seen}
       />
       {done && rated.rate && <HowWasIt onRated={rated.rate} />}
     </section>
@@ -610,11 +614,11 @@ function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: 
  * them, then gone with their room kept so the tiles do not jump; back again (counted down and timed) whenever `again`
  * changes, after a wrong tap, and `peeks` times on its Look again button, which goes once used.
  */
-function Show({ round, again = 0, peeks = 0 }: { round: Round; again?: number; peeks?: number }) {
+function Show({ round, again = 0, peeks = 0, onLook }: { round: Round; again?: number; peeks?: number; onLook?: () => void }) {
   const picture = <div className="type-picture picture-lead justify-self-center break-words text-center" aria-hidden>{round.show}</div>
   const count = useContext(LookCount)
   if (round.exposure_ms === null) return picture
-  return <Glimpse ms={round.exposure_ms} count={count} again={again} peeks={peeks} gone="The pictures have gone.">{picture}</Glimpse>
+  return <Glimpse ms={round.exposure_ms} count={count} again={again} peeks={peeks} gone="The pictures have gone." onLook={onLook}>{picture}</Glimpse>
 }
 
 const placeMarks = { held: 'Picked up', right: 'Right', wrong: 'Not yet' }
