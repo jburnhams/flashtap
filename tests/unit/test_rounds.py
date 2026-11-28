@@ -153,7 +153,7 @@ def test_missing_offers_the_reversal_of_six_and_nine():
 @given(choice_counts, seeds)
 def test_quick_look_hides_up_to_five_after_a_moment(choices, seed):
     r = rounds.generate(Mode.QUICK_LOOK, choices, seed)
-    assert r.exposure_ms == 1500
+    assert (r.exposure_ms, r.peeks) == (1500, 1)  # played by hand: no step, one look again
     assert 1 <= len(r.show.split(" ")) <= 5
     assert r.answer == f"n{len(r.show.split(' '))}"
     assert r.say != r.prompt
@@ -287,6 +287,8 @@ def test_check_refuses_a_round_without_a_primary_skill_and_misplaced_exposure():
         mx.check(_choose(ok, skills=[SkillRole(skill="x", role=QRole.CONFOUND)]))
     with pytest.raises(InvalidRound, match="only a brief exposure"):
         mx.check(_choose(ok, exposure_ms=100))
+    with pytest.raises(InvalidRound, match="only a brief exposure has looks again"):
+        mx.check(_choose(ok, peeks=1))
     with pytest.raises(InvalidRound, match="needs something to show"):
         mx.check(_choose(ok, mechanic=Mechanic.BRIEF_EXPOSURE))
     with pytest.raises(InvalidRound, match="no pieces or places"):
@@ -410,6 +412,28 @@ def test_every_step_of_every_template_gives_one_answer_at_its_own_size(mode):
                 assert [o.id for o in r.options if o.correct] == [r.answer]
             if step.top is not None:
                 assert _asked(r) <= step.top
+
+
+@pytest.mark.parametrize("mode", [Mode.QUICK_LOOK, Mode.QUICK_DOTS])
+def test_quick_look_steps_set_how_long_it_shows_and_the_looks_again(mode):
+    """The owner (2026-11-28): the time shown and the free looks again are difficulty the engine sets from success."""
+    steps = TEMPLATES[mode].levels
+    assert [(s.exposure_ms, s.peeks) for s in steps] == [
+        (3000, 2),
+        (2000, 1),
+        (2500, 1),
+        (1500, 1),
+        (1500, 0),
+        (1000, 0),
+    ]
+    assert steps[0].says == "numbers to 3, 3 to pick from, 3 seconds to look, 2 looks again"
+    assert steps[-1].says == "numbers to 5, 6 to pick from, 1 second to look, no looks again"
+    for level, step in enumerate(steps):
+        r = rounds.at_level(mode, level, 7)
+        assert (r.exposure_ms, r.peeks) == (step.exposure_ms, step.peeks)
+    # Every other kind's steps leave the round's own: no time, no looks again.
+    r = rounds.at_level(Mode.COUNTING, 0, 7)
+    assert (r.exposure_ms, r.peeks) == (None, 0)
 
 
 def test_number_steps_lay_out_what_they_say():

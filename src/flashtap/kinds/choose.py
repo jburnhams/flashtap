@@ -9,7 +9,9 @@ chosen by named generators (`flashtap.distractors`). The last three are new with
 - **Missing** (`fill_missing`): a run of numbers with one gap. The gap's neighbours are offered too, because saying
   the number before or after is the common slip.
 - **Quick look** (`brief_exposure`): up to five pictures shown for a moment, then hidden. Long enough to see, too
-  short to count one by one, so a right answer is evidence of subitising rather than counting.
+  short to count one by one, so a right answer is evidence of subitising rather than counting. From version 2
+  (0.21.0) each step of difficulty also sets how long they show and how many looks again the learner may ask for
+  (`rounds.Level`): the easiest shows three seconds with two looks again, the hardest one second with none.
 - **Listen** (`audio_respond`): a word is said (and its picture shown, never its spelling) and the learner taps the
   letter it starts with. A letter that spells the same sound (c and k for /k/) is never offered: it would also be
   right. Wrong letters are the right one's look-alikes (b d p q) and its sound's neighbours (/p/ for /b/) first.
@@ -179,6 +181,7 @@ def counting(rng: random.Random, choices: int, top: int | None = None) -> Body:
 
 
 QUICK_LOOK_MS = 1500  # long enough to see up to five, too short to point and count them one by one
+QUICK_LOOK_PEEKS = 1  # a round played by hand (no step) allows one look again; a step sets both (rounds.Level)
 
 
 def quick_look(rng: random.Random, choices: int, top: int | None = None) -> Body:
@@ -191,6 +194,7 @@ def quick_look(rng: random.Random, choices: int, top: int | None = None) -> Body
         say=f"Look quickly! How many {thing.many}?",
         show=" ".join([thing.picture] * n),
         exposure_ms=QUICK_LOOK_MS,
+        peeks=QUICK_LOOK_PEEKS,
         options=_number_options(
             _numerals(rng, n, *numerals, choices, 0.5), n, f"Yes! There {'was' if n == 1 else 'were'} {n} {many}."
         ),
@@ -364,6 +368,7 @@ def quick_dots(rng: random.Random, choices: int, top: int | None = None) -> Body
         say="Look quickly! How many dots?",
         show=" ".join([DOT] * n),
         exposure_ms=QUICK_LOOK_MS,
+        peeks=QUICK_LOOK_PEEKS,
         options=_number_options(
             _numerals(rng, n, *numerals, choices, 0.5), n, f"Yes! There {'was' if n == 1 else 'were'} {n}."
         ),

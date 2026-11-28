@@ -1,5 +1,12 @@
 # Progress log
 
+## 2026-11-28: quick look's countdown and timer, and a calmer climb (0.21.0)
+
+- Asked for: a 3-2-1 before a quick look's pictures, a timer until they go, the pictures again after every wrong answer, a one-tap free retry that goes once used, and time shown and retries as difficulty set from success. Then: "it might be ramping up slightly too fast - perhaps have a global failure rate taken into account ... if they are struggling in one area currently then slow rate of increase in others so they not overwhelmed".
+- The reusable parts went to strata-react (`Glimpse`, `useCountdown`, #411); Flashtap passes the round's time and looks again and bumps `again` after a wrong tap.
+- Difficulty: the quick look's ladder now has six steps; the first gives 3 s and two looks again, the last 1 s and none. Each step moves one or two levers, so with the stair moving on every answer a learner who can is at the top in five rounds.
+- The calmer climb counts the last eight first answers at a step over every kind, not per kind or per skill, as the owner asked for one rate across areas. A quarter missed means two right to step up, half means three; misses still step down at once, and the existing guard (an easier step after two misses in a row, a break after three) is unchanged. Half a window (four answers) is needed first, so a new learner's first miss does not slow anything. Simulated: 13.63 skills known after 6 sessions against 13.86 under `utility@9`.
+
 ## 2026-11-27: ramping up on every right answer (0.19.0)
 
 - Asked for: after a learner answered a few right, "should ramp far more aggressively - ie always increase a slightly hard question and so keep increasing all the time they are got right. That way can quickly adjust to current level".

@@ -19,14 +19,18 @@ or overrides (policy.REPLAYS). A decision before `utility@7` is remade on the sk
 skills, which joined it then (`Graph.without`): their edges change the readiness and reach of the kinds they open;
 one before `utility@8` without Same shape's skill, which joined it then (`policy.SKILLS_SINCE`).
 `maths.number` version 2's two edges are a pack change like any other and show as differences in the candidates.
+A decision that served or offered a round of a template version no longer kept (Quick look and Quick dots version 1,
+replaced with `utility@10`) is reported, not remade, as one from changed packs is: its round cannot be rebuilt (Codex on
+#64). One that only weighed such a kind among its candidates is remade, and its candidates show as a difference.
 """
 
 from collections.abc import Sequence
 from datetime import datetime
 
 from flashtap import rounds
-from flashtap.engine.model import SLOW_STAIR, Graph, Params, fold
+from flashtap.engine.model import QUICK_STAIR, SLOW_STAIR, Graph, Params, fold
 from flashtap.engine.policy import (
+    CALM_FROM,
     QUICK_FROM,
     REPLAYS,
     Action,
@@ -108,7 +112,13 @@ def remake(
     # made before some first steps' skills joined the graph: remade without them
     if later := later_skills(policy.version):
         g = g.without(later)
-    params = Params() if policy.version >= QUICK_FROM else Params(**SLOW_STAIR)
+    params = (
+        Params()
+        if policy.version >= CALM_FROM
+        else Params(**QUICK_STAIR)
+        if policy.version >= QUICK_FROM
+        else Params(**SLOW_STAIR)
+    )
     k = fold(as_of(events, d.at), g, params, told_as_of(told, d.at))
     past = past_of(started, decisions, events, d.session_id, d.at, d.seq)
     likes = likes_as_of(ratings, decisions, d.at)
@@ -132,13 +142,22 @@ def replay(
     for d in sorted(decisions, key=lambda d: (d.at, d.session_id, d.seq)):
         where = f"decision {d.seq} of session {d.session_id}"
         if d.policy not in REPLAYS:
-            out.append(f"{where}: made by {d.policy}, which is not kept (now {', '.join(sorted(REPLAYS))})")
+            out.append(
+                f"{where}: made by {d.policy}, which is not kept (now {', '.join(sorted(REPLAYS, key=_version))})"
+            )
+            continue
+        served = [(d.mode, d.version), *((o.mode, o.version) for o in d.offers or [])]
+        old = [(m, v) for m, v in served if m is not None and v is not None and v != rounds.TEMPLATES[m].version]
+        if old:
+            m, v = old[0]
+            t = rounds.TEMPLATES[m]
+            out.append(f"{where}: made a round of {t.name} version {v}, which is not kept (now {t.version})")
             continue
         drawn = [(d.mode, d.content), *((o.mode, o.content) for o in d.offers or [])]
         moved = [(c, now) for m, c in drawn if m is not None and c and c != (now := rounds.content_of(m))]
         if moved:
-            made, kept = (", ".join(f"{k}@{v}" for k, v in sorted(c.items())) for c in moved[0])
-            out.append(f"{where}: made from {made}, which are not kept (now {kept})")
+            made, now = (", ".join(f"{k}@{v}" for k, v in sorted(c.items())) for c in moved[0])
+            out.append(f"{where}: made from {made}, which are not kept (now {now})")
             continue
         started, config = sessions.get(d.session_id, (None, None))
         if started is None or config is None:
@@ -154,3 +173,9 @@ def replay(
         else:
             same += 1
     return same, out
+
+
+def _version(policy_id: str) -> tuple[str, int]:
+    """A policy id's sort key: by name, then by version as a number, so utility@10 comes after utility@9."""
+    name, _, version = policy_id.partition("@")
+    return name, int(version or 0)

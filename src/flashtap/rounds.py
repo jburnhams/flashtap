@@ -15,7 +15,8 @@ version no longer kept is, rather than rebuilt from today's words and judged aga
 
 **Steps of difficulty** (spec §6, "shared difficulty dimensions": content and distractors). Each template has a short
 ladder of `Level`s, easiest first: how many options or pieces a round lays out and, for the number kinds, the largest
-number in play (`top`, inside the skill's `number_range` in the packs). The adaptive engine chooses the step from the
+number in play (`top`, inside the skill's `number_range` in the packs); for a quick look (version 2, 0.21.0) also how
+long its pictures show and how many looks again it allows. The adaptive engine chooses the step from the
 learner's answers (engine/model.py `Stair`); a round played by hand has no step (`level` None) and is built from the
 grown-up's number of choices and the kind's fixed range, exactly as before steps existed, so every round made before
 0.11.0 rebuilds unchanged and no template version was raised. A round with a step carries it, and its attempt records
@@ -90,6 +91,10 @@ class Level:
     choices: int
     says: str
     top: int | None = None
+    # A brief exposure's (0.21.0): how long the pictures show and how many looks again the learner may ask for. None
+    # keeps the body's own (a kind that hides nothing).
+    exposure_ms: int | None = None
+    peeks: int = 0
 
 
 Build = Callable[[random.Random, int, int | None], Body]
@@ -106,6 +111,23 @@ def _picks(*ns: int) -> tuple[Level, ...]:
 
 def _numbers(*steps: tuple[int, int]) -> tuple[Level, ...]:
     return tuple(Level(n, f"numbers to {top}, {n} to pick from", top) for n, top in steps)
+
+
+def _looks(*steps: tuple[int, int, int, int]) -> tuple[Level, ...]:
+    """A quick look's steps: (choices, top, milliseconds shown, looks again). The owner (2026-11-28) asked for the
+    time shown and the free looks again to be levers the engine sets from success, beside the numbers and tiles."""
+
+    def says(n: int, top: int, ms: int, peeks: int) -> str:
+        again = "no looks again" if not peeks else "1 look again" if peeks == 1 else f"{peeks} looks again"
+        return f"numbers to {top}, {n} to pick from, {ms / 1000:g} second{'' if ms == 1000 else 's'} to look, {again}"
+
+    return tuple(Level(n, says(n, top, ms, peeks), top, ms, peeks) for n, top, ms, peeks in steps)
+
+
+# Easiest first: more time and looks again before more numbers, then less time. Each step changes one or two levers.
+QUICK_LOOK_STEPS = _looks(
+    (3, 3, 3000, 2), (3, 3, 2000, 1), (4, 5, 2500, 1), (4, 5, 1500, 1), (4, 5, 1500, 0), (6, 5, 1000, 0)
+)
 
 
 @dataclass(frozen=True)
@@ -182,9 +204,9 @@ TEMPLATES: dict[Mode, Template] = {
             choose.missing, _numbers((3, 5), (4, 10), (4, 20), (6, 20)),
         ),
         Template(
-            Mode.QUICK_LOOK, 1, Mechanic.BRIEF_EXPOSURE, "Quick look", "See a few pictures for a moment and say how many",
+            Mode.QUICK_LOOK, 2, Mechanic.BRIEF_EXPOSURE, "Quick look", "See a few pictures for a moment and say how many",
             (("maths.subitising.perceptual", P), ("maths.numerals.recognise", C)), choose.quick_look,
-            _numbers((3, 3), (4, 5), (6, 5)),
+            QUICK_LOOK_STEPS,
         ),
         Template(
             Mode.LISTEN, 1, Mechanic.AUDIO_RESPOND, "Listen", "Hear a word and tap the letter it starts with",
@@ -237,9 +259,9 @@ TEMPLATES: dict[Mode, Template] = {
             _numbers((2, 3), (3, 4), (4, 5)), held_out=True,
         ),
         Template(
-            Mode.QUICK_DOTS, 1, Mechanic.BRIEF_EXPOSURE, "Quick dots", "See some dots for a moment and say how many",
+            Mode.QUICK_DOTS, 2, Mechanic.BRIEF_EXPOSURE, "Quick dots", "See some dots for a moment and say how many",
             (("maths.subitising.perceptual", P), ("maths.numerals.recognise", C)), choose.quick_dots,
-            _numbers((3, 3), (4, 5), (6, 5)), held_out=True,
+            QUICK_LOOK_STEPS, held_out=True,
         ),
         Template(
             Mode.ONE_MORE, 1, Mechanic.SELECT_ONE, "One more, one less", "Find the number one more or one less than another",
@@ -427,13 +449,18 @@ def generate(
             "not kept"
         )
     top = None
+    step: Level | None = None
     if level is not None:
         if not 0 <= level < len(t.levels):
             raise ValueError(f"{played} has steps 0 to {len(t.levels) - 1}, not {level}")
         if choices != t.levels[level].choices:
             raise ValueError(f"{played} step {level} lays out {t.levels[level].choices}, not {choices}")
-        top = t.levels[level].top
+        step = t.levels[level]
+        top = step.top
     b = t.build(rng, choices, top)
+    exposure_ms, peeks = b.exposure_ms, b.peeks
+    if step is not None and step.exposure_ms is not None:  # a quick look's step sets its time and looks again
+        exposure_ms, peeks = step.exposure_ms, step.peeks
     return check(
         Round(
             mode=played,
@@ -447,7 +474,8 @@ def generate(
             prompt=b.prompt,
             say=b.say or b.prompt,
             show=b.show,
-            exposure_ms=b.exposure_ms,
+            exposure_ms=exposure_ms,
+            peeks=peeks,
             options=b.options,
             answer=b.answer,
             pieces=b.pieces,

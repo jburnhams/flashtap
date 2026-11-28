@@ -2499,7 +2499,7 @@
       "title": "Learner Id"
      },
      "policy": {
-      "default": "utility@9",
+      "default": "utility@10",
       "title": "Policy",
       "type": "string"
      },
@@ -2630,6 +2630,12 @@
       "title": "Options",
       "type": "array"
      },
+     "peeks": {
+      "default": 0,
+      "minimum": 0.0,
+      "title": "Peeks",
+      "type": "integer"
+     },
      "pieces": {
       "items": {
        "$ref": "#/components/schemas/Piece"
@@ -2700,6 +2706,7 @@
      "say",
      "show",
      "exposure_ms",
+     "peeks",
      "options",
      "answer",
      "pieces",

@@ -141,6 +141,9 @@ class Round(ApiModel):  # every field is always sent, so the schema (and the web
     say: str  # said aloud; differs from prompt where printing it would give the answer to a reader
     show: str = ""  # the big picture or word above the answer: "🐄", "RED", "1 2 _ 4", "🍎 🍎 🍎"; empty for none
     exposure_ms: int | None = None  # brief exposure: `show` is hidden after this long
+    # Brief exposure (0.21.0): looks again the learner may ask for once `show` has gone, each counted down and timed
+    # like the first. A step of difficulty sets it with `exposure_ms` (rounds.Level); it changes no answer.
+    peeks: int = Field(default=0, ge=0)
     options: list[Option] = Field(default_factory=list[Option])  # a factory: ruff cannot tell ApiModel is pydantic
     answer: str = ""  # a choose round's right option id
     pieces: list[Piece] = Field(default_factory=list[Piece])
@@ -170,6 +173,8 @@ def check(r: Round) -> Round:
         raise InvalidRound(f"{where}: a brief exposure needs something to show and how long")
     if r.mechanic is not Mechanic.BRIEF_EXPOSURE and r.exposure_ms is not None:
         raise InvalidRound(f"{where}: only a brief exposure hides what it shows")
+    if r.mechanic is not Mechanic.BRIEF_EXPOSURE and r.peeks:
+        raise InvalidRound(f"{where}: only a brief exposure has looks again")
     return r
 
 

@@ -5,8 +5,11 @@
 // Two ways to answer, by the round's mechanic (src/flashtap/mechanics.py):
 // - one tap (select one, fill the missing number, quick look, listen): strata-react's `ChoiceGrid`.
 //   A wrong tap says what was tapped and greys that tile out; the right one says so and offers
-//   Next. A quick look hides its picture after the round's `exposure_ms`, so the learner says how
-//   many they saw, not how many they counted. Listen says a word the screen never prints.
+//   Next. A quick look counts down 3, 2, 1, shows its pictures for the round's `exposure_ms` with a bar
+//   emptying under them, then hides them, so the learner says how many they saw, not how many they
+//   counted; they come back (counted down and timed) after every wrong tap, and the round's `peeks`
+//   allow that many looks again on a button that goes once used (the owner, 2026-11-28). The engine's
+//   step sets both. Listen says a word the screen never prints.
 // - an arrangement (give a number, put in order, match, sort): strata-react's `PlaceBoard`, two
 //   taps to move a picture, then Check. A check marks each place right or "Not yet"; moving a
 //   piece in or out of a place clears its mark.
@@ -56,7 +59,7 @@
 // or wrong. With the grown-up choosing the kind, the faces still come every few rounds for a learner who is recorded.
 import { useQueryClient } from '@tanstack/react-query'
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { Button, ButtonLink, isRefusal, ChoiceGrid, ChoiceGridSkeleton, DataView, Done, EmptyState, format, Field, NativeSelect, PageHeader, PlaceBoard, SayAgain, Skeleton, useLoad, useSearchParam, type ChoiceState, type Delivery, type Load, type PlaceState } from 'strata-react'
+import { Button, ButtonLink, isRefusal, ChoiceGrid, ChoiceGridSkeleton, DataView, Done, EmptyState, format, Field, Glimpse, NativeSelect, PageHeader, PlaceBoard, SayAgain, Skeleton, useCountdown, useLoad, useSearchParam, type ChoiceState, type Delivery, type Load, type PlaceState } from 'strata-react'
 import { api, isMode, isPlayChoice, keepAttempt, keepRating, keys, MODES, newId, PLACE_MECHANICS, type AttemptIn, type Face, type LearnerRow, type Mode, type Next, type OfferOut, type Option, type PlayChoice, type Round, type SessionInfo, type Settings } from '../api'
 import { LANG, useVoice } from '../voice'
 import { refresh, take } from '../reserve'
@@ -169,6 +172,8 @@ export const PLAY_AREA = 'mx-auto grid w-full max-w-7xl gap-6 sm:px-6 lg:px-12'
 
 /** Seconds Next counts down before the next round comes by itself (Settings, `next_after`); 0 waits for a tap. */
 export const NextAfter = createContext(0)
+/** Seconds a quick look counts down before each look (3); a story sets 0 so its screenshot holds still. */
+export const LookCount = createContext(3)
 
 /** Who the rounds are recorded for; Nobody records nothing. A failed list still lets the child play, unrecorded. */
 function WhoPlays({ learners, recording, failed }: { learners: LearnerRow[]; recording: boolean; failed: boolean }) {
@@ -535,32 +540,6 @@ export function Board({ round, onNext, onAnswered, onRated }: { round: Round; on
   return PLACE_MECHANICS.includes(round.mechanic) ? <Arrange round={round} onNext={next} onAnswered={onAnswered} onRated={onRated} /> : <Choose round={round} onNext={next} onAnswered={onAnswered} onRated={onRated} />
 }
 
-/**
- * Counts down `seconds` while `running`, then calls `onDone` once: the seconds left, or null when not counting (not
- * running, or 0 seconds: wait for a tap). Read through a ref, so a new `onDone` each render does not restart it.
- */
-export function useCountdown(running: boolean, seconds: number, onDone: () => void): number | null {
-  const [left, setLeft] = useState(seconds)
-  const latest = useRef(onDone)
-  useEffect(() => { latest.current = onDone })
-  const counting = running && seconds > 0
-  useEffect(() => {
-    if (!counting) return
-    setLeft(seconds)
-    let n = seconds
-    const t = setInterval(() => {
-      n -= 1
-      setLeft(n)
-      if (n <= 0) {
-        clearInterval(t)
-        latest.current()
-      }
-    }, 1000)
-    return () => clearInterval(t)
-  }, [counting, seconds])
-  return counting ? Math.max(left, 1) : null
-}
-
 /** The heading every round shares: the prompt, Say it again, and once it is over what happened and Next, which counts
  * down to the next round by itself while `onward` (the faces, when asked, hold it until one is tapped). */
 function RoundHeader({ round, over, onNext, onward = true }: { round: Round; over: 'right' | 'missed' | null; onNext: () => void; onward?: boolean }) {
@@ -582,6 +561,10 @@ const marks = { wrong: 'Not this one', right: 'Right', answer: 'This one' }
 
 function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: () => void; onAnswered?: OnAnswered; onRated?: (v: Face) => Promise<unknown> }) {
   const [turn, setTurn] = useState<Turn>({ tapped: [] })
+  const [again, setAgain] = useState(0) // a quick look's pictures come back after each wrong tap while it is still playing
+  // A quick look takes no answer until its pictures have shown once: a tap during the first 3-2-1 would be a guess at
+  // pictures not yet seen, counted as a first answer (Codex on #64).
+  const [seen, setSeen] = useState(round.exposure_ms === null)
   const attempt = useAttempt(onAnswered)
   const rated = useRated(onRated)
   const state = outcome(round, turn)
@@ -594,18 +577,20 @@ function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: 
   const voice = useVoice()
   const talk = useTalk()
   const tap = (id: string) => { // only an open tile reaches here: ChoiceGrid closes tapped tiles and, once answered, every tile
+    if (!seen) return
     const next = { tapped: [...turn.tapped, id] }
     setTurn(next)
     voice.say(feedback(round, next, talk))
     attempt.answered({ option: id }, round.options.some(o => o.id === id && o.correct))
     const after = outcome(round, next)
     if (after !== 'playing') attempt.ended(after)
+    else if (round.exposure_ms !== null) setAgain(n => n + 1)
   }
 
   return (
     <section aria-labelledby="prompt" className="grid gap-6">
       <RoundHeader round={round} over={done ? state : null} onNext={onNext} onward={!rated.rate || rated.done} />
-      {round.show && <Show round={round} />}
+      {round.show && <Show round={round} again={again} peeks={done ? 0 : round.peeks} onLook={() => setSeen(true)} />}
       <ChoiceGrid
         label="Choices"
         items={round.options}
@@ -616,28 +601,24 @@ function Choose({ round, onNext, onAnswered, onRated }: { round: Round; onNext: 
         marks={marks}
         onChoose={o => tap(o.id)}
         stretch
-        beckon
+        beckon={seen}
       />
       {done && rated.rate && <HowWasIt onRated={rated.rate} />}
     </section>
   )
 }
 
-/** The big picture, word or row above the answer, centred and a step larger than the tiles' pictures. A quick look hides it after `exposure_ms`, keeping its room so the tiles do not jump. */
-function Show({ round }: { round: Round }) {
-  const [hidden, setHidden] = useState(false)
-  useEffect(() => {
-    if (round.exposure_ms === null) return
-    const t = setTimeout(() => setHidden(true), round.exposure_ms)
-    return () => clearTimeout(t)
-  }, [round.exposure_ms])
-  if (!hidden) return <div className="type-picture picture-lead justify-self-center break-words text-center" aria-hidden>{round.show}</div>
-  return (
-    <div className="type-picture picture-lead">
-      <span aria-hidden>{'\u00a0'}</span>
-      <span role="status" className="sr-only">The pictures have gone.</span>
-    </div>
-  )
+/**
+ * The big picture, word or row above the answer, centred and a step larger than the tiles' pictures. A quick look
+ * (`exposure_ms`) is a strata-react `Glimpse`: 3, 2, 1, then the pictures for the round's time with a bar emptying under
+ * them, then gone with their room kept so the tiles do not jump; back again (counted down and timed) whenever `again`
+ * changes, after a wrong tap, and `peeks` times on its Look again button, which goes once used.
+ */
+function Show({ round, again = 0, peeks = 0, onLook }: { round: Round; again?: number; peeks?: number; onLook?: () => void }) {
+  const picture = <div className="type-picture picture-lead justify-self-center break-words text-center" aria-hidden>{round.show}</div>
+  const count = useContext(LookCount)
+  if (round.exposure_ms === null) return picture
+  return <Glimpse ms={round.exposure_ms} count={count} again={again} peeks={peeks} gone="The pictures have gone." onLook={onLook}>{picture}</Glimpse>
 }
 
 const placeMarks = { held: 'Picked up', right: 'Right', wrong: 'Not yet' }

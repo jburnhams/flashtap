@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { nextBreak, nextChoice, nextEnd, nextError, quickLookGoes, quickLookStays, roundError, roundFor, roundLoading, roundUnreachable } from '../src/mocks/handlers'
 import { FOX } from '../src/mocks/learners'
+import { LookCount } from '../src/screens/PlayScreen'
 import { AppAt } from './app-at'
 
 /** Earlier stories in the same browser keep rounds (src/reserve.ts): a story of the server away starts with none. */
@@ -22,9 +23,11 @@ export const Letters: Story = { render: () => <AppAt route="/?mode=letters" /> }
 export const Break: Story = { render: () => <AppAt route={`/break?learner=${FOX}`} /> }
 export const Counting: Story = { render: () => <AppAt route="/?mode=counting" /> }
 export const Missing: Story = { render: () => <AppAt route="/?mode=missing" /> }
-/** A quick look while its pictures show (held on screen for the shot), and after they have gone. */
-export const QuickLook: Story = { render: () => <AppAt route="/?mode=quick_look" />, beforeEach: ({ msw }) => msw.use(quickLookStays) }
-export const QuickLookGone: Story = { render: () => <AppAt route="/?mode=quick_look" />, beforeEach: ({ msw }) => msw.use(quickLookGoes) }
+/** A quick look while its pictures show (held on screen for the shot), and after they have gone, with its one look
+ * again. Its 3-2-1 is left out (`LookCount` 0), so the shot does not depend on when it is taken. */
+const quickLook = () => <LookCount.Provider value={0}><AppAt route="/?mode=quick_look" /></LookCount.Provider>
+export const QuickLook: Story = { render: quickLook, beforeEach: ({ msw }) => msw.use(quickLookStays) }
+export const QuickLookGone: Story = { render: quickLook, beforeEach: ({ msw }) => msw.use(quickLookGoes) }
 export const Listen: Story = { render: () => <AppAt route="/?mode=listen" /> }
 export const GiveANumber: Story = { render: () => <AppAt route="/?mode=give" /> }
 export const Order: Story = { render: () => <AppAt route="/?mode=order" /> }
