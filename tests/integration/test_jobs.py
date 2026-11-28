@@ -14,7 +14,10 @@ from flashtap import jobs, voice
 from flashtap.server.app import create_app, job_queue, run_jobs
 
 
-def until(done: Callable[[], bool], seconds: float = 120.0) -> None:
+# The build's first clip waits for `voice.lines()`, a sweep of every template over thousands of seeds: about 50 s on
+# Linux and about 120 s on a Windows runner, where 120 s here failed at 0.22.0 (3,732 lines, 3,634 before). The wait
+# is for the sweep, not for the job, so it is generous.
+def until(done: Callable[[], bool], seconds: float = 300.0) -> None:
     end = time.monotonic() + seconds
     while not done():
         assert time.monotonic() < end, "the job did not finish in time"

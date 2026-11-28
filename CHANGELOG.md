@@ -13,6 +13,7 @@ Asked for: for "pick the matching letter" it should say the letter, both name an
 - `src/flashtap/mechanics.py`: `Option.reveal`, the sentence said on a miss to say where the answer was; empty keeps "The right one was the cow.". `web/openapi.json`, `web/src/api.generated.ts`: regenerated.
 - `web/src/play.ts`: `feedback` says the right option's `reveal` on a miss when it has one. `src/flashtap/voice.py`: the clips made for a round include its `reveal`.
 - `web/src/mocks/fixtures.ts`: the Same letter round at version 2; every option carries `reveal` (empty but there).
+- `tests/integration/test_jobs.py`: waits up to 300 s for the voice build's first clips (was 120 s). The build first sweeps every template for its lines, which takes about 120 s on CI's Windows runner, and the 98 new lines pushed it over.
 - Tests: `tests/unit/test_rounds.py` (Same letter says the name and the sound when asked, answered, tapped wrong and missed, and the voice cuts it into the letter's line and its sound), `web/tests/unit/logic.test.ts` (a missed Same letter says where the answer was in its own words).
 - `pyproject.toml`, `uv.lock`: 0.22.0. `docs/content.md` (First steps), `docs/progress.md`.
 
