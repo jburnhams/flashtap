@@ -2,6 +2,18 @@
 
 Newest first, grouped by day. One entry per change, in the same commit or PR as the change.
 
+## 2026-11-28
+
+**Placing rounds: drag, one tap for the basket, a blue "picked up", nothing moving, a big Check (0.20.0, branch `claude/project-thread-vijkfa`)**
+
+Asked for: on the "do X then check" rounds a much bigger Check with a tick either side; drag and drop as well as taps; "picked up" far more visible, a blue border on the piece and the same on where it can go; for the basket, a tap to put a picture in and a tap to take it out (a big X on hover); pictures keep their places in the pile with a gap where one is missing, so nothing reorders or resizes; in an order, a number put on top of another sends that one back; all of it in strata-react where it can be. Built there (strata-react PR #409, released as 2.1.2: `PlaceBoard` `limit`, `check`, drag, gaps, room for all a place can hold, a lone basket across the row; `Button size="lg"`); Flashtap passes props.
+
+- `web/src/screens/PlayScreen.tsx`: `Arrange` gives `PlaceBoard` its `check` (the big Check, in place of the Button under the board) and a `limit` of each place's `holds` for orders and capitals (a basket or a sound group takes any number, since too many is an answer to check); the opening comment says how a placing round is answered now.
+- `web/package.json`, `web/package-lock.json`: strata-react ^2.1.2.
+- `web/tests/integration/PlayScreen.test.tsx`: the basket rounds tap a duck in and out; **new** test of a number put on top of another in an order.
+- `web/tests/visual/baselines/`: the placing rounds' shots moved (`screens-play--{give-a-number,order,capitals,sort-by-sound}`, `give--default`, `order--checked`, light and dark): the gaps, the big Check, the room in each place, the blue held ring. Written with Chromium build 1243 here (Playwright 1.65 wants 1254); every other shot matched on it.
+- `pyproject.toml`, `uv.lock`: 0.20.0. `docs/implementation-plan.md`: the board takes a drag as well as taps.
+
 ## 2026-11-27
 
 **Ramping up on every right answer (0.19.0, branch `claude/project-thread-85zcg6`)**

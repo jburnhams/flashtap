@@ -8,8 +8,10 @@
 //   Next. A quick look hides its picture after the round's `exposure_ms`, so the learner says how
 //   many they saw, not how many they counted. Listen says a word the screen never prints.
 // - an arrangement (give a number, put in order, match, sort): strata-react's `PlaceBoard`, two
-//   taps to move a picture, then Check. A check marks each place right or "Not yet"; moving a
-//   piece in or out of a place clears its mark.
+//   taps to move a picture (one tap in and out of a lone basket) or a drag, then its big Check. A check marks each
+//   place right or "Not yet"; moving a piece in or out of a place clears its mark. A place that holds one (an
+//   order's slot, a capital) takes a piece put on top of the one there and sends that one back (`limit`; the
+//   owner, 2026-11-28); a basket or a group takes as many as are put in it, since too many is an answer to check.
 //
 // With a limit on tries (Settings), running out shows the answer: taps for a one-tap round, checks
 // for an arrangement. Once a round is over, Next counts down from three (Settings, `next_after`) and
@@ -699,12 +701,9 @@ function Arrange({ round, onNext, onAnswered, onRated }: { round: Round; onNext:
         locked={done}
         stretch
         beckon
+        limit={p => (round.mechanic === 'sequence' || round.mechanic === 'match_pairs' ? p.holds : Infinity)}
+        check={{ label: 'Check', onCheck: check, disabled: !placed }}
       />
-      {!done && (
-        <Button variant="default" className="justify-self-start" onClick={check} disabled={!placed}>
-          Check
-        </Button>
-      )}
       {done && rated.rate && <HowWasIt onRated={rated.rate} />}
     </section>
   )
