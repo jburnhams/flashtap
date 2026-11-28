@@ -40,6 +40,13 @@ describe('a round in play', () => {
     expect(feedback({ ...rounds.counting, tries: 1 }, { tapped: ['n5'] })).toBe('No, that’s 5. The right one was 3.')
   })
 
+  it('says the answer as the round says it, where it says one: Same letter names the letter and its sound', () => {
+    const letter = { ...rounds.same_letter, tries: 1 }
+    expect(feedback(letter, { tapped: ['letter_m'] })).toBe("No, that's m, /m/. The right one was d, /d/.")
+    expect(feedback(letter, { tapped: ['letter_d'] })).toBe("Yes! That's d, /d/.")
+    expect(feedback(letter, { tapped: [] })).toBe('Find the same letter: d, /d/.')
+  })
+
   it('says what the round says before any tap, which may not be what it prints', () => {
     expect(feedback(cow, { tapped: [] })).toBe('Find the cow.')
     expect(feedback(rounds.listen, { tapped: [] })).toBe('dog. Which letter does dog start with?')

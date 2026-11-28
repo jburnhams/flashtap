@@ -1,5 +1,12 @@
 # Progress log
 
+## 2026-11-28: Same letter says the letter's name and sound (0.22.0)
+
+- Asked for: in "pick the matching letter" the voice should say the letter, "both name and sound", in the question and in the answer.
+- Checked: Kokoro (strata-models' `speak`, through kokoro-onnx) spells words to sounds with espeak-ng, which reads a letter written alone as its name, "a" too ("eɪ", not the article) and "z" as "zed" in en-gb, before a comma or a full stop (phonemized with espeakng-loader and phonemizer-fork). So the line writes the letter itself ("Find the same letter: b,") and the sound as `/b/`, no table of spelled names.
+- A missed round said "The right one was the b."; the right option now carries `reveal`, the sentence that says where the answer was, so the miss says "The right one was b, /b/." Other kinds leave it empty and keep the old line.
+- Version 0.22.0, since 0.20.0 (the place board) and 0.21.0 (Quick look) are taken by open branches.
+
 ## 2026-11-27: ramping up on every right answer (0.19.0)
 
 - Asked for: after a learner answered a few right, "should ramp far more aggressively - ie always increase a slightly hard question and so keep increasing all the time they are got right. That way can quickly adjust to current level".

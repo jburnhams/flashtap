@@ -35,7 +35,9 @@ export function feedback(round: Round, turn: Turn, words: Words = PLAIN): string
   if (state === 'missed') {
     const right = round.options.find(o => o.correct)
     if (!right) return last.feedback
-    return join(last.feedback, words.missed(), `The right one was ${/^\d+$/.test(right.word) ? right.word : `the ${right.word}`}.`)
+    // A round may say where its answer was itself (Same letter: its name and sound); else it is named by its word
+    const reveal = right.reveal || `The right one was ${/^\d+$/.test(right.word) ? right.word : `the ${right.word}`}.`
+    return join(last.feedback, words.missed(), reveal)
   }
   return state === 'playing' ? join(last.feedback, words.retry()) : cheer(last.feedback, words)
 }

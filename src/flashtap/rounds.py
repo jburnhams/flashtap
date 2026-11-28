@@ -146,7 +146,7 @@ TEMPLATES: dict[Mode, Template] = {
             (("maths.geometry.same_shape", P),), _plain(starter.same_shape), _picks(2, 3, 4),
         ),
         Template(
-            Mode.SAME_LETTER, 1, Mechanic.SELECT_ONE, "Same letter", "See a letter and tap the same letter",
+            Mode.SAME_LETTER, 2, Mechanic.SELECT_ONE, "Same letter", "See a letter and tap the same letter",
             (("literacy.letters.same", P),), _plain(starter.same_letter), _picks(2, 3, 4),
         ),
         Template(

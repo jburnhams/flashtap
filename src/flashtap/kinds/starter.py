@@ -12,7 +12,8 @@ learner what a round is, not for catching a mix-up.
   shape itself at two tiles, and from three tiles another shape of that colour where there is one (the red square for
   a red circle), so the step up asks for the colour and not the picture. Same shape does the same the other way: from
   three tiles its right tile is the shape in another colour, beside a wrong one in the shown colour, so the step up
-  asks for the shape and not the colour.
+  asks for the shape and not the colour. Same letter says the letter's name and sound in its prompt, on each tap
+  and in the answer on a miss ("b, /b/"; version 2, 0.22.0), so the letter is heard as well as seen.
 - **Picture twins** (animals), **Colour twins**, **Shape twins**, **Letter twins**, **Number twins**
   (`match_pairs`): the transfer kinds, held out of practice (rounds.TEMPLATES). Each piece goes onto the place that
   is the same: the same skill in another mechanic, which is what a transfer check asks (learners/transfer.py). Colour
@@ -26,6 +27,7 @@ from collections.abc import Sequence
 from flashtap import distractors as dx
 from flashtap import lexicon
 from flashtap.kinds import Body
+from flashtap.kinds.choose import sound_token
 from flashtap.lexicon import Thing
 from flashtap.mechanics import Option, Piece, Place
 
@@ -73,6 +75,11 @@ def _shapes() -> list[Thing]:
 
 def _letters() -> list[str]:
     return sorted({g.grapheme for g in lexicon.words().letters})
+
+
+def _sound(letter: str) -> str:
+    """The letter's sound: its first one-letter GPC in the inventory (each letter has one; c and k are both /k/)."""
+    return next(g.phoneme for g in lexicon.words().letters if g.grapheme == letter)
 
 
 def same_picture(rng: random.Random, choices: int) -> Body:
@@ -139,13 +146,30 @@ def same_shape(rng: random.Random, choices: int) -> Body:
 
 
 def same_letter(rng: random.Random, choices: int) -> Body:
+    """Version 2 (0.22.0, the owner: "it should say the letter (both name and sound) in question and answer"): the
+    prompt, each tap and the answer on a miss say the letter's name and then its sound ("b, /b/"). The letter is
+    written alone and the voice reads it as its name, "a" too ("ay", not the article): espeak-ng, Kokoro's spelling
+    to sound step, does so before a comma or a full stop. The sound is the letter's one GPC in the inventory."""
     chosen = _apart(rng, _letters(), choices)
     answer = chosen[0]
     rng.shuffle(chosen)
+    said = {g: f"{g}, {sound_token(_sound(g))}" for g in chosen}
     return Body(
         prompt="Find the same letter.",
+        say=f"Find the same letter: {said[answer]}.",
         show=answer,
-        options=[_tile(f"letter_{g}", g, g, g == answer, "Yes! That's the same letter.") for g in chosen],
+        options=[
+            Option(
+                id=f"letter_{g}",
+                picture=g,
+                word=g,
+                correct=g == answer,
+                feedback=f"Yes! That's {said[g]}." if g == answer else f"No, that's {said[g]}.",
+                distractor="" if g == answer else dx.RANDOM,
+                reveal=f"The right one was {said[g]}." if g == answer else "",
+            )
+            for g in chosen
+        ],
         answer=f"letter_{answer}",
     )
 

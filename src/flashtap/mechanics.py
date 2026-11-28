@@ -110,6 +110,9 @@ class Option(BaseModel):
     correct: bool
     feedback: str  # said when this option is tapped: the success message on the right one
     distractor: str = ""  # the generator that chose a wrong option; empty on the right one
+    # Where the answer was, said on the right one when the round is missed (web/src/play.ts `feedback`); empty: "The
+    # right one was the cow." Same letter says the letter's name and sound here, which its word alone cannot (0.22.0).
+    reveal: str = ""
 
 
 class Piece(BaseModel):

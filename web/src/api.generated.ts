@@ -1243,6 +1243,11 @@ export interface components {
             id: string;
             /** Picture */
             picture: string;
+            /**
+             * Reveal
+             * @default
+             */
+            reveal: string;
             /** Word */
             word: string;
         };
