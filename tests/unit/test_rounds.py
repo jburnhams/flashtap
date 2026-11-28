@@ -3,7 +3,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from flashtap import distractors as dx
-from flashtap import lexicon, rounds
+from flashtap import lexicon, rounds, voice
 from flashtap import mechanics as mx
 from flashtap.mechanics import (
     CHOOSE,
@@ -646,6 +646,25 @@ def test_letter_matching_never_puts_look_alikes_together(mode):
         r = rounds.generate(mode, 4, seed)
         shown = [o.picture for o in r.options] or [p.picture for p in r.pieces]
         assert all(b not in dx.confusable_graphemes(a) for a in shown for b in shown)
+
+
+def test_same_letter_says_the_letters_name_and_sound_when_asked_and_answered():
+    # The owner (0.22.0): "it should say the letter (both name and sound) in question and answer/confirmation"
+    sounds = {g.grapheme: g.phoneme for g in lexicon.words().letters}
+    for seed in range(200):
+        r = rounds.generate(Mode.SAME_LETTER, 3, seed)
+        g = r.show
+        assert r.version == 2
+        assert r.prompt == "Find the same letter."  # what is printed does not change
+        assert r.say == f"Find the same letter: {g}, /{sounds[g]}/."
+        right = next(o for o in r.options if o.correct)
+        assert right.feedback == f"Yes! That's {g}, /{sounds[g]}/."
+        assert right.reveal == f"The right one was {g}, /{sounds[g]}/."
+        for o in r.options:
+            if not o.correct:
+                assert o.feedback == f"No, that's {o.picture}, /{sounds[o.picture]}/."
+                assert o.reveal == ""
+        assert voice.segments(r.say) == [f"Find the same letter: {g},", f"/{sounds[g]}/"]
 
 
 def test_same_number_starts_with_one_to_three():

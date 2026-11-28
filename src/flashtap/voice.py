@@ -137,7 +137,9 @@ def _round_lines(r: rounds.Round) -> Iterable[str]:
         yield from segments(o.feedback)
     if r.options:  # a choose round missed: play.ts adds where the answer was
         right = next(o for o in r.options if o.correct)
-        yield f"The right one was {right.word if right.word.isdigit() else f'the {right.word}'}."
+        yield from segments(
+            right.reveal or f"The right one was {right.word if right.word.isdigit() else f'the {right.word}'}."
+        )
     if r.done_feedback:
         yield from segments(r.done_feedback)
     if r.mechanic is Mechanic.GIVE_N:

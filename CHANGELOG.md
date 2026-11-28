@@ -2,6 +2,21 @@
 
 Newest first, grouped by day. One entry per change, in the same commit or PR as the change.
 
+## 2026-11-28
+
+**Same letter says the letter's name and sound in the question and the answer (0.22.0, branch `claude/project-thread-v5edv6`)**
+
+Asked for: for "pick the matching letter" it should say the letter, both name and sound, in the question and in the answer or confirmation. The letter is written as itself, since Kokoro's spelling-to-sound step (espeak-ng) reads a lone letter as its name, "a" included (docs/progress.md).
+
+- `src/flashtap/kinds/starter.py`: `same_letter` says "Find the same letter: b, /b/.", "Yes! That's b, /b/." on the right tile, "No, that's d, /d/." on a wrong one, and "The right one was b, /b/." on a miss; `_sound`, a letter's sound from the phonics inventory. What is printed ("Find the same letter.") does not change.
+- `src/flashtap/rounds.py`: Same letter is template version 2 (the same seed says other words); version 1 is no longer kept.
+- `src/flashtap/mechanics.py`: `Option.reveal`, the sentence said on a miss to say where the answer was; empty keeps "The right one was the cow.". `web/openapi.json`, `web/src/api.generated.ts`: regenerated.
+- `web/src/play.ts`: `feedback` says the right option's `reveal` on a miss when it has one. `src/flashtap/voice.py`: the clips made for a round include its `reveal`.
+- `web/src/mocks/fixtures.ts`: the Same letter round at version 2; every option carries `reveal` (empty but there).
+- `tests/integration/test_jobs.py`: waits up to 300 s for the voice build's first clips (was 120 s). The build first sweeps every template for its lines, which takes about 120 s on CI's Windows runner, and the 98 new lines pushed it over.
+- Tests: `tests/unit/test_rounds.py` (Same letter says the name and the sound when asked, answered, tapped wrong and missed, and the voice cuts it into the letter's line and its sound), `web/tests/unit/logic.test.ts` (a missed Same letter says where the answer was in its own words).
+- `pyproject.toml`, `uv.lock`: 0.22.0. `docs/content.md` (First steps), `docs/progress.md`.
+
 ## 2026-11-27
 
 **Ramping up on every right answer (0.19.0, branch `claude/project-thread-85zcg6`)**

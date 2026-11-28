@@ -2008,6 +2008,11 @@
       "title": "Picture",
       "type": "string"
      },
+     "reveal": {
+      "default": "",
+      "title": "Reveal",
+      "type": "string"
+     },
      "word": {
       "title": "Word",
       "type": "string"
